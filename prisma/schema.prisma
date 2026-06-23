@@ -1,0 +1,95 @@
+// FantasyFire Prisma schema — see docs/PLAN.md §4.
+//
+// Prisma 7 notes:
+//  - generator provider is the new `prisma-client` (TS output, driver-adapter based)
+//  - `output` is REQUIRED; the client is generated into src/generated/prisma
+//  - connection URLs live in prisma.config.ts (env: DATABASE_URL / DIRECT_URL),
+//    NOT in the datasource block.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Team {
+  id           Int     @id @default(autoincrement())
+  nbaId        Int     @unique
+  abbreviation String  @unique
+  name         String
+  conference   String?
+  division     String?
+
+  players         Player[]
+  homeGames       Game[]           @relation("home")
+  awayGames       Game[]           @relation("away")
+  playerGameStats PlayerGameStat[] @relation("statTeam")
+  opponentStats   PlayerGameStat[] @relation("statOpponent")
+}
+
+model Player {
+  id        Int     @id @default(autoincrement())
+  nbaId     Int     @unique // PERSON_ID / PLAYER_ID
+  firstName String
+  lastName  String
+  slug      String  @unique // for SEO URLs, e.g. "lebron-james"
+  position  String? // raw, e.g. "G", "F-C"
+  posBucket String? // normalized: "G" | "F" | "C"
+  teamId    Int?
+  team      Team?   @relation(fields: [teamId], references: [id])
+
+  gameStats PlayerGameStat[]
+
+  @@index([lastName])
+}
+
+model Game {
+  id         Int      @id @default(autoincrement())
+  nbaId      String   @unique // NBA GAME_ID is a zero-padded string
+  date       DateTime
+  season     String // "2025-26"
+  homeTeamId Int
+  awayTeamId Int
+  homeTeam   Team     @relation("home", fields: [homeTeamId], references: [id])
+  awayTeam   Team     @relation("away", fields: [awayTeamId], references: [id])
+
+  stats PlayerGameStat[]
+
+  @@index([date])
+}
+
+model PlayerGameStat {
+  id             Int      @id @default(autoincrement())
+  playerId       Int
+  gameId         Int
+  teamId         Int
+  opponentTeamId Int
+  isHome         Boolean
+  season         String
+  gameDate       DateTime // denormalized for fast "last N" queries
+  minutes        Float?
+  points         Int
+  rebounds       Int
+  assists        Int
+  steals         Int
+  blocks         Int
+  turnovers      Int
+  fgm            Int
+  fga            Int
+  fg3m           Int
+  fg3a           Int
+  ftm            Int
+  fta            Int
+
+  player       Player @relation(fields: [playerId], references: [id])
+  game         Game   @relation(fields: [gameId], references: [id])
+  team         Team   @relation("statTeam", fields: [teamId], references: [id])
+  opponentTeam Team   @relation("statOpponent", fields: [opponentTeamId], references: [id])
+
+  @@unique([playerId, gameId])
+  @@index([playerId, gameDate])
+  @@index([opponentTeamId, season])
+}

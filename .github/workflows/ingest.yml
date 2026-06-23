@@ -1,0 +1,50 @@
+name: Ingest NBA data
+
+# Pulls stats.nba.com (playerindex + leaguegamelog) and upserts into Postgres.
+#
+# WHY GITHUB ACTIONS (not Vercel): stats.nba.com frequently blocks AWS/Vercel/
+# cloud IP ranges, so the ingest must NOT run from a Vercel function. GitHub
+# Actions runners usually work, but their IPs are *occasionally* blocked too.
+# If a run fails with NbaLikelyBlockedError (every request timed out), that is
+# the IP block — not a code bug. Fallbacks, in order of effort:
+#   1. Re-run the job (block is often transient / IP-specific).
+#   2. Run the ingest from a small always-on VPS or locally on a cron.
+#   3. Implement the documented ESPN fallback client (see docs/PLAN.md §2).
+# Do NOT fabricate or stub data to work around the block.
+
+on:
+  schedule:
+    # 11:00 UTC daily (~early morning US) — after the prior night's games settle.
+    - cron: '0 11 * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL }}
+      NBA_SEASON: ${{ vars.NBA_SEASON || '2025-26' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply database migrations
+        run: pnpm db:deploy
+
+      - name: Run ingest
+        run: pnpm ingest

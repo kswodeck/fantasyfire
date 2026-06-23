@@ -1,0 +1,35 @@
+'use client';
+
+import { useQuery } from '@tanstack/react-query';
+import type { PlayerResearch } from '@/lib/types';
+import type { StatKey } from '@/lib/stats';
+
+/**
+ * Fetch a player's research payload for a stat/line from the versioned API.
+ * Seeded with `initialData` (from SSR) so the first render needs no fetch; later
+ * stat/line changes refetch while keeping the previous data on screen.
+ */
+export function useHitRate({
+  slug,
+  stat,
+  line,
+  initialData,
+}: {
+  slug: string;
+  stat: StatKey;
+  line?: number;
+  initialData?: PlayerResearch;
+}) {
+  return useQuery<PlayerResearch>({
+    queryKey: ['hitrate', slug, stat, line ?? null],
+    queryFn: async ({ signal }) => {
+      const params = new URLSearchParams({ playerSlug: slug, stat });
+      if (line !== undefined) params.set('line', String(line));
+      const res = await fetch(`/api/v1/hitrate?${params.toString()}`, { signal });
+      if (!res.ok) throw new Error(`Request failed (${res.status})`);
+      return (await res.json()) as PlayerResearch;
+    },
+    initialData,
+    placeholderData: (prev) => prev,
+  });
+}

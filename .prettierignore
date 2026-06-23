@@ -1,0 +1,10 @@
+node_modules
+.next
+out
+build
+coverage
+pnpm-lock.yaml
+src/generated
+prisma/migrations
+public/sw.js
+public/workbox-*.js
