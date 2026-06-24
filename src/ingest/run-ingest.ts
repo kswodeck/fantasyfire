@@ -106,9 +106,12 @@ async function main() {
     slugByNbaId.set(p.personId, slug);
   }
 
-  // ---- 2) Players (upsert in chunked transactions for throughput) ----
-  for (const part of chunk(players, 100)) {
-    await db.$transaction(
+  // ---- 2) Players (upsert in concurrent chunks for throughput) ----
+  // NOT wrapped in $transaction: over a remote DB (Supabase) a 100-row interactive
+  // transaction blows past the 5s timeout. Upserts are independent + idempotent, so
+  // plain concurrent batches are fine; the pg pool caps real concurrency.
+  for (const part of chunk(players, 50)) {
+    await Promise.all(
       part.map((p) => {
         const teamId = p.teamId ? teamIdByNbaId.get(p.teamId) : undefined;
         const slug = slugByNbaId.get(p.personId)!;

@@ -13,7 +13,20 @@ import { PrismaClient } from '../generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
 const createPrismaClient = () => {
-  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+  const raw = process.env.DATABASE_URL ?? '';
+  // Managed Postgres (Supabase/Neon) requires TLS. node-postgres parses `sslmode=`
+  // from the URL and (as of pg 8.22) does FULL cert verification, which overrides any
+  // explicit ssl option and fails on these providers' cert chains
+  // (SELF_SIGNED_CERT_IN_CHAIN). Prisma's own connector — used by `prisma migrate` —
+  // handles sslmode fine, but the driver adapter does not. So for the app/runtime we
+  // strip sslmode and set ssl ourselves (encrypted, without bundling each CA).
+  // `prisma migrate` keeps using the original URL (with sslmode) from prisma.config.ts.
+  const hasSslmode = /[?&]sslmode=/i.test(raw);
+  const connectionString = hasSslmode ? raw.replace(/[?&]sslmode=[^&]*/i, '') : raw;
+  const adapter = new PrismaPg({
+    connectionString,
+    ...(hasSslmode ? { ssl: { rejectUnauthorized: false } } : {}),
+  });
   return new PrismaClient({ adapter });
 };
 
