@@ -17,7 +17,7 @@ import {
   statValue,
   statKeysForSport,
   defaultStatForSport,
-  nbaMinutesThreshold,
+  blendedRoleThreshold,
   RECENT_GAMES_WINDOW,
 } from '@/lib/stats';
 import { roundToHalfLine } from '@/lib/format';
@@ -50,14 +50,25 @@ const getActiveSeason = cache(async (sport: Sport): Promise<string> => {
   return current; // nothing ingested — queries return empty, handled gracefully
 });
 
-// NBA: exclude games where a player logged well below their normal role (injury
-// exits / garbage time) so they don't drag rates around — but the bar is
-// per-player (the average of their season and last-10 minutes-per-game), so
-// bench players aren't zeroed out by a fixed floor. MLB has no minutes — any
-// appearance counts. `threshold` is the player's nbaMinutesThreshold (0 for MLB).
-function isQualified(sport: Sport, minutes: number | null | undefined, threshold: number): boolean {
-  if (sport === 'mlb') return true;
-  return minutes != null && minutes > 0 && minutes >= threshold;
+// Per-game "opportunity" used to drop games where a player was barely involved
+// (injury exits / garbage time / pinch-hit cameos), which would otherwise drag
+// rates around. The bar is per-player (blendedRoleThreshold) so part-timers
+// aren't zeroed out by a fixed floor.
+//   NBA            -> minutes played
+//   MLB hitters    -> plate appearances ≈ AB + BB + HBP
+//   MLB pitchers   -> null (NOT filtered): a workload proxy (outs/IP) is
+//                     negatively correlated with earned runs — a starter who is
+//                     shelled gets pulled early — so filtering by it would bias
+//                     ER/hits-allowed rates downward. The correct pitcher filter
+//                     is starts-only, which needs an ingested gamesStarted flag.
+function opportunityFor(
+  sport: Sport,
+  posBucket: string | null | undefined,
+  g: PlayerGame,
+): number | null {
+  if (sport === 'nba') return g.minutes ?? null;
+  if (posBucket === 'P') return null;
+  return (g.atBats ?? 0) + (g.walks ?? 0) + (g.hbp ?? 0);
 }
 
 const POS_LABEL: Record<string, string> = { G: 'guards', F: 'forwards', C: 'centers' };
@@ -433,8 +444,21 @@ export async function getPlayerResearch(
       : defaultStatForSport(sport, record.posBucket);
 
   const allGames = await getPlayerGames(record.id);
-  const minThreshold = sport === 'nba' ? nbaMinutesThreshold(allGames.map((g) => g.minutes)) : 0;
-  const games = allGames.filter((g) => isQualified(sport, g.minutes, minThreshold));
+  // Keep only games where the player got a normal opportunity for their role.
+  // NBA minutes are continuous, so the bar is the player's own blended average.
+  // MLB plate appearances are small integers clustered at ~4 for regulars, so a
+  // bar equal to the average would clip the modal full game (a 4-PA game vs a 4.3
+  // average); there we use 60% of normal, dropping cameos (0–2 PA) while keeping
+  // full games. Pitchers aren't opportunity-filtered (opp == null).
+  const qualifyFactor = sport === 'nba' ? 1 : 0.6;
+  const cutoff =
+    qualifyFactor *
+    blendedRoleThreshold(allGames.map((g) => opportunityFor(sport, record.posBucket, g)));
+  const games = allGames.filter((g) => {
+    const opp = opportunityFor(sport, record.posBucket, g);
+    if (opp == null) return true; // role not opportunity-filtered (MLB pitchers)
+    return opp > 0 && opp >= cutoff;
+  });
   const line = lineParam ?? defaultLine(games, stat);
 
   const windows: WindowResult[] = STAT_WINDOWS.map((w) => {

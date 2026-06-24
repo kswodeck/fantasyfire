@@ -57,11 +57,20 @@ export default function HowItWorksPage() {
           precision.
         </p>
 
-        <h2>The minutes filter</h2>
+        <h2>Qualifying games</h2>
         <p>
-          Garbage-time cameos and injury exits distort prop research. In the NBA we exclude
-          games under ten minutes by default, so the rates reflect games a player actually
-          factored into. (MLB lines use every appearance.)
+          Garbage-time cameos, injury exits, and pinch-hit appearances distort prop
+          research, so we only count games where a player got a normal opportunity for{' '}
+          <em>their</em> role. The bar scales to each player&rsquo;s own workload — a blend
+          of their season and last-10-game rate — so bench players and platoon bats
+          aren&rsquo;t zeroed out by a fixed cutoff. For the NBA that workload is minutes
+          played; for MLB hitters it&rsquo;s plate appearances (so pinch-hit cameos
+          don&rsquo;t count, but full games do). MLB pitchers count every appearance (a
+          short outing often means a rough night, which is still real signal).
+        </p>
+        <p>
+          The matchup numbers (defense-vs-position / opposing pitching) use a team&rsquo;s
+          full game logs, so they aren&rsquo;t affected by this per-player filter.
         </p>
 
         <h2>Fair price</h2>

@@ -53,8 +53,9 @@ DIRECT_URL="...dev project session pooler...?sslmode=require"
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
-> The NBA minutes filter is now per-player (season + last-10 minutes-per-game),
-> computed automatically
+> The "qualifying games" filter is per-player (avg of season + last-10 workload),
+> computed automatically — NBA = minutes, MLB hitters = plate appearances, MLB
+> pitchers = every appearance. No env var.
 
 > The portable local Postgres on `:5433` we used during the build still works offline,
 > but the cloud dev project is the durable path (survives reboots, matches prod).

@@ -33,6 +33,10 @@ jobs:
   ingest:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    # Secrets (DATABASE_URL / DIRECT_URL) are stored on the "Production"
+    # environment, so the job must declare it to access them. The environment's
+    # branch rule allows `main`, which is where the schedule/dispatch runs.
+    environment: Production
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL || '' }}
       DIRECT_URL: ${{ secrets.DIRECT_URL || '' }}
