@@ -75,14 +75,15 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
    | `NBA_SEASON` | `2025-26` |
    | `NBA_MIN_MINUTES` | `10` |
    | `NEXT_PUBLIC_SITE_URL` | `https://fantasyfire.app` |
-3. **Before the first deploy**, seed the prod DB from your machine:
+3. **Before the first deploy**, migrate + seed the prod DB from your machine. Put the
+   PROD password into `.env.prod.local` (gitignored), then:
    ```bash
-   # temporarily point .env at the PROD strings, or export them inline:
-   DATABASE_URL=<prod> DIRECT_URL=<prod> pnpm db:deploy
-   DATABASE_URL=<prod> DIRECT_URL=<prod> NBA_SEASON=2025-26 pnpm ingest
+   pnpm db:deploy:prod   # apply migrations to the prod Supabase project
+   pnpm ingest:prod      # pull real NBA data into prod
    ```
-   (The production **build** runs `generateStaticParams`, which queries the DB, so the
-   schema must exist first.)
+   These use `.env.prod.local` via dotenv-cli, so you never have to edit your local
+   `.env`. (The production **build** runs `generateStaticParams`, which queries the DB,
+   so the schema must exist first.)
 4. Deploy.
 
 ---

@@ -20,10 +20,12 @@
     "test:nba": "vitest run src/ingest/nba",
     "e2e": "playwright test",
     "ingest": "tsx src/ingest/run-ingest.ts",
+    "ingest:prod": "dotenv -e .env.prod.local -- tsx src/ingest/run-ingest.ts",
     "seed": "tsx prisma/seed-demo.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
+    "db:deploy:prod": "dotenv -e .env.prod.local -- prisma migrate deploy",
     "db:studio": "prisma studio"
   },
   "dependencies": {
@@ -49,6 +51,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.0.3",
+    "dotenv-cli": "^11.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "jsdom": "^29.1.1",
