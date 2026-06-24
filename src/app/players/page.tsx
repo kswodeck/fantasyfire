@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { SearchForm } from '@/components/SearchForm';
 import { PlayerCard } from '@/components/PlayerCard';
+import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { searchPlayers } from '@/lib/server/players';
 import type { PlayerListItem } from '@/lib/types';
 
@@ -28,6 +29,10 @@ export default async function PlayersPage({ searchParams }: PageProps) {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8">
+      <Breadcrumbs
+        className="mb-4"
+        items={[{ label: 'Home', href: '/' }, { label: 'Players' }]}
+      />
       <h1 className="mb-4 text-2xl font-bold tracking-tight">
         {q ? `Players matching “${q}”` : 'Players'}
       </h1>

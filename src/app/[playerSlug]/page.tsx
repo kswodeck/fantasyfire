@@ -8,6 +8,7 @@ import { PlayerResearchClient } from '@/components/PlayerResearchClient';
 import { PlayerAvatar } from '@/components/PlayerAvatar';
 import { TeamLogo } from '@/components/TeamLogo';
 import { PlayerBioBar } from '@/components/PlayerBioBar';
+import { Breadcrumbs } from '@/components/Breadcrumbs';
 
 // ISR: statically generate all player pages, revalidate hourly.
 export const revalidate = 3600;
@@ -76,10 +77,11 @@ export default async function PlayerPage({ params }: PageProps) {
       {
         '@type': 'BreadcrumbList',
         itemListElement: [
-          { '@type': 'ListItem', position: 1, name: 'Players', item: absoluteUrl('/players') },
+          { '@type': 'ListItem', position: 1, name: 'Home', item: absoluteUrl('/') },
+          { '@type': 'ListItem', position: 2, name: 'Players', item: absoluteUrl('/players') },
           {
             '@type': 'ListItem',
-            position: 2,
+            position: 3,
             name: player.fullName,
             item: absoluteUrl(`/${player.slug}`),
           },
@@ -99,6 +101,15 @@ export default async function PlayerPage({ params }: PageProps) {
             .replace(/>/g, '\\u003e')
             .replace(/&/g, '\\u0026'),
         }}
+      />
+
+      <Breadcrumbs
+        className="mb-4"
+        items={[
+          { label: 'Home', href: '/' },
+          { label: 'Players', href: '/players' },
+          { label: player.fullName },
+        ]}
       />
 
       <header

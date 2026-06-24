@@ -5,10 +5,19 @@ import { test, expect } from '@playwright/test';
 test('player page shows hit-rate cards, chart, matchup and read', async ({ page }) => {
   await page.goto('/players');
 
-  // First player card in the results grid.
-  const firstPlayer = page.locator('main a[href^="/"]').first();
+  // First player card in the results grid (exclude breadcrumb links to / and /players).
+  const firstPlayer = page
+    .locator('main a[href^="/"]:not([href="/"]):not([href="/players"])')
+    .first();
   await expect(firstPlayer).toBeVisible();
   await firstPlayer.click();
+
+  // Breadcrumb back-link to the players page.
+  const crumb = page.getByRole('navigation', { name: 'Breadcrumb' });
+  await expect(crumb.getByRole('link', { name: 'Players' })).toHaveAttribute(
+    'href',
+    '/players',
+  );
 
   // Header + interactive controls.
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
