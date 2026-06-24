@@ -1,21 +1,28 @@
-name: Ingest NBA data
+name: Ingest NBA + MLB data
 
-# Pulls stats.nba.com (playerindex + leaguegamelog) and upserts into Postgres.
+# Pulls stats.nba.com (playerindex + leaguegamelog) and statsapi.mlb.com and
+# upserts into Postgres.
 #
 # WHY GITHUB ACTIONS (not Vercel): stats.nba.com frequently blocks AWS/Vercel/
-# cloud IP ranges, so the ingest must NOT run from a Vercel function. GitHub
+# cloud IP ranges, so the NBA ingest must NOT run from a Vercel function. GitHub
 # Actions runners usually work, but their IPs are *occasionally* blocked too.
 # If a run fails with NbaLikelyBlockedError (every request timed out), that is
 # the IP block — not a code bug. Fallbacks, in order of effort:
 #   1. Re-run the job (block is often transient / IP-specific).
 #   2. Run the ingest from a small always-on VPS or locally on a cron.
 #   3. Implement the documented ESPN fallback client (see docs/PLAN.md §2).
-# Do NOT fabricate or stub data to work around the block.
+# Do NOT fabricate or stub data to work around the block. statsapi.mlb.com is
+# generally NOT IP-blocked, so the MLB step runs even if the NBA step fails.
+#
+# REQUIRED repository secrets (Settings → Secrets and variables → Actions):
+#   DATABASE_URL  — pooled app connection (Supabase transaction pooler, :6543), sslmode=require
+#   DIRECT_URL    — direct/migration connection (Supabase session pooler, :5432), sslmode=require
+# These are the same values as your local .env.prod.local.
 
 on:
   schedule:
-    # 11:00 UTC daily (~early morning US) — after the prior night's games settle.
-    - cron: '0 11 * * *'
+    # 10:00 UTC daily (~early morning US) — after the prior night's games settle.
+    - cron: '0 10 * * *'
   workflow_dispatch: {}
 
 concurrency:
@@ -25,13 +32,14 @@ concurrency:
 jobs:
   ingest:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      DIRECT_URL: ${{ secrets.DIRECT_URL }}
-      # Season is computed from the date in code. Set the NBA_SEASON repo variable
-      # only to force a specific season (e.g. backfill); otherwise leave it unset.
-      NBA_SEASON: ${{ vars.NBA_SEASON }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL || '' }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL || '' }}
+      # Seasons are computed from the date in code. Set the NBA_SEASON / MLB_SEASON
+      # repo variables only to force a specific season (e.g. backfill).
+      NBA_SEASON: ${{ vars.NBA_SEASON || '' }}
+      MLB_SEASON: ${{ vars.MLB_SEASON || '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -42,11 +50,32 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      # Fail fast with an actionable message if the DB secrets are missing,
+      # instead of Prisma's cryptic "Connection url is empty".
+      - name: Check database secrets
+        run: |
+          missing=0
+          if [ -z "$DATABASE_URL" ]; then echo "::error::DATABASE_URL secret is not set."; missing=1; fi
+          if [ -z "$DIRECT_URL" ]; then echo "::error::DIRECT_URL secret is not set."; missing=1; fi
+          if [ "$missing" = "1" ]; then
+            echo "Add DATABASE_URL and DIRECT_URL as repository secrets (Settings → Secrets and variables → Actions)."
+            echo "Use the same values as your local .env.prod.local (DATABASE_URL = pooler :6543, DIRECT_URL = pooler :5432, both with sslmode=require)."
+            exit 1
+          fi
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Apply database migrations
         run: pnpm db:deploy
 
-      - name: Run ingest
+      - name: Run NBA ingest
+        id: nba_ingest
         run: pnpm ingest
+
+      # MLB uses statsapi.mlb.com (not IP-blocked), so refresh it even when the
+      # NBA step fails on a transient cloud-IP block. Skipped if migrations or
+      # earlier setup failed. The job still reports failure if NBA failed.
+      - name: Run MLB ingest
+        if: ${{ success() || steps.nba_ingest.outcome == 'failure' }}
+        run: pnpm ingest:mlb

@@ -17,6 +17,8 @@ import {
   statValue,
   statKeysForSport,
   defaultStatForSport,
+  nbaMinutesThreshold,
+  RECENT_GAMES_WINDOW,
 } from '@/lib/stats';
 import { roundToHalfLine } from '@/lib/format';
 import { currentSeason, previousSeason } from '@/lib/season';
@@ -48,16 +50,14 @@ const getActiveSeason = cache(async (sport: Sport): Promise<string> => {
   return current; // nothing ingested — queries return empty, handled gracefully
 });
 
-// NBA: exclude low-minute games / DNPs so a 2-minute injury exit doesn't drag
-// rates around. MLB rows have no minutes — any appearance counts.
-const MINUTES_FLOOR = (() => {
-  const n = Number(process.env.NBA_MIN_MINUTES ?? 10);
-  return Number.isFinite(n) && n >= 0 ? n : 10;
-})();
-
-function isQualified(sport: Sport, minutes: number | null | undefined): boolean {
+// NBA: exclude games where a player logged well below their normal role (injury
+// exits / garbage time) so they don't drag rates around — but the bar is
+// per-player (the average of their season and last-10 minutes-per-game), so
+// bench players aren't zeroed out by a fixed floor. MLB has no minutes — any
+// appearance counts. `threshold` is the player's nbaMinutesThreshold (0 for MLB).
+function isQualified(sport: Sport, minutes: number | null | undefined, threshold: number): boolean {
   if (sport === 'mlb') return true;
-  return minutes != null && minutes >= MINUTES_FLOOR;
+  return minutes != null && minutes > 0 && minutes >= threshold;
 }
 
 const POS_LABEL: Record<string, string> = { G: 'guards', F: 'forwards', C: 'centers' };
@@ -330,16 +330,32 @@ async function getNbaDvp(
 ): Promise<DvpCell | null> {
   const expr = NBA_STAT_SQL[stat];
   if (!expr) return null;
+  // Apply the SAME per-player minute threshold as the player page: for each
+  // player, blend their season and last-N appearance minutes, then keep only
+  // games at/above that bar. Done in SQL (window function) so the league-wide
+  // DvP averages stay consistent with each player's own role.
   const rows = await db.$queryRawUnsafe<{ opponentTeamId: number; avg: number; n: number }[]>(
-    `SELECT s."opponentTeamId" AS "opponentTeamId", AVG(${expr})::float8 AS avg, COUNT(*)::int AS n
-     FROM "PlayerGameStat" s
-     JOIN "Player" p ON p.id = s."playerId"
-     WHERE p.sport = 'nba' AND p."posBucket" = $1 AND s.season = $2
-       AND s.minutes IS NOT NULL AND s.minutes >= $3
-     GROUP BY s."opponentTeamId"`,
+    `WITH games AS (
+       SELECT s."opponentTeamId" AS opp, s.minutes AS minutes, (${expr}) AS val,
+              ROW_NUMBER() OVER (PARTITION BY s."playerId" ORDER BY s."gameDate" DESC) AS rn,
+              s."playerId" AS pid
+       FROM "PlayerGameStat" s
+       JOIN "Player" p ON p.id = s."playerId"
+       WHERE p.sport = 'nba' AND p."posBucket" = $1 AND s.season = $2
+         AND s.minutes IS NOT NULL AND s.minutes > 0
+     ),
+     thresh AS (
+       SELECT pid, (AVG(minutes) + AVG(minutes) FILTER (WHERE rn <= $3)) / 2.0 AS thr
+       FROM games GROUP BY pid
+     )
+     SELECT g.opp AS "opponentTeamId", AVG(g.val)::float8 AS avg, COUNT(*)::int AS n
+     FROM games g
+     JOIN thresh t ON t.pid = g.pid
+     WHERE g.minutes >= t.thr
+     GROUP BY g.opp`,
     posBucket,
     season,
-    MINUTES_FLOOR,
+    RECENT_GAMES_WINDOW,
   );
   if (rows.length === 0) return null;
   const cells = rankDvp(
@@ -417,7 +433,8 @@ export async function getPlayerResearch(
       : defaultStatForSport(sport, record.posBucket);
 
   const allGames = await getPlayerGames(record.id);
-  const games = allGames.filter((g) => isQualified(sport, g.minutes));
+  const minThreshold = sport === 'nba' ? nbaMinutesThreshold(allGames.map((g) => g.minutes)) : 0;
+  const games = allGames.filter((g) => isQualified(sport, g.minutes, minThreshold));
   const line = lineParam ?? defaultLine(games, stat);
 
   const windows: WindowResult[] = STAT_WINDOWS.map((w) => {

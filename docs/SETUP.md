@@ -50,9 +50,11 @@ pnpm dev                # http://localhost:3000
 ```
 DATABASE_URL="...dev project session pooler...?sslmode=require"
 DIRECT_URL="...dev project session pooler...?sslmode=require"
-NBA_MIN_MINUTES=10
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
+
+> The NBA minutes filter is now per-player (season + last-10 minutes-per-game),
+> computed automatically
 
 > The portable local Postgres on `:5433` we used during the build still works offline,
 > but the cloud dev project is the durable path (survives reboots, matches prod).
@@ -68,7 +70,6 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
    |---|---|
    | `DATABASE_URL` | prod project session-pooler URL (`?sslmode=require`) |
    | `DIRECT_URL` | same |
-   | `NBA_MIN_MINUTES` | `10` |
    | `NEXT_PUBLIC_SITE_URL` | `https://fantasyfire.app` |
 3. **Before the first deploy**, migrate + seed the prod DB from your machine. Put the
    PROD password into `.env.prod.local` (gitignored), then:
