@@ -83,6 +83,9 @@ type PlayerRecord = {
   lastName: string;
   position: string | null;
   posBucket: string | null;
+  jersey: string | null;
+  height: string | null;
+  weight: number | null;
   team: { abbreviation: string; name: string } | null;
 };
 
@@ -99,6 +102,9 @@ const getPlayerRecord = cache((slug: string): Promise<PlayerRecord | null> => {
       lastName: true,
       position: true,
       posBucket: true,
+      jersey: true,
+      height: true,
+      weight: true,
       team: { select: { abbreviation: true, name: true } },
     },
   });
@@ -120,6 +126,9 @@ function toSummary(p: PlayerRecord): PlayerSummary {
     fullName: `${p.firstName} ${p.lastName}`.trim(),
     position: p.position ?? null,
     posBucket: (p.posBucket as PosBucket | null) ?? null,
+    jersey: p.jersey ?? null,
+    height: p.height ?? null,
+    weight: p.weight ?? null,
     teamAbbreviation: p.team?.abbreviation ?? null,
     teamName: teamDisplayName(p.team?.abbreviation, p.team?.name ?? null),
   };
@@ -209,6 +218,9 @@ export async function searchPlayers(q?: string, limit = 20): Promise<PlayerListI
     fullName: `${p.firstName} ${p.lastName}`.trim(),
     position: p.position ?? null,
     posBucket: (p.posBucket as PosBucket | null) ?? null,
+    jersey: p.jersey ?? null,
+    height: p.height ?? null,
+    weight: p.weight ?? null,
     teamAbbreviation: p.team?.abbreviation ?? null,
     teamName: teamDisplayName(p.team?.abbreviation, p.team?.name ?? null),
     gamesPlayed: p._count.gameStats,

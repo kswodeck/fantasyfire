@@ -38,6 +38,9 @@ model Player {
   slug      String  @unique // for SEO URLs, e.g. "lebron-james"
   position  String? // raw, e.g. "G", "F-C"
   posBucket String? // normalized: "G" | "F" | "C"
+  jersey    String? // jersey number (string: can be "00")
+  height    String? // e.g. "6-6"
+  weight    Int? // pounds
   teamId    Int?
   team      Team?   @relation(fields: [teamId], references: [id])
 

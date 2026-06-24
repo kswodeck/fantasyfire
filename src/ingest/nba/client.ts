@@ -49,6 +49,8 @@ const PLAYER_INDEX_COLUMNS = [
   'TEAM_ABBREVIATION',
   'POSITION',
   'JERSEY_NUMBER',
+  'HEIGHT',
+  'WEIGHT',
 ];
 
 const LEAGUE_GAME_LOG_COLUMNS = [
@@ -141,6 +143,8 @@ export class NbaStatsClient {
         position,
         posBucket: toPosBucket(position),
         jerseyNumber: toStrOrNull(r['JERSEY_NUMBER']),
+        height: toStrOrNull(r['HEIGHT']),
+        weight: toNumOrNull(r['WEIGHT']),
       };
     });
   }

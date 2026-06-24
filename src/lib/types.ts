@@ -18,6 +18,9 @@ export interface PlayerSummary {
   fullName: string;
   position: string | null;
   posBucket: PosBucket | null;
+  jersey: string | null;
+  height: string | null; // e.g. "6-6"
+  weight: number | null; // lbs
   teamAbbreviation: string | null;
   teamName: string | null;
 }

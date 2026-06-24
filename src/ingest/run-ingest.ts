@@ -140,6 +140,9 @@ async function main() {
             slug,
             position: p.position ?? undefined,
             posBucket: p.posBucket ?? undefined,
+            jersey: p.jerseyNumber ?? undefined,
+            height: p.height ?? undefined,
+            weight: p.weight ?? undefined,
             teamId: teamId ?? undefined,
           },
           update: {
@@ -148,6 +151,9 @@ async function main() {
             slug,
             position: p.position ?? undefined,
             posBucket: p.posBucket ?? undefined,
+            jersey: p.jerseyNumber ?? undefined,
+            height: p.height ?? undefined,
+            weight: p.weight ?? undefined,
             teamId: teamId ?? undefined,
           },
         });

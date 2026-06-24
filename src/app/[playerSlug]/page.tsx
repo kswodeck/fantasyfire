@@ -116,8 +116,10 @@ export default async function PlayerPage({ params }: PageProps) {
             <h1 className="mt-1 text-3xl font-bold tracking-tight">{player.fullName}</h1>
             <p className="mt-1 text-sm text-muted">
               {[
+                player.jersey ? `#${player.jersey}` : null,
                 player.position,
-                player.posBucket ? `${player.posBucket}-bucket` : null,
+                player.height,
+                player.weight ? `${player.weight} lb` : null,
                 `${research.gamesPlayed} games`,
               ]
                 .filter(Boolean)

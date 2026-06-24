@@ -38,6 +38,10 @@ export interface PlayerIndexRow {
   /** Coarse bucket for DvP grouping. */
   posBucket: 'G' | 'F' | 'C' | null;
   jerseyNumber: string | null;
+  /** Listed height, e.g. "6-6" (feet-inches), or null. */
+  height: string | null;
+  /** Listed weight in pounds, or null. */
+  weight: number | null;
 }
 
 /** Normalized single-game box score line (from /leaguegamelog, PlayerOrTeam=P). */
