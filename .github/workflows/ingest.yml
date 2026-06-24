@@ -61,6 +61,14 @@ jobs:
           missing=0
           if [ -z "$DATABASE_URL" ]; then echo "::error::DATABASE_URL secret is not set."; missing=1; fi
           if [ -z "$DIRECT_URL" ]; then echo "::error::DIRECT_URL secret is not set."; missing=1; fi
+          # `prisma migrate deploy` takes a session-level advisory lock, which the
+          # Supabase TRANSACTION pooler (:6543) can't hold — it hangs until the job
+          # times out. DIRECT_URL must be the SESSION pooler (:5432) or a direct
+          # connection. Catch the misconfig in seconds instead of after an hour.
+          if printf '%s' "$DIRECT_URL" | grep -q ':6543'; then
+            echo "::error::DIRECT_URL points at the transaction pooler (:6543); migrate deploy will hang. Use the Supabase SESSION pooler (:5432) or a direct connection."
+            missing=1
+          fi
           if [ "$missing" = "1" ]; then
             echo "Add DATABASE_URL and DIRECT_URL as repository secrets (Settings → Secrets and variables → Actions)."
             echo "Use the same values as your local .env.prod.local (DATABASE_URL = pooler :6543, DIRECT_URL = pooler :5432, both with sslmode=require)."
@@ -71,6 +79,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Apply database migrations
+        # Cap migrate so a bad/hung connection fails fast instead of consuming the
+        # whole 60-minute job budget (migrate deploy normally finishes in seconds).
+        timeout-minutes: 5
         run: pnpm db:deploy
 
       - name: Run NBA ingest
