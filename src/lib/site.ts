@@ -8,7 +8,7 @@ export const SITE = {
   /** Short tagline used in titles and OG. */
   tagline: 'NBA Player Props Research',
   description:
-    'Free NBA player prop research: hit rates over L5/L10/L20/season, defense-vs-position matchups, sample-size confidence intervals, and fair-price math — all from public game logs.',
+    "NBA player-prop research that's honest about uncertainty: hit rates over L5/L10/L20/season, defense-vs-position matchups, sample-size confidence intervals, and fair-price math — from public game logs.",
   /** Canonical origin with no trailing slash. */
   url: rawUrl.replace(/\/+$/, ''),
   /** Public contact email. */

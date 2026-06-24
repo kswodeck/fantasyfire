@@ -21,10 +21,10 @@ export default function AboutPage() {
 
       <Prose>
         <p>
-          {SITE.name}{' '}is a free NBA player-prop research tool. We turn public game
-          logs into clear, honest answers about player props — hit rates, matchups,
-          and how much you can actually trust each number — so you can do your own
-          research without paying for &ldquo;locks&rdquo; or wading through ads.
+          {SITE.name}{' '}is an NBA player-prop research tool. We turn public game logs
+          into clear, honest answers about player props — hit rates, matchups, and how
+          much you can actually trust each number — so you can do your own research
+          instead of trusting someone else&rsquo;s &ldquo;locks.&rdquo;
         </p>
 
         <h2>What it does</h2>

@@ -6,7 +6,7 @@ import { SITE } from '@/lib/site';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy',
-  description: `How ${SITE.name} handles data. Short version: no accounts, no tracking by default.`,
+  description: `How ${SITE.name} handles your data — we collect as little as possible.`,
   alternates: { canonical: '/privacy' },
 };
 
@@ -24,15 +24,16 @@ export default function PrivacyPage() {
 
       <Prose>
         <p>
-          The short version: {SITE.name} has no user accounts and does not require you to
-          provide any personal information to use it. We try to collect as little as
-          possible.
+          The short version: {SITE.name} collects as little as possible, and we do not
+          sell or rent your data. Browsing the site does not currently require an account.
         </p>
 
-        <h2>Information we do not collect</h2>
+        <h2>Information we collect</h2>
         <p>
-          There is no sign-up, login, or profile. We do not ask for your name, email, or
-          payment details to browse the site, and we do not sell or rent data to anyone.
+          Today, browsing {SITE.name} does not require you to create an account or provide
+          personal details such as your name or email. If we introduce accounts or paid
+          features in the future, we will update this policy to explain what is collected
+          and why before those features go live.
         </p>
 
         <h2>Analytics</h2>

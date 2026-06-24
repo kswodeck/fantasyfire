@@ -12,8 +12,8 @@ export const metadata: Metadata = {
 
 const FAQS: { q: string; a: string }[] = [
   {
-    q: 'Is FantasyFire free?',
-    a: 'Yes. FantasyFire is completely free — no account, no login, and no ads. Search a player and start researching.',
+    q: 'What is FantasyFire?',
+    a: 'FantasyFire is an NBA player-prop research tool. Search any player to see hit rates, matchups, sample-size confidence, and fair-price math — all computed from public game logs.',
   },
   {
     q: 'Where does the data come from?',

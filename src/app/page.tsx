@@ -23,7 +23,8 @@ export default async function Home() {
         </h1>
         <p className="max-w-xl text-lg text-muted">
           Hit rates, defense-vs-position matchups, sample-size confidence, and fair-price
-          math — computed from public game logs. No ads, no login.
+          math — computed from public game logs, with the uncertainty shown rather than
+          hidden.
         </p>
         <div className="w-full max-w-xl">
           <SearchForm />

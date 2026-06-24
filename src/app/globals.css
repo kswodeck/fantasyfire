@@ -3,7 +3,7 @@
 /*
  * FantasyFire design tokens. Light/dark values live on :root and switch via
  * prefers-color-scheme; @theme maps them to Tailwind utilities (bg-surface,
- * text-muted, text-over, border-line, etc.). Mobile-first, clean, no ads.
+ * text-muted, text-over, border-line, etc.). Mobile-first, clean, uncluttered.
  */
 :root {
   --background: #fafaf9; /* warm off-white */

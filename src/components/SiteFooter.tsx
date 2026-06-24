@@ -44,7 +44,7 @@ export function SiteFooter() {
               </span>
             </Link>
             <p className="mt-3 text-xs leading-relaxed text-muted">
-              {SITE.tagline} from public game logs. No ads, no login.
+              Honest player-prop research, built on public NBA game logs.
             </p>
             <a
               href={`mailto:${SITE.email}`}
@@ -77,8 +77,8 @@ export function SiteFooter() {
 
         <div className="mt-8 space-y-2 border-t border-line pt-6 text-xs leading-relaxed text-muted">
           <p>
-            <strong className="text-foreground">{SITE.name}</strong> is a free research
-            tool built on public NBA game logs. Hit rates and matchup numbers are
+            <strong className="text-foreground">{SITE.name}</strong> is a research tool
+            built on public NBA game logs. Hit rates and matchup numbers are
             descriptive statistics about past performance — they are{' '}
             <strong className="text-foreground">
               not predictions, advice, or a guarantee
