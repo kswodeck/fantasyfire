@@ -3,9 +3,11 @@ import { notFound } from 'next/navigation';
 import { getTopPlayerSlugs, getPlayerBySlug, getPlayerResearch } from '@/lib/server/players';
 import { absoluteUrl } from '@/lib/site';
 import { getTeam } from '@/lib/teams';
+import { configuredSeason } from '@/lib/season';
 import { PlayerResearchClient } from '@/components/PlayerResearchClient';
 import { PlayerAvatar } from '@/components/PlayerAvatar';
 import { TeamLogo } from '@/components/TeamLogo';
+import { PlayerBioBar } from '@/components/PlayerBioBar';
 
 // ISR: statically generate all player pages, revalidate hourly.
 export const revalidate = 3600;
@@ -54,6 +56,10 @@ export default async function PlayerPage({ params }: PageProps) {
 
   const { player } = research;
   const team = getTeam(player.teamAbbreviation);
+  const seasonStartYear = Number(configuredSeason().slice(0, 4));
+  const experience = research.bio.fromYear
+    ? Math.max(1, seasonStartYear - research.bio.fromYear + 1)
+    : null;
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -128,6 +134,8 @@ export default async function PlayerPage({ params }: PageProps) {
           </div>
         </div>
       </header>
+
+      <PlayerBioBar bio={research.bio} experience={experience} />
 
       <PlayerResearchClient
         slug={player.slug}

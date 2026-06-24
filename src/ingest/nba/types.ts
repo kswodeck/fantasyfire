@@ -42,6 +42,14 @@ export interface PlayerIndexRow {
   height: string | null;
   /** Listed weight in pounds, or null. */
   weight: number | null;
+  college: string | null;
+  country: string | null;
+  /** Draft year / round / overall pick. null pick = undrafted. */
+  draftYear: number | null;
+  draftRound: number | null;
+  draftNumber: number | null;
+  /** First NBA season year (for experience). */
+  fromYear: number | null;
 }
 
 /** Normalized single-game box score line (from /leaguegamelog, PlayerOrTeam=P). */

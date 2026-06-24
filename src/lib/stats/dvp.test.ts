@@ -6,10 +6,13 @@ function row(opponentTeamId: number, posBucket: PosBucket | null, points: number
   const game: GameStatLine = {
     points,
     rebounds: 0,
+    oreb: 0,
+    dreb: 0,
     assists: 0,
     steals: 0,
     blocks: 0,
     turnovers: 0,
+    fouls: 0,
     fgm: 0,
     fga: 0,
     fg3m: 0,

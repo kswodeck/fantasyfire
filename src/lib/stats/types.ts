@@ -5,10 +5,13 @@
 export interface GameStatLine {
   points: number;
   rebounds: number;
+  oreb: number;
+  dreb: number;
   assists: number;
   steals: number;
   blocks: number;
   turnovers: number;
+  fouls: number;
   fgm: number;
   fga: number;
   fg3m: number;
@@ -29,11 +32,14 @@ export type PosBucket = 'G' | 'F' | 'C';
 export type StatKey =
   | 'pts'
   | 'reb'
+  | 'oreb'
+  | 'dreb'
   | 'ast'
   | 'fg3m'
   | 'stl'
   | 'blk'
   | 'tov'
+  | 'fouls'
   | 'pra'
   | 'pr'
   | 'pa'
@@ -53,11 +59,14 @@ export interface StatDef {
 export const STAT_DEFS: Record<StatKey, StatDef> = {
   pts: { key: 'pts', label: 'Points', short: 'PTS', value: (g) => g.points },
   reb: { key: 'reb', label: 'Rebounds', short: 'REB', value: (g) => g.rebounds },
+  oreb: { key: 'oreb', label: 'Offensive Rebounds', short: 'OREB', value: (g) => g.oreb },
+  dreb: { key: 'dreb', label: 'Defensive Rebounds', short: 'DREB', value: (g) => g.dreb },
   ast: { key: 'ast', label: 'Assists', short: 'AST', value: (g) => g.assists },
   fg3m: { key: 'fg3m', label: '3-Pointers Made', short: '3PM', value: (g) => g.fg3m },
   stl: { key: 'stl', label: 'Steals', short: 'STL', value: (g) => g.steals },
   blk: { key: 'blk', label: 'Blocks', short: 'BLK', value: (g) => g.blocks },
   tov: { key: 'tov', label: 'Turnovers', short: 'TOV', value: (g) => g.turnovers },
+  fouls: { key: 'fouls', label: 'Personal Fouls', short: 'PF', value: (g) => g.fouls },
   pra: {
     key: 'pra',
     label: 'Points + Rebounds + Assists',

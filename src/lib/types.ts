@@ -35,6 +35,8 @@ export interface PlayerGame extends GameStatLine {
   opponentTeamId: number;
   opponentAbbreviation: string;
   isHome: boolean;
+  wl: string | null;
+  plusMinus: number | null;
 }
 
 export interface ChartPoint {
@@ -43,6 +45,18 @@ export interface ChartPoint {
   isHome: boolean;
   value: number;
   result: 'over' | 'under' | 'push';
+  wl: string | null;
+  plusMinus: number | null;
+}
+
+/** Player bio (from playerindex). Shown on the player page. */
+export interface PlayerBio {
+  college: string | null;
+  country: string | null;
+  draftYear: number | null;
+  draftRound: number | null;
+  draftNumber: number | null;
+  fromYear: number | null;
 }
 
 export interface WindowResult {
@@ -53,6 +67,7 @@ export interface WindowResult {
 
 export interface PlayerResearch {
   player: PlayerSummary;
+  bio: PlayerBio;
   stat: StatKey;
   line: number;
   seasonAverage: number | null;

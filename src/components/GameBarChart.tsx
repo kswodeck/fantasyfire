@@ -34,7 +34,7 @@ export function GameBarChart({
   const n = chronological.length;
 
   // Layout (SVG units; the SVG scales responsively to its container).
-  const m = { top: 22, right: 12, bottom: 30, left: 12 };
+  const m = { top: 22, right: 12, bottom: 40, left: 12 };
   const step = 32;
   const barW = 20;
   const plotH = 160;
@@ -84,8 +84,11 @@ export function GameBarChart({
           return (
             <g key={`${p.gameDate}-${i}`}>
               <title>
-                {p.gameDate} {p.isHome ? 'vs' : '@'} {p.opponentAbbreviation}:{' '}
-                {p.value} {statShort} ({p.result})
+                {p.gameDate} {p.isHome ? 'vs' : '@'} {p.opponentAbbreviation}
+                {p.wl ? ` (${p.wl})` : ''}: {p.value} {statShort}, {p.result}
+                {p.plusMinus != null
+                  ? `, ${p.plusMinus > 0 ? '+' : ''}${p.plusMinus} +/-`
+                  : ''}
               </title>
               <rect
                 x={x}
@@ -115,6 +118,18 @@ export function GameBarChart({
                 {p.isHome ? '' : '@'}
                 {p.opponentAbbreviation}
               </text>
+              {p.wl && (
+                <text
+                  x={x + barW / 2}
+                  y={baselineY + 23}
+                  textAnchor="middle"
+                  fontSize={8}
+                  fontWeight={600}
+                  fill={p.wl === 'W' ? 'var(--over)' : 'var(--under)'}
+                >
+                  {p.wl}
+                </text>
+              )}
             </g>
           );
         })}

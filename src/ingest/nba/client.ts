@@ -51,6 +51,12 @@ const PLAYER_INDEX_COLUMNS = [
   'JERSEY_NUMBER',
   'HEIGHT',
   'WEIGHT',
+  'COLLEGE',
+  'COUNTRY',
+  'DRAFT_YEAR',
+  'DRAFT_ROUND',
+  'DRAFT_NUMBER',
+  'FROM_YEAR',
 ];
 
 const LEAGUE_GAME_LOG_COLUMNS = [
@@ -145,6 +151,12 @@ export class NbaStatsClient {
         jerseyNumber: toStrOrNull(r['JERSEY_NUMBER']),
         height: toStrOrNull(r['HEIGHT']),
         weight: toNumOrNull(r['WEIGHT']),
+        college: toStrOrNull(r['COLLEGE']),
+        country: toStrOrNull(r['COUNTRY']),
+        draftYear: toNumOrNull(r['DRAFT_YEAR']),
+        draftRound: toNumOrNull(r['DRAFT_ROUND']),
+        draftNumber: toNumOrNull(r['DRAFT_NUMBER']),
+        fromYear: toNumOrNull(r['FROM_YEAR']),
       };
     });
   }

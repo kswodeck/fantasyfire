@@ -41,6 +41,12 @@ model Player {
   jersey    String? // jersey number (string: can be "00")
   height    String? // e.g. "6-6"
   weight    Int? // pounds
+  college     String?
+  country     String?
+  draftYear   Int?
+  draftRound  Int?
+  draftNumber Int? // overall pick; null = undrafted
+  fromYear    Int? // first NBA season year (for experience)
   teamId    Int?
   team      Team?   @relation(fields: [teamId], references: [id])
 
@@ -76,16 +82,21 @@ model PlayerGameStat {
   minutes        Float?
   points         Int
   rebounds       Int
+  oreb           Int      @default(0) // offensive rebounds
+  dreb           Int      @default(0) // defensive rebounds
   assists        Int
   steals         Int
   blocks         Int
   turnovers      Int
+  fouls          Int      @default(0) // personal fouls (PF)
   fgm            Int
   fga            Int
   fg3m           Int
   fg3a           Int
   ftm            Int
   fta            Int
+  wl             String? // "W" | "L"
+  plusMinus      Int?
 
   player       Player @relation(fields: [playerId], references: [id])
   game         Game   @relation(fields: [gameId], references: [id])

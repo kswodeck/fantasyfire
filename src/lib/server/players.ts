@@ -21,6 +21,7 @@ import { configuredSeason, previousNbaSeason } from '@/lib/season';
 import { getTeam } from '@/lib/teams';
 import type {
   PlayerSummary,
+  PlayerBio,
   PlayerGame,
   PlayerListItem,
   ChartPoint,
@@ -63,11 +64,14 @@ function isQualified(minutes: number | null): boolean {
 const STAT_SQL_EXPR: Record<StatKey, string> = {
   pts: 's.points',
   reb: 's.rebounds',
+  oreb: 's.oreb',
+  dreb: 's.dreb',
   ast: 's.assists',
   fg3m: 's.fg3m',
   stl: 's.steals',
   blk: 's.blocks',
   tov: 's.turnovers',
+  fouls: 's.fouls',
   pra: '(s.points + s.rebounds + s.assists)',
   pr: '(s.points + s.rebounds)',
   pa: '(s.points + s.assists)',
@@ -86,6 +90,12 @@ type PlayerRecord = {
   jersey: string | null;
   height: string | null;
   weight: number | null;
+  college: string | null;
+  country: string | null;
+  draftYear: number | null;
+  draftRound: number | null;
+  draftNumber: number | null;
+  fromYear: number | null;
   team: { abbreviation: string; name: string } | null;
 };
 
@@ -105,10 +115,28 @@ const getPlayerRecord = cache((slug: string): Promise<PlayerRecord | null> => {
       jersey: true,
       height: true,
       weight: true,
+      college: true,
+      country: true,
+      draftYear: true,
+      draftRound: true,
+      draftNumber: true,
+      fromYear: true,
       team: { select: { abbreviation: true, name: true } },
     },
   });
 });
+
+/** Bio object from a player record. */
+function toBio(p: PlayerRecord): PlayerBio {
+  return {
+    college: p.college ?? null,
+    country: p.country ?? null,
+    draftYear: p.draftYear ?? null,
+    draftRound: p.draftRound ?? null,
+    draftNumber: p.draftNumber ?? null,
+    fromYear: p.fromYear ?? null,
+  };
+}
 
 /** Prefer the curated full team name; fall back to the stored (abbr) name. */
 function teamDisplayName(abbr: string | null | undefined, dbName: string | null): string | null {
@@ -148,10 +176,13 @@ export async function getPlayerGames(playerId: number): Promise<PlayerGame[]> {
   return rows.map((r) => ({
     points: r.points,
     rebounds: r.rebounds,
+    oreb: r.oreb,
+    dreb: r.dreb,
     assists: r.assists,
     steals: r.steals,
     blocks: r.blocks,
     turnovers: r.turnovers,
+    fouls: r.fouls,
     fgm: r.fgm,
     fga: r.fga,
     fg3m: r.fg3m,
@@ -163,6 +194,8 @@ export async function getPlayerGames(playerId: number): Promise<PlayerGame[]> {
     opponentTeamId: r.opponentTeamId,
     opponentAbbreviation: r.opponentTeam.abbreviation,
     isHome: r.isHome,
+    wl: r.wl,
+    plusMinus: r.plusMinus,
   }));
 }
 
@@ -318,6 +351,8 @@ export async function getPlayerResearch(
       isHome: g.isHome,
       value,
       result: value > line ? 'over' : value < line ? 'under' : 'push',
+      wl: g.wl,
+      plusMinus: g.plusMinus,
     };
   });
 
@@ -333,6 +368,7 @@ export async function getPlayerResearch(
 
   return {
     player,
+    bio: toBio(record),
     stat,
     line,
     seasonAverage: seasonResult.mean,
