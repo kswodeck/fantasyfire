@@ -10,6 +10,8 @@ import type {
 } from '@/lib/stats';
 
 export interface PlayerSummary {
+  /** NBA PERSON_ID — used for the official headshot URL. */
+  nbaId: number;
   slug: string;
   firstName: string;
   lastName: string;

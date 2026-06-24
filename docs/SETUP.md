@@ -15,23 +15,20 @@ For **each** project:
 
 1. Create the project at [supabase.com](https://supabase.com) → note the **database password** you set.
 2. Open **Project → Connect** (top bar) → **ORMs / Prisma**, or **Settings → Database → Connection string**.
-3. Grab the **Session pooler** connection string (IPv4, port **5432**). It looks like:
-   ```
-   postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
-   ```
+3. Grab **two** pooler connection strings (same host, different ports):
+   - **Transaction pooler — port 6543** → `DATABASE_URL` (app + build)
+   - **Session pooler — port 5432** → `DIRECT_URL` (migrations)
 
-> **Why the session pooler for both URLs?** Vercel's serverless functions are IPv4,
-> and Supabase's *direct* connection is now IPv6-only — so you must go through a
-> pooler. The **session** pooler (5432) supports prepared statements and migration
-> advisory locks, so it works for both the app (`DATABASE_URL`) and migrations
-> (`DIRECT_URL`) with Prisma 7's `pg` driver adapter. (Later, for higher concurrency,
-> you can switch `DATABASE_URL` to the **transaction** pooler on port **6543**; keep
-> `DIRECT_URL` on the session pooler / direct for migrations.)
-
-Set both URLs to the session pooler string, adding `?sslmode=require`:
+> **Why two pools?** Vercel is IPv4 and Supabase's *direct* connection is IPv6-only,
+> so you must use a pooler. The **transaction** pooler (6543) multiplexes many clients
+> onto a few server connections — essential because the production **build** statically
+> generates pages across many workers and would otherwise blow past the session
+> pooler's ~15-client cap (`max clients reached in session mode`). Migrations need
+> session semantics (advisory locks), so `DIRECT_URL` uses the **session** pooler
+> (5432). Both work with Prisma 7's `pg` driver adapter (verified). Add `?sslmode=require`.
 
 ```
-DATABASE_URL="postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require"
+DATABASE_URL="postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres?sslmode=require"
 DIRECT_URL="postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require"
 ```
 
@@ -53,7 +50,6 @@ pnpm dev                # http://localhost:3000
 ```
 DATABASE_URL="...dev project session pooler...?sslmode=require"
 DIRECT_URL="...dev project session pooler...?sslmode=require"
-NBA_SEASON=2025-26
 NBA_MIN_MINUTES=10
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
@@ -72,7 +68,6 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
    |---|---|
    | `DATABASE_URL` | prod project session-pooler URL (`?sslmode=require`) |
    | `DIRECT_URL` | same |
-   | `NBA_SEASON` | `2025-26` |
    | `NBA_MIN_MINUTES` | `10` |
    | `NEXT_PUBLIC_SITE_URL` | `https://fantasyfire.app` |
 3. **Before the first deploy**, migrate + seed the prod DB from your machine. Put the

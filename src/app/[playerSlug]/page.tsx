@@ -2,7 +2,10 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTopPlayerSlugs, getPlayerBySlug, getPlayerResearch } from '@/lib/server/players';
 import { absoluteUrl } from '@/lib/site';
+import { getTeam } from '@/lib/teams';
 import { PlayerResearchClient } from '@/components/PlayerResearchClient';
+import { PlayerAvatar } from '@/components/PlayerAvatar';
+import { TeamLogo } from '@/components/TeamLogo';
 
 // ISR: statically generate all player pages, revalidate hourly.
 export const revalidate = 3600;
@@ -50,6 +53,7 @@ export default async function PlayerPage({ params }: PageProps) {
   if (!research) notFound();
 
   const { player } = research;
+  const team = getTeam(player.teamAbbreviation);
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -91,18 +95,36 @@ export default async function PlayerPage({ params }: PageProps) {
         }}
       />
 
-      <header className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight">{player.fullName}</h1>
-        <p className="mt-1 text-sm text-muted">
-          {[
-            player.teamAbbreviation,
-            player.position,
-            player.posBucket ? `${player.posBucket}-bucket` : null,
-            `${research.gamesPlayed} games`,
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-        </p>
+      <header
+        className="mb-6 overflow-hidden rounded-2xl border border-line"
+        style={{
+          background: `linear-gradient(120deg, color-mix(in srgb, ${team.primary} 22%, var(--surface)) 0%, var(--surface) 62%)`,
+        }}
+      >
+        <div className="flex items-center gap-4 p-5">
+          <PlayerAvatar
+            nbaId={player.nbaId}
+            name={player.fullName}
+            size={84}
+            ring={team.primary}
+          />
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 text-sm text-muted">
+              <TeamLogo abbr={player.teamAbbreviation} size={18} />
+              <span className="truncate">{player.teamName ?? player.teamAbbreviation}</span>
+            </div>
+            <h1 className="mt-1 text-3xl font-bold tracking-tight">{player.fullName}</h1>
+            <p className="mt-1 text-sm text-muted">
+              {[
+                player.position,
+                player.posBucket ? `${player.posBucket}-bucket` : null,
+                `${research.gamesPlayed} games`,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+          </div>
+        </div>
       </header>
 
       <PlayerResearchClient

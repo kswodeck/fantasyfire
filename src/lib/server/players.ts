@@ -18,6 +18,7 @@ import {
 } from '@/lib/stats';
 import { roundToHalfLine } from '@/lib/format';
 import { configuredSeason, previousNbaSeason } from '@/lib/season';
+import { getTeam } from '@/lib/teams';
 import type {
   PlayerSummary,
   PlayerGame,
@@ -76,6 +77,7 @@ const STAT_SQL_EXPR: Record<StatKey, string> = {
 
 type PlayerRecord = {
   id: number;
+  nbaId: number;
   slug: string;
   firstName: string;
   lastName: string;
@@ -91,6 +93,7 @@ const getPlayerRecord = cache((slug: string): Promise<PlayerRecord | null> => {
     where: { slug },
     select: {
       id: true,
+      nbaId: true,
       slug: true,
       firstName: true,
       lastName: true,
@@ -101,8 +104,16 @@ const getPlayerRecord = cache((slug: string): Promise<PlayerRecord | null> => {
   });
 });
 
+/** Prefer the curated full team name; fall back to the stored (abbr) name. */
+function teamDisplayName(abbr: string | null | undefined, dbName: string | null): string | null {
+  if (!abbr) return dbName ?? null;
+  const t = getTeam(abbr);
+  return t.fullName || dbName || abbr;
+}
+
 function toSummary(p: PlayerRecord): PlayerSummary {
   return {
+    nbaId: p.nbaId,
     slug: p.slug,
     firstName: p.firstName,
     lastName: p.lastName,
@@ -110,7 +121,7 @@ function toSummary(p: PlayerRecord): PlayerSummary {
     position: p.position ?? null,
     posBucket: (p.posBucket as PosBucket | null) ?? null,
     teamAbbreviation: p.team?.abbreviation ?? null,
-    teamName: p.team?.name ?? null,
+    teamName: teamDisplayName(p.team?.abbreviation, p.team?.name ?? null),
   };
 }
 
@@ -191,6 +202,7 @@ export async function searchPlayers(q?: string, limit = 20): Promise<PlayerListI
     take: limit,
   });
   return rows.map((p) => ({
+    nbaId: p.nbaId,
     slug: p.slug,
     firstName: p.firstName,
     lastName: p.lastName,
@@ -198,7 +210,7 @@ export async function searchPlayers(q?: string, limit = 20): Promise<PlayerListI
     position: p.position ?? null,
     posBucket: (p.posBucket as PosBucket | null) ?? null,
     teamAbbreviation: p.team?.abbreviation ?? null,
-    teamName: p.team?.name ?? null,
+    teamName: teamDisplayName(p.team?.abbreviation, p.team?.name ?? null),
     gamesPlayed: p._count.gameStats,
   }));
 }

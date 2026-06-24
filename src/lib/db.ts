@@ -23,8 +23,14 @@ const createPrismaClient = () => {
   // `prisma migrate` keeps using the original URL (with sslmode) from prisma.config.ts.
   const hasSslmode = /[?&]sslmode=/i.test(raw);
   const connectionString = hasSslmode ? raw.replace(/[?&]sslmode=[^&]*/i, '') : raw;
+  // Small per-process pool. DATABASE_URL should point at Supabase's TRANSACTION
+  // pooler (port 6543), which multiplexes many clients onto few server connections
+  // — so a low `max` per process keeps the multi-worker build and serverless
+  // functions well under the pooler's client limit. (Migrations use DIRECT_URL /
+  // the session pooler via prisma.config.ts.)
   const adapter = new PrismaPg({
     connectionString,
+    max: 3,
     ...(hasSslmode ? { ssl: { rejectUnauthorized: false } } : {}),
   });
   return new PrismaClient({ adapter });
