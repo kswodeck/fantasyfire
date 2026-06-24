@@ -11,8 +11,8 @@ export const SITE = {
     'Free NBA player prop research: hit rates over L5/L10/L20/season, defense-vs-position matchups, sample-size confidence intervals, and fair-price math — all from public game logs.',
   /** Canonical origin with no trailing slash. */
   url: rawUrl.replace(/\/+$/, ''),
-  /** Twitter/X handle (optional, for cards). */
-  twitter: '@fantasyfire',
+  /** Public contact email. */
+  email: 'hello@fantasyfire.app',
 } as const;
 
 /** Build an absolute URL from a path (for canonical/OG/sitemap). */

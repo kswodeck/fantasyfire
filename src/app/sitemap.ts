@@ -18,9 +18,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
-  return [
-    { url: absoluteUrl('/'), changeFrequency: 'daily', priority: 1, lastModified: new Date() },
-    { url: absoluteUrl('/players'), changeFrequency: 'daily', priority: 0.8, lastModified: new Date() },
-    ...players,
+  const now = new Date();
+  const staticPages: MetadataRoute.Sitemap = [
+    { url: absoluteUrl('/'), changeFrequency: 'daily', priority: 1, lastModified: now },
+    { url: absoluteUrl('/players'), changeFrequency: 'daily', priority: 0.8, lastModified: now },
+    { url: absoluteUrl('/how-it-works'), changeFrequency: 'monthly', priority: 0.6, lastModified: now },
+    { url: absoluteUrl('/about'), changeFrequency: 'monthly', priority: 0.4, lastModified: now },
+    { url: absoluteUrl('/contact'), changeFrequency: 'yearly', priority: 0.3, lastModified: now },
+    { url: absoluteUrl('/responsible-gaming'), changeFrequency: 'yearly', priority: 0.3, lastModified: now },
+    { url: absoluteUrl('/privacy'), changeFrequency: 'yearly', priority: 0.2, lastModified: now },
+    { url: absoluteUrl('/terms'), changeFrequency: 'yearly', priority: 0.2, lastModified: now },
   ];
+
+  return [...staticPages, ...players];
 }
