@@ -166,6 +166,12 @@ export default function MethodologyPage() {
           on low-sample cells.
         </p>
         <p>
+          <strong>Situational splits</strong> break any stat down by home/away and by days since
+          the player&rsquo;s last game, and each split carries its <strong>own</strong> 95% Wilson
+          confidence — so a small-sample &ldquo;crushes at home&rdquo; reads as Low, not as an edge.
+          Splits describe past games in that situation; they are not a forecast.
+        </p>
+        <p>
           <strong>FireScore</strong> blends these descriptive signals into one transparent
           read of how a line leans — <em>Strong lean</em>, <em>Lean</em>,{' '}
           <em>Slight lean</em>, <em>No lean</em>, or <em>Pass</em>. It is a{' '}

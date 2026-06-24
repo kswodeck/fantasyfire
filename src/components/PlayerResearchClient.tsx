@@ -18,6 +18,7 @@ import { GameBarChart } from './GameBarChart';
 import { DvpBlock } from './DvpBlock';
 import { WhyReadout } from './WhyReadout';
 import { VerdictPanel } from './VerdictPanel';
+import { SplitsPanel } from './SplitsPanel';
 
 /** Sanitize raw odds: treat 0 / non-finite as "not entered". */
 function cleanOdds(x: number | null): number | null {
@@ -162,6 +163,9 @@ export function PlayerResearchClient({
       <section aria-label="Game-by-game" className="mb-6">
         <GameBarChart points={data.chart} line={data.line} statShort={statDef.short} />
       </section>
+
+      {/* Situational splits */}
+      <SplitsPanel splits={data.splits} statShort={statDef.short} line={data.line} />
 
       {/* Matchup + read */}
       <section className="mb-6 grid gap-4 md:grid-cols-2">

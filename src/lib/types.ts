@@ -11,6 +11,7 @@ import type {
   Consistency,
   MatchupGrade,
   FireScoreResult,
+  PlayerSplits,
 } from '@/lib/stats';
 import type { Sport } from '@/lib/sports';
 
@@ -95,6 +96,8 @@ export interface PlayerResearch {
   lastGameDate: string | null;
   /** The FireScore verdict + its sub-reads for this stat + line. */
   verdict: PlayerVerdict;
+  /** Home/away + days-since-last-game splits for this stat + line. */
+  splits: PlayerSplits;
   /** Last 20 games, most-recent-first, for the bar chart. */
   chart: ChartPoint[];
   windows: WindowResult[];
@@ -112,4 +115,25 @@ export interface BoardRow {
   /** Stabilized recent-form estimate (for the "recent X vs line Y" read). */
   projection: number | null;
   fireScore: FireScoreResult;
+}
+
+/** One analyzed line from a pasted slate (matched, or skipped with a reason). */
+export interface SlateResult {
+  raw: string;
+  matched: boolean;
+  /** Why an entry was skipped (when matched === false). */
+  reason?: string;
+  player?: PlayerSummary;
+  stat?: StatKey;
+  statShort?: string;
+  line?: number;
+  /** American odds the user supplied for the over (drives edge + EV). */
+  odds?: number | null;
+  fireScore?: FireScoreResult;
+  /** Season over rate at the user's line. */
+  overHitRate?: number | null;
+  /** historical hit rate − price-implied prob (only with odds). */
+  edge?: number | null;
+  /** EV per $1 on the over vs the user's price (only with odds). */
+  evPerDollar?: number | null;
 }

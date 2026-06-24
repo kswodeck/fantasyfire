@@ -23,10 +23,13 @@ import {
   computeConsistency,
   matchupGrade,
   computeFireScore,
+  computeSplits,
   STAT_DEFS,
   FIRESCORE_MIN_GAMES,
 } from '@/lib/stats';
 import { roundToHalfLine, median } from '@/lib/format';
+import { fairPriceReadout } from '@/lib/odds';
+import { parseSlate, normalizeName } from '@/lib/slate';
 import { currentSeason, previousSeason } from '@/lib/season';
 import { getTeam } from '@/lib/teams';
 import type { Sport } from '@/lib/sports';
@@ -39,6 +42,7 @@ import type {
   WindowResult,
   PlayerResearch,
   BoardRow,
+  SlateResult,
 } from '@/lib/types';
 
 /**
@@ -594,6 +598,7 @@ export async function getPlayerResearch(
     matchup: grade ?? undefined,
     gamesPlayed: games.length,
   });
+  const splits = computeSplits(games, stat, line);
 
   return {
     player,
@@ -606,6 +611,7 @@ export async function getPlayerResearch(
     // the qualify cutoff), so the "updated through" stamp reflects real data age.
     lastGameDate: allGames[0]?.gameDate ?? null,
     verdict: { projection, consistency, matchupGrade: grade, fireScore },
+    splits,
     chart,
     windows,
     recentOpponent,
@@ -737,4 +743,93 @@ export async function getBoard(sport: Sport, limit = 40): Promise<BoardRow[]> {
     if (capped.length >= limit) break;
   }
   return capped;
+}
+
+/**
+ * Analyze a pasted slate of REAL book lines: parse each line, resolve the player
+ * (exact name, else a unique last-name match — never a guess), and compute the
+ * FireScore against the user's actual number (not our median), plus edge + EV
+ * when odds are supplied. Capped at 30 entries. Unmatched lines come back with a
+ * reason instead of being dropped.
+ */
+export async function analyzeSlate(sport: Sport, text: string): Promise<SlateResult[]> {
+  const entries = parseSlate(text).slice(0, 30);
+  if (entries.length === 0) return [];
+
+  const roster = await db.player.findMany({
+    where: { sport },
+    select: { slug: true, firstName: true, lastName: true, posBucket: true },
+  });
+  type RosterPlayer = (typeof roster)[number];
+  const byFullName = new Map<string, RosterPlayer>();
+  const byLastName = new Map<string, RosterPlayer[]>();
+  for (const p of roster) {
+    byFullName.set(normalizeName(`${p.firstName} ${p.lastName}`), p);
+    const last = normalizeName(p.lastName);
+    const list = byLastName.get(last);
+    if (list) list.push(p);
+    else byLastName.set(last, [p]);
+  }
+
+  const results: SlateResult[] = [];
+  for (const e of entries) {
+    if (e.line == null) {
+      results.push({ raw: e.raw, matched: false, reason: 'No line found' });
+      continue;
+    }
+    const norm = normalizeName(e.name);
+    let match = byFullName.get(norm) ?? null;
+    if (!match) {
+      const tokens = norm.split(' ');
+      const cands = byLastName.get(tokens[tokens.length - 1] ?? '');
+      if (cands && cands.length === 1) match = cands[0]; // unique last name only
+    }
+    if (!match) {
+      results.push({ raw: e.raw, matched: false, reason: 'Player not found' });
+      continue;
+    }
+    if (!e.stat) {
+      results.push({ raw: e.raw, matched: false, reason: 'Stat not recognized' });
+      continue;
+    }
+    if (!statKeysForSport(sport, match.posBucket).includes(e.stat)) {
+      results.push({ raw: e.raw, matched: false, reason: 'Stat not offered for this player' });
+      continue;
+    }
+
+    const research = await getPlayerResearch(sport, match.slug, e.stat, e.line);
+    if (!research) {
+      results.push({ raw: e.raw, matched: false, reason: 'No data' });
+      continue;
+    }
+    const overHitRate =
+      research.windows.find((w) => w.window === 'season')?.hitRate.hitRateOver ?? null;
+    let edge: number | null = null;
+    let evPerDollar: number | null = null;
+    if (e.odds != null) {
+      const ro = fairPriceReadout({ overOdds: e.odds, historicalHitRateOver: overHitRate });
+      edge = ro.edge;
+      evPerDollar = ro.evPerDollarOver;
+    }
+    results.push({
+      raw: e.raw,
+      matched: true,
+      player: research.player,
+      stat: e.stat,
+      statShort: STAT_DEFS[e.stat].short,
+      line: e.line,
+      odds: e.odds ?? null,
+      fireScore: research.verdict.fireScore,
+      overHitRate,
+      edge,
+      evPerDollar,
+    });
+  }
+
+  // Matched first, strongest FireScore first.
+  results.sort((a, b) => {
+    if (a.matched !== b.matched) return a.matched ? -1 : 1;
+    return (b.fireScore?.score ?? -1) - (a.fireScore?.score ?? -1);
+  });
+  return results;
 }

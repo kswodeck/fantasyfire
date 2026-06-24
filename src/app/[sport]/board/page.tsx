@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { BoardTable } from '@/components/BoardTable';
+import { SlatePaster } from '@/components/SlatePaster';
 import { getBoard } from '@/lib/server/players';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
 import type { BoardRow } from '@/lib/types';
@@ -68,8 +69,16 @@ export default async function BoardPage({ params }: PageProps) {
         read.
       </p>
 
+      <div className="mt-6">
+        <SlatePaster sport={sport} />
+      </div>
+
+      <h2 className="mb-2 mt-2 text-xs font-semibold uppercase tracking-wide text-muted">
+        Auto board — strongest leans vs our typical line
+      </h2>
+
       {rows.length === 0 ? (
-        <p className="mt-8 rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
+        <p className="mt-2 rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
           No board data yet — check back after the next nightly update, or{' '}
           <Link href={`/${sport}/players`} className="text-brand hover:text-brand-strong">
             browse all {cfg.name} players

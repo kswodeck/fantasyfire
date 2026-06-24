@@ -7,3 +7,4 @@ export * from './qualify';
 export * from './projection';
 export * from './consistency';
 export * from './fireScore';
+export * from './splits';

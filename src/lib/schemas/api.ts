@@ -33,3 +33,9 @@ export const playerResearchQuerySchema = z.object({
   line: lineSchema.optional(),
 });
 export type PlayerResearchQuery = z.infer<typeof playerResearchQuerySchema>;
+
+/** Body for POST /api/v1/{sport}/slate — the user's pasted prop lines. */
+export const slateBodySchema = z.object({
+  text: z.string().min(1).max(8000),
+});
+export type SlateBody = z.infer<typeof slateBodySchema>;
