@@ -8,8 +8,11 @@
 import 'dotenv/config';
 import { db } from '../src/lib/db';
 import { slugify } from '../src/ingest/nba';
+import { configuredSeason } from '../src/lib/season';
 
-const SEASON = process.env.NBA_SEASON ?? '2025-26';
+// Use the same season the app reads (computed from today's date) so the demo data
+// is visible without setting any env var.
+const SEASON = configuredSeason();
 
 // Deterministic PRNG so demo averages are stable across runs.
 function mulberry32(seed: number) {

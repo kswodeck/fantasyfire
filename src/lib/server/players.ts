@@ -17,6 +17,7 @@ import {
   statValue,
 } from '@/lib/stats';
 import { roundToHalfLine } from '@/lib/format';
+import { configuredSeason, previousNbaSeason } from '@/lib/season';
 import type {
   PlayerSummary,
   PlayerGame,
@@ -26,7 +27,22 @@ import type {
   PlayerResearch,
 } from '@/lib/types';
 
-const SEASON = process.env.NBA_SEASON ?? '2025-26';
+/**
+ * The season the app reads. Computed from today's date, but falls back to the
+ * previous season if the current one has no data yet (e.g. just after the Oct 15
+ * cutoff, before the new season has been ingested). Cached per request.
+ */
+const getActiveSeason = cache(async (): Promise<string> => {
+  const current = configuredSeason();
+  if ((await db.playerGameStat.count({ where: { season: current } })) > 0) {
+    return current;
+  }
+  const prev = previousNbaSeason(current);
+  if ((await db.playerGameStat.count({ where: { season: prev } })) > 0) {
+    return prev;
+  }
+  return current; // nothing ingested yet — queries return empty, handled gracefully
+});
 
 // Games below this many minutes (and DNPs) are excluded from hit rates, the
 // chart, season averages, and DvP — a 2-minute injury exit or garbage-time stint
@@ -194,6 +210,7 @@ export async function getDvpForOpponent(
   opponentTeamId: number,
 ): Promise<DvpCell | null> {
   const expr = STAT_SQL_EXPR[stat];
+  const season = await getActiveSeason();
   const rows = await db.$queryRawUnsafe<
     { opponentTeamId: number; avg: number; n: number }[]
   >(
@@ -204,7 +221,7 @@ export async function getDvpForOpponent(
        AND s.minutes IS NOT NULL AND s.minutes >= $3
      GROUP BY s."opponentTeamId"`,
     posBucket,
-    SEASON,
+    season,
     MINUTES_FLOOR,
   );
   if (rows.length === 0) return null;

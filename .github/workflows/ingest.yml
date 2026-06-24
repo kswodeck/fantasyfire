@@ -29,7 +29,9 @@ jobs:
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       DIRECT_URL: ${{ secrets.DIRECT_URL }}
-      NBA_SEASON: ${{ vars.NBA_SEASON || '2025-26' }}
+      # Season is computed from the date in code. Set the NBA_SEASON repo variable
+      # only to force a specific season (e.g. backfill); otherwise leave it unset.
+      NBA_SEASON: ${{ vars.NBA_SEASON }}
     steps:
       - uses: actions/checkout@v4
 

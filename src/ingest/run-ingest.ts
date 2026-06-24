@@ -22,8 +22,8 @@ import 'dotenv/config';
 import { db } from '../lib/db';
 import { NbaStatsClient, NbaLikelyBlockedError, slugify } from './nba';
 import type { PlayerGameLogRow, PlayerIndexRow } from './nba';
+import { configuredSeason, previousNbaSeason } from '../lib/season';
 
-const SEASON = process.env.NBA_SEASON ?? '2025-26';
 const CHUNK = 1000;
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -32,20 +32,36 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
+async function fetchSeason(
+  season: string,
+): Promise<{ players: PlayerIndexRow[]; logs: PlayerGameLogRow[] }> {
+  const nba = new NbaStatsClient({ season });
+  console.log(`[ingest] fetching player index for ${season}…`);
+  const players = await nba.getPlayerIndex();
+  console.log(`[ingest]   ${players.length} players`);
+  console.log('[ingest] fetching league game log (full season, one response)…');
+  const logs = await nba.getLeagueGameLog();
+  console.log(`[ingest]   ${logs.length} player-game rows`);
+  return { players, logs };
+}
+
 async function main() {
-  console.log(`[ingest] season ${SEASON}`);
-  const nba = new NbaStatsClient({ season: SEASON });
+  // Season is computed from today's date (NBA_SEASON can still override it).
+  let season = configuredSeason();
+  console.log(`[ingest] season ${season}`);
 
   let players: PlayerIndexRow[];
   let logs: PlayerGameLogRow[];
   try {
-    console.log('[ingest] fetching player index…');
-    players = await nba.getPlayerIndex();
-    console.log(`[ingest]   ${players.length} players`);
-
-    console.log('[ingest] fetching league game log (full season, one response)…');
-    logs = await nba.getLeagueGameLog();
-    console.log(`[ingest]   ${logs.length} player-game rows`);
+    ({ players, logs } = await fetchSeason(season));
+    // Fail gracefully: if the computed season has no games yet (offseason, or just
+    // after the Oct 15 flip), fall back to the previous season.
+    if (logs.length === 0) {
+      const prev = previousNbaSeason(season);
+      console.warn(`[ingest] no games for ${season}; falling back to ${prev}`);
+      season = prev;
+      ({ players, logs } = await fetchSeason(season));
+    }
   } catch (err) {
     if (err instanceof NbaLikelyBlockedError) {
       console.error(`\n[ingest] ABORTED — stats.nba.com is blocking this host.\n`);
@@ -58,8 +74,8 @@ async function main() {
 
   if (logs.length === 0) {
     console.warn(
-      '[ingest] league game log is empty. This is normal in the offseason or ' +
-        'very early in a season. Nothing to write.',
+      `[ingest] no games for ${season} or the prior season — normal deep in the ` +
+        `offseason. Nothing to write.`,
     );
     return;
   }
@@ -157,7 +173,7 @@ async function main() {
     gameByNbaId.set(row.gameId, {
       nbaId: row.gameId,
       date: new Date(row.gameDate),
-      season: SEASON,
+      season,
       homeTeamId,
       awayTeamId,
     });
@@ -191,7 +207,7 @@ async function main() {
       teamId,
       opponentTeamId,
       isHome: row.isHome,
-      season: SEASON,
+      season,
       gameDate: new Date(row.gameDate),
       minutes: row.minutes ?? null,
       points: row.pts,
