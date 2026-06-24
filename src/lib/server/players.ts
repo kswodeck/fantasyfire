@@ -23,6 +23,8 @@ import {
   computeConsistency,
   matchupGrade,
   computeFireScore,
+  STAT_DEFS,
+  FIRESCORE_MIN_GAMES,
 } from '@/lib/stats';
 import { roundToHalfLine, median } from '@/lib/format';
 import { currentSeason, previousSeason } from '@/lib/season';
@@ -36,6 +38,7 @@ import type {
   ChartPoint,
   WindowResult,
   PlayerResearch,
+  BoardRow,
 } from '@/lib/types';
 
 /**
@@ -205,13 +208,24 @@ export async function getPlayerBySlug(sport: Sport, slug: string): Promise<Playe
   return p ? toSummary(p) : null;
 }
 
-export async function getPlayerGames(playerId: number): Promise<PlayerGame[]> {
-  const rows = await db.playerGameStat.findMany({
-    where: { playerId },
-    orderBy: { gameDate: 'desc' },
-    include: { opponentTeam: { select: { abbreviation: true } } },
-  });
-  return rows.map((r) => ({
+/** Prisma stat row shape used by the game mapper (model fields + opponent abbr). */
+type StatGameRow = {
+  points: number | null; rebounds: number | null; oreb: number | null; dreb: number | null;
+  assists: number | null; steals: number | null; blocks: number | null; turnovers: number | null;
+  fouls: number | null; fgm: number | null; fga: number | null; fg3m: number | null;
+  fg3a: number | null; ftm: number | null; fta: number | null; minutes: number | null;
+  atBats: number | null; hits: number | null; doubles: number | null; triples: number | null;
+  homeRuns: number | null; runs: number | null; rbi: number | null; walks: number | null;
+  strikeouts: number | null; stolenBases: number | null; totalBases: number | null; hbp: number | null;
+  outs: number | null; hitsAllowed: number | null; runsAllowed: number | null; earnedRuns: number | null;
+  walksAllowed: number | null; strikeoutsPitched: number | null;
+  gameDate: Date; opponentTeamId: number; opponentTeam: { abbreviation: string };
+  isHome: boolean; wl: string | null; plusMinus: number | null;
+};
+
+/** Map a Prisma stat row (with opponent) to the view-layer PlayerGame. */
+function toPlayerGame(r: StatGameRow): PlayerGame {
+  return {
     // NBA
     points: r.points,
     rebounds: r.rebounds,
@@ -256,7 +270,16 @@ export async function getPlayerGames(playerId: number): Promise<PlayerGame[]> {
     isHome: r.isHome,
     wl: r.wl,
     plusMinus: r.plusMinus,
-  }));
+  };
+}
+
+export async function getPlayerGames(playerId: number): Promise<PlayerGame[]> {
+  const rows = await db.playerGameStat.findMany({
+    where: { playerId },
+    orderBy: { gameDate: 'desc' },
+    include: { opponentTeam: { select: { abbreviation: true } } },
+  });
+  return rows.map(toPlayerGame);
 }
 
 /** All slugs for a sport (sitemap — every player stays crawlable). */
@@ -589,4 +612,129 @@ export async function getPlayerResearch(
     dvp,
     why,
   };
+}
+
+// The popular, well-lined stats we scan for the board (keeps it focused + fast).
+const BOARD_NBA_STATS: StatKey[] = ['pts', 'reb', 'ast', 'pra', 'fg3m'];
+const BOARD_MLB_HITTER_STATS: StatKey[] = ['hits', 'tb', 'hr', 'rbi', 'runs'];
+
+function boardStatsFor(sport: Sport, posBucket: string | null): StatKey[] {
+  // MLB pitchers are excluded for now (no matchup, and starts aren't filtered).
+  if (sport === 'mlb') return posBucket === 'P' ? [] : BOARD_MLB_HITTER_STATS;
+  return BOARD_NBA_STATS;
+}
+
+/**
+ * Cross-player board: the strongest recent-form leans, ranked by the
+ * confidence-adjusted FireScore vs OUR default (season-median) line — NOT a
+ * sportsbook line, so it's a research starting point, not a +EV claim. Free data
+ * only (no odds feed). Bounded to the most active players + a small per-player
+ * cap for performance and variety. Never throws for an empty result — the route
+ * renders an empty state.
+ */
+export async function getBoard(sport: Sport, limit = 40): Promise<BoardRow[]> {
+  const players = await db.player.findMany({
+    where: { sport },
+    include: { team: { select: { abbreviation: true, name: true, externalId: true } } },
+    orderBy: { gameStats: { _count: 'desc' } },
+    take: 120,
+  });
+  if (players.length === 0) return [];
+
+  const rows = await db.playerGameStat.findMany({
+    where: { playerId: { in: players.map((p) => p.id) } },
+    orderBy: { gameDate: 'desc' },
+    include: { opponentTeam: { select: { abbreviation: true } } },
+  });
+  const gamesByPlayer = new Map<number, PlayerGame[]>();
+  for (const r of rows) {
+    const list = gamesByPlayer.get(r.playerId);
+    if (list) list.push(toPlayerGame(r));
+    else gamesByPlayer.set(r.playerId, [toPlayerGame(r)]);
+  }
+
+  const out: BoardRow[] = [];
+  for (const p of players) {
+    const allGames = gamesByPlayer.get(p.id);
+    if (!allGames || allGames.length < FIRESCORE_MIN_GAMES) continue;
+
+    const qualifyFactor = sport === 'nba' ? 1 : 0.6;
+    const cutoff =
+      qualifyFactor *
+      blendedRoleThreshold(allGames.map((g) => opportunityFor(sport, p.posBucket, g)));
+    const games = allGames.filter((g) => {
+      const opp = opportunityFor(sport, p.posBucket, g);
+      if (opp == null) return true;
+      return opp > 0 && opp >= cutoff;
+    });
+    if (games.length < FIRESCORE_MIN_GAMES) continue;
+
+    const listItem: PlayerListItem = {
+      sport,
+      externalId: p.externalId,
+      slug: p.slug,
+      firstName: p.firstName,
+      lastName: p.lastName,
+      fullName: `${p.firstName} ${p.lastName}`.trim(),
+      position: p.position ?? null,
+      posBucket: (p.posBucket as PosBucket | null) ?? null,
+      jersey: p.jersey ?? null,
+      height: p.height ?? null,
+      weight: p.weight ?? null,
+      teamAbbreviation: p.team?.abbreviation ?? null,
+      teamName: teamDisplayName(sport, p.team?.abbreviation, p.team?.name ?? null),
+      teamExternalId: p.team?.externalId ?? null,
+      gamesPlayed: games.length,
+    };
+
+    for (const stat of boardStatsFor(sport, p.posBucket)) {
+      const line = defaultLine(games, stat);
+      // Skip degenerate low-volume props: a 0.5 line means the player's typical
+      // game is 0 of this stat, so any "lean" is a trivial under, not a real read.
+      if (line <= 0.5) continue;
+      const windows = STAT_WINDOWS.map((w) => {
+        const hr = computeHitRate(games, stat, line, w);
+        return { window: String(w), overs: hr.overs, decided: hr.decided };
+      });
+      const seasonHr = computeHitRate(games, stat, line, 'season');
+      const projection = recentFormEstimate(seasonHr.values, seasonHr.mean);
+      const consistency = computeConsistency(seasonHr.values, seasonHr.mean, seasonHr.stdev, line);
+      // No matchup component here (avoids a per-player DvP query); FireScore
+      // degrades gracefully. The full read (with matchup) is on the player page.
+      const fireScore = computeFireScore({
+        line,
+        windows,
+        projection: projection.stabilized,
+        stdev: seasonHr.stdev,
+        cv: consistency.cv,
+        gamesPlayed: games.length,
+      });
+      out.push({
+        player: listItem,
+        stat,
+        statShort: STAT_DEFS[stat].short,
+        line,
+        projection: projection.stabilized,
+        fireScore,
+      });
+    }
+  }
+
+  out.sort((a, b) => b.fireScore.score - a.fireScore.score);
+
+  // Cap per player (2) and per stat (10) so one name — or one stat like low-volume
+  // 3PM, which structurally produces reliable unders — can't dominate the board.
+  const perPlayer = new Map<string, number>();
+  const perStat = new Map<string, number>();
+  const capped: BoardRow[] = [];
+  for (const r of out) {
+    const np = perPlayer.get(r.player.slug) ?? 0;
+    const ns = perStat.get(r.stat) ?? 0;
+    if (np >= 2 || ns >= 10) continue;
+    perPlayer.set(r.player.slug, np + 1);
+    perStat.set(r.stat, ns + 1);
+    capped.push(r);
+    if (capped.length >= limit) break;
+  }
+  return capped;
 }

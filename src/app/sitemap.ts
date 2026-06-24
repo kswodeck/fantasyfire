@@ -42,6 +42,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         priority: 0.8,
         lastModified: sportMod,
       },
+      {
+        url: absoluteUrl(`/${sport}/board`),
+        changeFrequency: 'daily',
+        priority: 0.8,
+        lastModified: sportMod,
+      },
     );
   }
 

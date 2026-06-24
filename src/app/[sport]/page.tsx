@@ -69,6 +69,13 @@ export default async function SportHome({ params }: PageProps) {
             {summary.players} players · {summary.games} games · season {summary.season}
           </p>
         )}
+        <Link
+          href={`/${sport}/board`}
+          className="rounded-full px-5 py-2 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90"
+          style={{ backgroundColor: cfg.accent }}
+        >
+          {cfg.name} Top Leans →
+        </Link>
       </section>
 
       {trending.length > 0 && (

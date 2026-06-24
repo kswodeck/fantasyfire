@@ -102,3 +102,14 @@ export interface PlayerResearch {
   dvp: DvpCell | null;
   why: string;
 }
+
+/** One ranked row on the cross-player board. */
+export interface BoardRow {
+  player: PlayerListItem;
+  stat: StatKey;
+  statShort: string;
+  line: number;
+  /** Stabilized recent-form estimate (for the "recent X vs line Y" read). */
+  projection: number | null;
+  fireScore: FireScoreResult;
+}
