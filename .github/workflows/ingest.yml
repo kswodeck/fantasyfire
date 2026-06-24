@@ -14,10 +14,12 @@ name: Ingest NBA + MLB data
 # Do NOT fabricate or stub data to work around the block. statsapi.mlb.com is
 # generally NOT IP-blocked, so the MLB step runs even if the NBA step fails.
 #
-# REQUIRED repository secrets (Settings → Secrets and variables → Actions):
+# Migrations are NOT run here — they live in migrate.yml (push to main), so a
+# schema change or DB hiccup can't block the data pull. This job only reads/writes
+# data, so it needs just the pooled app connection (no DIRECT_URL).
+#
+# REQUIRED secret (stored on the "Production" environment):
 #   DATABASE_URL  — pooled app connection (Supabase transaction pooler, :6543), sslmode=require
-#   DIRECT_URL    — direct/migration connection (Supabase session pooler, :5432), sslmode=require
-# These are the same values as your local .env.prod.local.
 
 on:
   schedule:
@@ -33,13 +35,12 @@ jobs:
   ingest:
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    # Secrets (DATABASE_URL / DIRECT_URL) are stored on the "Production"
-    # environment, so the job must declare it to access them. The environment's
-    # branch rule allows `main`, which is where the schedule/dispatch runs.
+    # DATABASE_URL is stored on the "Production" environment, so the job must
+    # declare it to access the secret. The environment's branch rule allows
+    # `main`, which is where the schedule/dispatch runs.
     environment: Production
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL || '' }}
-      DIRECT_URL: ${{ secrets.DIRECT_URL || '' }}
       # Seasons are computed from the date in code. Set the NBA_SEASON / MLB_SEASON
       # repo variables only to force a specific season (e.g. backfill).
       NBA_SEASON: ${{ vars.NBA_SEASON || '' }}
@@ -54,43 +55,26 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      # Fail fast with an actionable message if the DB secrets are missing,
+      # Fail fast with an actionable message if the DB secret is missing,
       # instead of Prisma's cryptic "Connection url is empty".
-      - name: Check database secrets
+      - name: Check database secret
         run: |
-          missing=0
-          if [ -z "$DATABASE_URL" ]; then echo "::error::DATABASE_URL secret is not set."; missing=1; fi
-          if [ -z "$DIRECT_URL" ]; then echo "::error::DIRECT_URL secret is not set."; missing=1; fi
-          # `prisma migrate deploy` takes a session-level advisory lock, which the
-          # Supabase TRANSACTION pooler (:6543) can't hold — it hangs until the job
-          # times out. DIRECT_URL must be the SESSION pooler (:5432) or a direct
-          # connection. Catch the misconfig in seconds instead of after an hour.
-          if printf '%s' "$DIRECT_URL" | grep -q ':6543'; then
-            echo "::error::DIRECT_URL points at the transaction pooler (:6543); migrate deploy will hang. Use the Supabase SESSION pooler (:5432) or a direct connection."
-            missing=1
-          fi
-          if [ "$missing" = "1" ]; then
-            echo "Add DATABASE_URL and DIRECT_URL as repository secrets (Settings → Secrets and variables → Actions)."
-            echo "Use the same values as your local .env.prod.local (DATABASE_URL = pooler :6543, DIRECT_URL = pooler :5432, both with sslmode=require)."
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL secret is not set."
+            echo "Add it on the Production environment (the Supabase transaction pooler URL, :6543, with sslmode=require)."
             exit 1
           fi
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Apply database migrations
-        # Cap migrate so a bad/hung connection fails fast instead of consuming the
-        # whole 60-minute job budget (migrate deploy normally finishes in seconds).
-        timeout-minutes: 5
-        run: pnpm db:deploy
-
       - name: Run NBA ingest
         id: nba_ingest
         run: pnpm ingest
 
       # MLB uses statsapi.mlb.com (not IP-blocked), so refresh it even when the
-      # NBA step fails on a transient cloud-IP block. Skipped if migrations or
-      # earlier setup failed. The job still reports failure if NBA failed.
+      # NBA step fails on a transient cloud-IP block. Skipped if earlier setup
+      # failed. The job still reports failure if NBA failed.
       - name: Run MLB ingest
         if: ${{ success() || steps.nba_ingest.outcome == 'failure' }}
         run: pnpm ingest:mlb

@@ -1,0 +1,70 @@
+name: Apply DB migrations
+
+# Runs `prisma migrate deploy` against the production database. Split out from the
+# nightly ingest so a schema change (or a DB hiccup) can never block the data pull,
+# and so migrations run only when they actually change — not every night.
+#
+# Triggers:
+#   - push to `main` that touches the schema/migrations (the normal path: a
+#     migration is applied when it merges to main, alongside the Vercel deploy)
+#   - manual dispatch (re-run, or apply out of band)
+#
+# REQUIRED secret (stored on the "Production" environment):
+#   DIRECT_URL — Supabase SESSION pooler (:5432) or a direct connection.
+#                NOT the transaction pooler (:6543): `migrate deploy` takes a
+#                session-level advisory lock that PgBouncer's transaction mode
+#                can't hold, so it hangs until the job times out.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'prisma/schema.prisma'
+      - 'prisma/migrations/**'
+      - '.github/workflows/migrate.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # DIRECT_URL lives on the "Production" environment, so the job must declare it.
+    environment: Production
+    env:
+      DIRECT_URL: ${{ secrets.DIRECT_URL || '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Check migration connection
+        run: |
+          if [ -z "$DIRECT_URL" ]; then
+            echo "::error::DIRECT_URL secret is not set. Add it on the Production environment (Settings → Environments)."
+            exit 1
+          fi
+          # migrate deploy hangs forever on the Supabase TRANSACTION pooler (:6543)
+          # because it can't hold the advisory lock — use the SESSION pooler (:5432)
+          # or a direct connection. Catch the misconfig in seconds, not after a hang.
+          if printf '%s' "$DIRECT_URL" | grep -q ':6543'; then
+            echo "::error::DIRECT_URL points at the transaction pooler (:6543); migrate deploy will hang. Use the Supabase SESSION pooler (:5432) or a direct connection."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply migrations
+        # migrate deploy normally finishes in seconds; cap it so a hung/bad
+        # connection fails fast instead of running to the job timeout.
+        timeout-minutes: 5
+        run: pnpm db:deploy
