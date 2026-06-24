@@ -24,6 +24,7 @@ import { db } from '../lib/db';
 import { NbaStatsClient, NbaLikelyBlockedError, slugify } from './nba';
 import type { PlayerGameLogRow, PlayerIndexRow } from './nba';
 import { configuredSeason, previousNbaSeason } from '../lib/season';
+import { ingestEspnNbaFallback, cleanupEspnDuplicates } from './espn-fallback';
 
 const SPORT = 'nba';
 const CHUNK = 1000;
@@ -79,9 +80,18 @@ async function main() {
       //   Set INGEST_STRICT=true to make this a hard failure instead.
       console.log(
         '::warning title=NBA ingest skipped::stats.nba.com blocked this runner ' +
-          '(expected cloud-IP block); NBA data was NOT refreshed this run.',
+          '(expected cloud-IP block); falling back to ESPN for recent games.',
       );
       console.error(err.message);
+      // ESPN's endpoints rarely block datacenter IPs. Fill the last few days of
+      // games so NBA data stays fresh; this is corruption-safe (matchup-keyed
+      // games + a cleanup that removes ESPN fill-ins once the canonical game lands).
+      try {
+        const r = await ingestEspnNbaFallback(5);
+        console.log(`[ingest] ESPN fallback: ${r.written} stat rows written, ${r.unmatched} unmatched.`);
+      } catch (e) {
+        console.warn(`[ingest] ESPN fallback also failed: ${(e as Error).message}`);
+      }
       if (process.env.INGEST_STRICT === 'true') process.exitCode = 1;
       return;
     }
@@ -318,6 +328,10 @@ async function main() {
     statsRecentUpserted: recentStats.length,
     statsSkipped: skipped,
   });
+
+  // If a prior run filled games via the ESPN fallback, drop those now that the
+  // canonical stats.nba.com game exists, so the two sources never double-count.
+  await cleanupEspnDuplicates();
 }
 
 main()

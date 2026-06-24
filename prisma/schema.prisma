@@ -28,6 +28,8 @@ model Team {
   awayGames       Game[]           @relation("away")
   playerGameStats PlayerGameStat[] @relation("statTeam")
   opponentStats   PlayerGameStat[] @relation("statOpponent")
+  scheduledHome   ScheduledGame[]  @relation("scheduledHome")
+  scheduledAway   ScheduledGame[]  @relation("scheduledAway")
 
   @@unique([sport, externalId])
   @@unique([sport, abbreviation])
@@ -54,7 +56,8 @@ model Player {
   teamId      Int?
   team        Team?   @relation(fields: [teamId], references: [id])
 
-  gameStats PlayerGameStat[]
+  gameStats           PlayerGameStat[]
+  projectionSnapshots ProjectionSnapshot[]
 
   @@unique([sport, externalId])
   @@unique([sport, slug])
@@ -140,4 +143,54 @@ model PlayerGameStat {
   @@unique([playerId, gameId])
   @@index([sport, playerId, gameDate])
   @@index([sport, opponentTeamId, season])
+}
+
+// Upcoming/recent games for the "tonight" slate. Pulled on a free schedule feed
+// (statsapi.mlb.com for MLB; ESPN scoreboard for NBA) — separate from the
+// completed-game box scores in Game/PlayerGameStat.
+model ScheduledGame {
+  id                  Int      @id @default(autoincrement())
+  sport               String
+  externalId          String // MLB gamePk / NBA (ESPN) event id
+  date                DateTime // game date (date-only, UTC midnight)
+  season              String
+  homeTeamId          Int
+  awayTeamId          Int
+  status              String?
+  homeProbablePitcher String?
+  awayProbablePitcher String?
+
+  homeTeam Team @relation("scheduledHome", fields: [homeTeamId], references: [id])
+  awayTeam Team @relation("scheduledAway", fields: [awayTeamId], references: [id])
+
+  @@unique([sport, externalId])
+  @@index([sport, date])
+}
+
+// A frozen FireScore "lean" prediction, later graded against the player's next
+// game — the data behind the public /accuracy calibration page. Honest backtest
+// of past performance, never a pick record.
+model ProjectionSnapshot {
+  id            Int      @id @default(autoincrement())
+  sport         String
+  playerId      Int
+  stat          String
+  line          Float
+  snapshotDate  DateTime // date the prediction was made (date-only)
+  predictedSide String // 'over' | 'under'
+  overHitRate   Float? // predicted over probability at snapshot
+  wilsonLower   Float?
+  fireScore     Int
+  fireTier      String
+
+  // Grading (filled once the target game completes):
+  targetGameDate DateTime?
+  actualValue    Float?
+  outcome        String? // 'over' | 'under' | 'push'
+  graded         Boolean   @default(false)
+
+  player Player @relation(fields: [playerId], references: [id])
+
+  @@unique([playerId, stat, snapshotDate])
+  @@index([sport, graded])
 }

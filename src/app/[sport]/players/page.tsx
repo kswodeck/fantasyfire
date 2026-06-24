@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { SearchForm } from '@/components/SearchForm';
-import { PlayerCard } from '@/components/PlayerCard';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
+import { PlayerBrowser } from '@/components/PlayerBrowser';
 import { searchPlayers } from '@/lib/server/players';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
 import type { PlayerListItem } from '@/lib/types';
@@ -24,10 +23,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const cfg = SPORTS[sport];
   return {
     title: `${cfg.name} Players`,
-    description: `Search and browse ${cfg.name} players for prop research — hit rates, matchups, and confidence.`,
+    description: `Browse and filter every ${cfg.name} player by team, position, or name for prop research — hit rates, matchups, and confidence.`,
     alternates: { canonical: `/${sport}/players` },
   };
 }
+
+// Whole roster — ~600 NBA / ~1250 MLB — shipped to the client for instant,
+// complete team/position/name filtering (a high cap, not a real page size).
+const ROSTER_LIMIT = 5000;
 
 export default async function PlayersPage({ params, searchParams }: PageProps) {
   const { sport: raw } = await params;
@@ -35,14 +38,15 @@ export default async function PlayersPage({ params, searchParams }: PageProps) {
   const sport: Sport = raw;
   const cfg = SPORTS[sport];
 
+  // ?q= from the no-JS SearchForm — pre-filters the initial (SSR'd) render.
   const sp = await searchParams;
-  const q = typeof sp.q === 'string' ? sp.q.trim() : '';
+  const initialQuery = typeof sp.q === 'string' ? sp.q.trim() : '';
 
   let players: PlayerListItem[] = [];
   try {
-    players = await searchPlayers(sport, q || undefined, 60);
+    players = await searchPlayers(sport, undefined, ROSTER_LIMIT);
   } catch {
-    // DB unavailable — render the search box with an empty result set.
+    // DB unavailable — render the empty state rather than erroring.
   }
 
   return (
@@ -55,26 +59,19 @@ export default async function PlayersPage({ params, searchParams }: PageProps) {
           { label: 'Players' },
         ]}
       />
-      <h1 className="mb-4 text-2xl font-bold tracking-tight">
-        {q ? `${cfg.name} players matching “${q}”` : `${cfg.name} players`}
-      </h1>
-
-      <div className="mb-6">
-        <SearchForm sport={sport} defaultValue={q} />
-      </div>
+      <h1 className="mb-1 text-2xl font-bold tracking-tight">{cfg.name} players</h1>
+      <p className="mb-5 text-sm text-muted">
+        {players.length > 0
+          ? `Search and filter all ${players.length} ${cfg.name} players by team, position, or name.`
+          : `Browse ${cfg.name} players by team, position, or name.`}
+      </p>
 
       {players.length === 0 ? (
         <p className="text-sm text-muted">
-          {q
-            ? `No players found for “${q}”. Try a last name.`
-            : 'No players available yet. Run the ingest to populate data.'}
+          No players available yet. Run the ingest to populate data.
         </p>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {players.map((p) => (
-            <PlayerCard key={p.slug} player={p} />
-          ))}
-        </div>
+        <PlayerBrowser sport={sport} players={players} initialQuery={initialQuery} />
       )}
     </div>
   );

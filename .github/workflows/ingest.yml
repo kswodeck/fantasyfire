@@ -78,3 +78,19 @@ jobs:
       - name: Run MLB ingest
         if: ${{ success() || steps.nba_ingest.outcome == 'failure' }}
         run: pnpm ingest:mlb
+
+      # Free schedule feed (statsapi.mlb.com + ESPN scoreboard) for the "tonight"
+      # slate. Best-effort and non-fatal — runs even if an ingest step failed.
+      - name: Pull schedule
+        if: ${{ success() || failure() }}
+        run: pnpm schedule
+
+      # Grow the /accuracy calibration: grade yesterday's snapshots against the
+      # box scores just ingested, then freeze today's. Non-fatal.
+      - name: Grade projections
+        if: ${{ success() || failure() }}
+        run: pnpm grade
+
+      - name: Snapshot projections
+        if: ${{ success() || failure() }}
+        run: pnpm snapshot

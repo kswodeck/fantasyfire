@@ -1,21 +1,21 @@
 import Link from 'next/link';
 import { FlameMark } from '@/components/FlameMark';
-import { PlayerCard } from '@/components/PlayerCard';
-import { searchPlayers, getSportSummary } from '@/lib/server/players';
+import { BoardTable } from '@/components/BoardTable';
+import { getBoard, getSportSummary } from '@/lib/server/players';
 import { SPORT_LIST, SPORTS, type Sport } from '@/lib/sports';
-import type { PlayerListItem } from '@/lib/types';
+import type { BoardRow } from '@/lib/types';
 
 export const revalidate = 3600;
 
 async function loadSport(sport: Sport) {
   try {
-    const [summary, trending] = await Promise.all([
+    const [summary, leans] = await Promise.all([
       getSportSummary(sport),
-      searchPlayers(sport, undefined, 6),
+      getBoard(sport, { limit: 6 }),
     ]);
-    return { summary, trending };
+    return { summary, leans };
   } catch {
-    return { summary: null, trending: [] as PlayerListItem[] };
+    return { summary: null, leans: [] as BoardRow[] };
   }
 }
 
@@ -42,7 +42,7 @@ export default async function Home() {
       <section className="grid gap-5 pb-10 md:grid-cols-2">
         {SPORT_LIST.map((sport) => {
           const cfg = SPORTS[sport];
-          const { summary, trending } = data[sport];
+          const { summary, leans } = data[sport];
           return (
             <div
               key={sport}
@@ -78,19 +78,22 @@ export default async function Home() {
               )}
 
               <div className="space-y-2 p-4">
-                <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted">
-                  Most active players
+                <h3 className="flex items-center gap-1.5 px-1 text-xs font-semibold uppercase tracking-wide text-muted">
+                  Top leans
+                  <span className="rounded bg-surface px-1 py-0.5 text-[9px] font-medium normal-case text-muted">
+                    experimental
+                  </span>
                 </h3>
-                {trending.length === 0 ? (
+                {leans.length === 0 ? (
                   <p className="px-1 py-4 text-sm text-muted">No data available yet.</p>
                 ) : (
-                  trending.map((p) => <PlayerCard key={p.slug} player={p} />)
+                  <BoardTable sport={sport} rows={leans} />
                 )}
                 <Link
-                  href={`/${sport}/players`}
+                  href={`/${sport}/board`}
                   className="mt-1 block rounded-lg px-1 py-2 text-sm font-medium text-brand transition-colors hover:text-brand-strong"
                 >
-                  Browse all {cfg.name} players →
+                  See the full {cfg.name} board →
                 </Link>
               </div>
             </div>

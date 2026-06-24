@@ -29,7 +29,7 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: 'What is Defense vs. Position (DvP)?',
-    a: "It's how much of a stat each opponent gives up to a player's position (guard, forward, or center), ranked 1 to 30 where rank 1 allows the most. A quick read on whether tonight's matchup is soft or tough for that role.",
+    a: "It's how much of a stat each opponent gives up to a player's position (guard, forward, or center), ranked 1 to 30 where rank 1 allows the most. A quick read on whether today's matchup is soft or tough for that role.",
   },
   {
     q: 'Why does the line default to a half-point like 24.5?',

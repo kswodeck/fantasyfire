@@ -172,6 +172,8 @@ export function PlayerResearchClient({
         <DvpBlock
           dvp={data.dvp}
           opponentAbbreviation={data.recentOpponent?.abbreviation ?? null}
+          opponentExternalId={data.recentOpponent?.externalId ?? null}
+          matchupDate={data.recentOpponent?.date ?? null}
           isHome={data.recentOpponent?.isHome ?? null}
           sport={sport}
         />

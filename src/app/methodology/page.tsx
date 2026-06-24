@@ -210,8 +210,9 @@ export default function MethodologyPage() {
             cross-book +EV.
           </li>
           <li>
-            <strong>No schedule, injury, or lineup data.</strong> We describe past games;
-            we don&rsquo;t know who is active tonight. Confirm availability yourself.
+            <strong>No injury, lineup, or active-status data.</strong> We show the day&rsquo;s
+            schedule (matchups and probable pitchers), but we describe past games and
+            don&rsquo;t know who is active today. Confirm availability yourself.
           </li>
           <li>
             <strong>No trained/fitted projection model.</strong> The recent-form estimate

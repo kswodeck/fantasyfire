@@ -43,6 +43,8 @@ export interface PlayerGame extends GameStatLine {
   gameDate: string;
   opponentTeamId: number;
   opponentAbbreviation: string;
+  /** Opponent's league team id (for the logo). */
+  opponentExternalId: number;
   isHome: boolean;
   wl: string | null;
   plusMinus: number | null;
@@ -101,13 +103,23 @@ export interface PlayerResearch {
   /** Last 20 games, most-recent-first, for the bar chart. */
   chart: ChartPoint[];
   windows: WindowResult[];
-  recentOpponent: { teamId: number; abbreviation: string; isHome: boolean } | null;
+  recentOpponent: {
+    teamId: number;
+    abbreviation: string;
+    isHome: boolean;
+    /** Opponent's league team id (for the logo). */
+    externalId: number;
+    /** ISO date of the game this matchup is from. */
+    date: string;
+  } | null;
   dvp: DvpCell | null;
   why: string;
 }
 
 /** One ranked row on the cross-player board. */
 export interface BoardRow {
+  /** Absolute FireScore rank in the full board (stable under client filtering). */
+  rank: number;
   player: PlayerListItem;
   stat: StatKey;
   statShort: string;
@@ -136,4 +148,38 @@ export interface SlateResult {
   edge?: number | null;
   /** EV per $1 on the over vs the user's price (only with odds). */
   evPerDollar?: number | null;
+}
+
+/** One row of the /accuracy calibration: how a FireScore tier actually fared. */
+export interface CalibrationBucket {
+  label: string;
+  /** Graded predictions in this tier (pushes excluded). */
+  decided: number;
+  /** Predictions where the leaned side actually won. */
+  wins: number;
+  winRate: number | null;
+  /** 95% Wilson interval on the win rate. */
+  lower: number;
+  upper: number;
+}
+
+export interface Calibration {
+  /** Total graded leans (pushes excluded). */
+  totalGraded: number;
+  overallWinRate: number | null;
+  /** ISO date of the earliest graded prediction. */
+  trackingSince: string | null;
+  buckets: CalibrationBucket[];
+}
+
+/** One game on the "tonight" slate (from the free schedule feed). */
+export interface TonightGame {
+  externalId: string;
+  /** ISO date (YYYY-MM-DD) of the game. */
+  date: string;
+  status: string | null;
+  home: { abbr: string | null; name: string | null; externalId: number | null };
+  away: { abbr: string | null; name: string | null; externalId: number | null };
+  homeProbablePitcher: string | null;
+  awayProbablePitcher: string | null;
 }

@@ -3,11 +3,11 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { FlameMark } from '@/components/FlameMark';
 import { SearchForm } from '@/components/SearchForm';
-import { PlayerCard } from '@/components/PlayerCard';
+import { BoardTable } from '@/components/BoardTable';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
-import { searchPlayers, getSportSummary } from '@/lib/server/players';
+import { getBoard, getSportSummary } from '@/lib/server/players';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
-import type { PlayerListItem } from '@/lib/types';
+import type { BoardRow } from '@/lib/types';
 
 export const revalidate = 3600;
 export const dynamicParams = false;
@@ -38,15 +38,15 @@ export default async function SportHome({ params }: PageProps) {
   const sport: Sport = raw;
   const cfg = SPORTS[sport];
 
-  let trending: PlayerListItem[] = [];
+  let leans: BoardRow[] = [];
   let summary: { players: number; games: number; season: string } | null = null;
   try {
-    [trending, summary] = await Promise.all([
-      searchPlayers(sport, undefined, 12),
+    [leans, summary] = await Promise.all([
+      getBoard(sport, { limit: 9 }),
       getSportSummary(sport),
     ]);
   } catch {
-    // DB unavailable — render the hero without the trending grid.
+    // DB unavailable — render the hero without the leans.
   }
 
   return (
@@ -69,30 +69,37 @@ export default async function SportHome({ params }: PageProps) {
             {summary.players} players · {summary.games} games · season {summary.season}
           </p>
         )}
-        <Link
-          href={`/${sport}/board`}
-          className="rounded-full px-5 py-2 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90"
-          style={{ backgroundColor: cfg.accent }}
-        >
-          {cfg.name} Top Leans →
-        </Link>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Link
+            href={`/${sport}/today`}
+            className="rounded-full px-5 py-2 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90"
+            style={{ backgroundColor: cfg.accent }}
+          >
+            {cfg.name} Today →
+          </Link>
+          <Link
+            href={`/${sport}/board`}
+            className="rounded-full border border-line px-5 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-surface-2"
+          >
+            Top Leans board
+          </Link>
+        </div>
       </section>
 
-      {trending.length > 0 && (
-        <section className="pb-8">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
-            Most active {cfg.name} players
+      {leans.length > 0 && (
+        <section className="mx-auto max-w-3xl pb-10">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted">
+            {cfg.name} Top Leans
+            <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium normal-case text-muted">
+              experimental
+            </span>
           </h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {trending.map((p) => (
-              <PlayerCard key={p.slug} player={p} />
-            ))}
-          </div>
+          <BoardTable sport={sport} rows={leans} />
           <Link
-            href={`/${sport}/players`}
+            href={`/${sport}/board`}
             className="mt-4 inline-block text-sm font-medium text-brand transition-colors hover:text-brand-strong"
           >
-            Browse all {cfg.name} players →
+            See the full {cfg.name} board →
           </Link>
         </section>
       )}

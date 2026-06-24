@@ -24,6 +24,7 @@ import {
   matchupGrade,
   computeFireScore,
   computeSplits,
+  wilsonInterval,
   STAT_DEFS,
   FIRESCORE_MIN_GAMES,
 } from '@/lib/stats';
@@ -43,6 +44,9 @@ import type {
   PlayerResearch,
   BoardRow,
   SlateResult,
+  TonightGame,
+  Calibration,
+  CalibrationBucket,
 } from '@/lib/types';
 
 /**
@@ -223,7 +227,7 @@ type StatGameRow = {
   strikeouts: number | null; stolenBases: number | null; totalBases: number | null; hbp: number | null;
   outs: number | null; hitsAllowed: number | null; runsAllowed: number | null; earnedRuns: number | null;
   walksAllowed: number | null; strikeoutsPitched: number | null;
-  gameDate: Date; opponentTeamId: number; opponentTeam: { abbreviation: string };
+  gameDate: Date; opponentTeamId: number; opponentTeam: { abbreviation: string; externalId: number };
   isHome: boolean; wl: string | null; plusMinus: number | null;
 };
 
@@ -271,6 +275,7 @@ function toPlayerGame(r: StatGameRow): PlayerGame {
     gameDate: r.gameDate.toISOString().slice(0, 10),
     opponentTeamId: r.opponentTeamId,
     opponentAbbreviation: r.opponentTeam.abbreviation,
+    opponentExternalId: r.opponentTeam.externalId,
     isHome: r.isHome,
     wl: r.wl,
     plusMinus: r.plusMinus,
@@ -281,7 +286,7 @@ export async function getPlayerGames(playerId: number): Promise<PlayerGame[]> {
   const rows = await db.playerGameStat.findMany({
     where: { playerId },
     orderBy: { gameDate: 'desc' },
-    include: { opponentTeam: { select: { abbreviation: true } } },
+    include: { opponentTeam: { select: { abbreviation: true, externalId: true } } },
   });
   return rows.map(toPlayerGame);
 }
@@ -536,6 +541,8 @@ export async function getPlayerResearch(
         teamId: recentGame.opponentTeamId,
         abbreviation: recentGame.opponentAbbreviation,
         isHome: recentGame.isHome,
+        externalId: recentGame.opponentExternalId,
+        date: recentGame.gameDate,
       }
     : null;
 
@@ -638,19 +645,31 @@ function boardStatsFor(sport: Sport, posBucket: string | null): StatKey[] {
  * cap for performance and variety. Never throws for an empty result — the route
  * renders an empty state.
  */
-export async function getBoard(sport: Sport, limit = 40): Promise<BoardRow[]> {
+export interface BoardOptions {
+  /** Max rows returned, after sort + caps (default 40). */
+  limit?: number;
+  /** How many most-active players to scan (default 120). */
+  scan?: number;
+  /** Max rows per player (default 2). */
+  perPlayerCap?: number;
+  /** Max rows per stat (default 10). */
+  perStatCap?: number;
+}
+
+export async function getBoard(sport: Sport, opts: BoardOptions = {}): Promise<BoardRow[]> {
+  const { limit = 40, scan = 120, perPlayerCap = 2, perStatCap = 10 } = opts;
   const players = await db.player.findMany({
     where: { sport },
     include: { team: { select: { abbreviation: true, name: true, externalId: true } } },
     orderBy: { gameStats: { _count: 'desc' } },
-    take: 120,
+    take: scan,
   });
   if (players.length === 0) return [];
 
   const rows = await db.playerGameStat.findMany({
     where: { playerId: { in: players.map((p) => p.id) } },
     orderBy: { gameDate: 'desc' },
-    include: { opponentTeam: { select: { abbreviation: true } } },
+    include: { opponentTeam: { select: { abbreviation: true, externalId: true } } },
   });
   const gamesByPlayer = new Map<number, PlayerGame[]>();
   for (const r of rows) {
@@ -659,7 +678,7 @@ export async function getBoard(sport: Sport, limit = 40): Promise<BoardRow[]> {
     else gamesByPlayer.set(r.playerId, [toPlayerGame(r)]);
   }
 
-  const out: BoardRow[] = [];
+  const out: Omit<BoardRow, 'rank'>[] = [];
   for (const p of players) {
     const allGames = gamesByPlayer.get(p.id);
     if (!allGames || allGames.length < FIRESCORE_MIN_GAMES) continue;
@@ -728,18 +747,18 @@ export async function getBoard(sport: Sport, limit = 40): Promise<BoardRow[]> {
 
   out.sort((a, b) => b.fireScore.score - a.fireScore.score);
 
-  // Cap per player (2) and per stat (10) so one name — or one stat like low-volume
-  // 3PM, which structurally produces reliable unders — can't dominate the board.
+  // Cap per player and per stat so one name — or one stat like low-volume 3PM,
+  // which structurally produces reliable unders — can't dominate the board.
   const perPlayer = new Map<string, number>();
   const perStat = new Map<string, number>();
   const capped: BoardRow[] = [];
   for (const r of out) {
     const np = perPlayer.get(r.player.slug) ?? 0;
     const ns = perStat.get(r.stat) ?? 0;
-    if (np >= 2 || ns >= 10) continue;
+    if (np >= perPlayerCap || ns >= perStatCap) continue;
     perPlayer.set(r.player.slug, np + 1);
     perStat.set(r.stat, ns + 1);
-    capped.push(r);
+    capped.push({ ...r, rank: capped.length + 1 });
     if (capped.length >= limit) break;
   }
   return capped;
@@ -832,4 +851,93 @@ export async function analyzeSlate(sport: Sport, text: string): Promise<SlateRes
     return (b.fireScore?.score ?? -1) - (a.fireScore?.score ?? -1);
   });
   return results;
+}
+
+/**
+ * The next slate of scheduled games for a sport (the soonest date on/after today
+ * that has games). Read-only from ScheduledGame, populated by the nightly
+ * schedule feed. Returns an empty slate in the off-season.
+ */
+export async function getTonightSlate(
+  sport: Sport,
+): Promise<{ date: string | null; games: TonightGame[] }> {
+  const todayUtc = new Date();
+  todayUtc.setUTCHours(0, 0, 0, 0);
+
+  const next = await db.scheduledGame.findFirst({
+    where: { sport, date: { gte: todayUtc } },
+    orderBy: { date: 'asc' },
+    select: { date: true },
+  });
+  if (!next) return { date: null, games: [] };
+
+  const dayStart = next.date;
+  const dayEnd = new Date(dayStart.getTime() + 86_400_000);
+  const rows = await db.scheduledGame.findMany({
+    where: { sport, date: { gte: dayStart, lt: dayEnd } },
+    include: {
+      homeTeam: { select: { abbreviation: true, name: true, externalId: true } },
+      awayTeam: { select: { abbreviation: true, name: true, externalId: true } },
+    },
+    orderBy: { externalId: 'asc' },
+  });
+
+  const games: TonightGame[] = rows.map((r) => ({
+    externalId: r.externalId,
+    date: r.date.toISOString().slice(0, 10),
+    status: r.status,
+    home: {
+      abbr: r.homeTeam.abbreviation,
+      name: teamDisplayName(sport, r.homeTeam.abbreviation, r.homeTeam.name),
+      externalId: r.homeTeam.externalId,
+    },
+    away: {
+      abbr: r.awayTeam.abbreviation,
+      name: teamDisplayName(sport, r.awayTeam.abbreviation, r.awayTeam.name),
+      externalId: r.awayTeam.externalId,
+    },
+    homeProbablePitcher: r.homeProbablePitcher,
+    awayProbablePitcher: r.awayProbablePitcher,
+  }));
+
+  return { date: dayStart.toISOString().slice(0, 10), games };
+}
+
+/**
+ * Calibration of the FireScore lean signal: across graded snapshots, how often
+ * did the leaned side actually win, broken down by tier. An honest, descriptive
+ * backtest of past performance — the higher tiers should win more often if the
+ * signal has value. Pushes are excluded; every bucket carries a Wilson interval.
+ */
+export async function getCalibration(sport: Sport): Promise<Calibration> {
+  const rows = await db.projectionSnapshot.findMany({
+    where: { sport, graded: true, outcome: { in: ['over', 'under'] } },
+    select: { fireScore: true, predictedSide: true, outcome: true, snapshotDate: true },
+  });
+
+  const decided = rows.length;
+  const wins = rows.filter((r) => r.predictedSide === r.outcome).length;
+  let since: Date | null = null;
+  for (const r of rows) if (!since || r.snapshotDate < since) since = r.snapshotDate;
+
+  const tiers: Array<{ label: string; test: (s: number) => boolean }> = [
+    { label: 'Strong lean', test: (s) => s >= 72 },
+    { label: 'Lean', test: (s) => s >= 58 && s < 72 },
+    { label: 'Slight lean', test: (s) => s >= 44 && s < 58 },
+    { label: 'No lean', test: (s) => s >= 30 && s < 44 },
+  ];
+  const buckets: CalibrationBucket[] = tiers.map((t) => {
+    const inBucket = rows.filter((r) => t.test(r.fireScore));
+    const d = inBucket.length;
+    const w = inBucket.filter((r) => r.predictedSide === r.outcome).length;
+    const iv = wilsonInterval(w, d);
+    return { label: t.label, decided: d, wins: w, winRate: d ? w / d : null, lower: iv.lower, upper: iv.upper };
+  });
+
+  return {
+    totalGraded: decided,
+    overallWinRate: decided ? wins / decided : null,
+    trackingSince: since ? since.toISOString().slice(0, 10) : null,
+    buckets,
+  };
 }

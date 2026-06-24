@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
-import { BoardTable } from '@/components/BoardTable';
+import { FilterableBoard } from '@/components/FilterableBoard';
 import { SlatePaster } from '@/components/SlatePaster';
 import { getBoard } from '@/lib/server/players';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
@@ -39,7 +39,7 @@ export default async function BoardPage({ params }: PageProps) {
 
   let rows: BoardRow[] = [];
   try {
-    rows = await getBoard(sport);
+    rows = await getBoard(sport, { limit: 150, perStatCap: 30 });
   } catch {
     // DB unavailable — fall through to the empty state rather than erroring.
     rows = [];
@@ -66,7 +66,11 @@ export default async function BoardPage({ params }: PageProps) {
         sample-size-adjusted <strong className="text-foreground">FireScore</strong>. The lines shown are{' '}
         <strong className="text-foreground">our own typical-game (median) line</strong>, not a sportsbook
         line — so this is a research starting point. Open a player to enter the real line and odds for the full
-        read.
+        read. See how these leans have actually held up on the{' '}
+        <Link href={`/${sport}/accuracy`} className="text-brand hover:text-brand-strong">
+          accuracy page
+        </Link>
+        .
       </p>
 
       <div className="mt-6">
@@ -87,7 +91,7 @@ export default async function BoardPage({ params }: PageProps) {
         </p>
       ) : (
         <div className="mt-5">
-          <BoardTable sport={sport} rows={rows} />
+          <FilterableBoard sport={sport} rows={rows} />
         </div>
       )}
 

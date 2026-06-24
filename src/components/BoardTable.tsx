@@ -20,7 +20,7 @@ const TIER_TEXT: Record<string, string> = {
 export function BoardTable({ sport, rows }: { sport: Sport; rows: BoardRow[] }) {
   return (
     <ol className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
-      {rows.map((r, i) => {
+      {rows.map((r) => {
         const team = getTeam(sport, r.player.teamAbbreviation);
         const dir = r.fireScore.tier === 'Pass' ? '' : r.fireScore.side === 'over' ? 'Over' : 'Under';
         return (
@@ -29,7 +29,7 @@ export function BoardTable({ sport, rows }: { sport: Sport; rows: BoardRow[] }) 
               href={`/${sport}/${r.player.slug}?stat=${r.stat}&line=${r.line}`}
               className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-surface-2"
             >
-              <span className="w-5 shrink-0 text-right text-xs tabular-nums text-muted">{i + 1}</span>
+              <span className="w-5 shrink-0 text-right text-xs tabular-nums text-muted">{r.rank}</span>
               <PlayerAvatar
                 sport={sport}
                 externalId={r.player.externalId}

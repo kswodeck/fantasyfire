@@ -1,23 +1,30 @@
 import type { DvpCell } from '@/lib/stats';
 import { STAT_DEFS } from '@/lib/stats';
-import { num1, ordinal } from '@/lib/format';
+import { num1, ordinal, formatIsoDate } from '@/lib/format';
+import { getTeam } from '@/lib/teams';
 import type { Sport } from '@/lib/sports';
+import { TeamLogo } from './TeamLogo';
 
 const POS_LABEL: Record<string, string> = { G: 'guards', F: 'forwards', C: 'centers' };
 
 /**
  * Matchup block for the player's most-recent opponent: rank, raw average
- * allowed, and a low-sample flag. NBA = defense-vs-position; MLB = the opposing
+ * allowed, and a low-sample flag — tinted in the opponent's team color, with
+ * their logo and the game date. NBA = defense-vs-position; MLB = the opposing
  * pitching staff's allowed rate. Coarse on purpose — sample size is surfaced.
  */
 export function DvpBlock({
   dvp,
   opponentAbbreviation,
+  opponentExternalId,
+  matchupDate,
   isHome,
   sport,
 }: {
   dvp: DvpCell | null;
   opponentAbbreviation: string | null;
+  opponentExternalId: number | null;
+  matchupDate: string | null;
   isHome: boolean | null;
   sport: Sport;
 }) {
@@ -29,6 +36,7 @@ export function DvpBlock({
     );
   }
 
+  const team = getTeam(sport, opponentAbbreviation);
   const short = STAT_DEFS[dvp.stat].short;
   // Whom the average is allowed to.
   const unit = sport === 'mlb' ? 'hitters' : (POS_LABEL[dvp.posBucket] ?? 'this position');
@@ -43,12 +51,27 @@ export function DvpBlock({
         : { label: 'Neutral', cls: 'text-muted' };
 
   return (
-    <div className="rounded-xl border border-line bg-surface p-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-muted">
+    <div
+      className="overflow-hidden rounded-xl border border-line p-4"
+      style={{
+        background: `linear-gradient(120deg, color-mix(in srgb, ${team.primary} 16%, var(--surface)) 0%, var(--surface) 62%)`,
+        borderTop: `2px solid ${team.primary}`,
+      }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="flex min-w-0 items-center gap-1.5 text-sm font-medium text-muted">
+          <TeamLogo
+            sport={sport}
+            externalId={opponentExternalId}
+            abbr={opponentAbbreviation}
+            size={18}
+          />
           Matchup — {isHome ? 'vs' : '@'} {opponentAbbreviation}
         </h3>
-        <span className={`text-xs font-semibold ${tone.cls}`}>{tone.label}</span>
+        <div className="flex shrink-0 items-center gap-2 text-xs">
+          {matchupDate && <span className="text-muted">{formatIsoDate(matchupDate)}</span>}
+          <span className={`font-semibold ${tone.cls}`}>{tone.label}</span>
+        </div>
       </div>
 
       <div className="mt-3 flex items-baseline gap-2">
