@@ -4,18 +4,20 @@ import { SITE } from '@/lib/site';
 
 const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
   {
-    title: 'Product',
+    title: 'Sports',
     links: [
-      { label: 'Search', href: '/' },
-      { label: 'Players', href: '/players' },
-      { label: 'How it works', href: '/how-it-works' },
-      { label: 'Glossary', href: '/glossary' },
+      { label: 'NBA', href: '/nba' },
+      { label: 'NBA players', href: '/nba/players' },
+      { label: 'MLB', href: '/mlb' },
+      { label: 'MLB players', href: '/mlb/players' },
     ],
   },
   {
     title: 'Company',
     links: [
       { label: 'About', href: '/about' },
+      { label: 'How it works', href: '/how-it-works' },
+      { label: 'Glossary', href: '/glossary' },
       { label: 'FAQ', href: '/faq' },
       { label: 'Contact', href: '/contact' },
     ],
@@ -44,7 +46,7 @@ export function SiteFooter() {
               </span>
             </Link>
             <p className="mt-3 text-xs leading-relaxed text-muted">
-              Honest player-prop research, built on public NBA game logs.
+              Honest player-prop research, built on public NBA and MLB game logs.
             </p>
             <a
               href={`mailto:${SITE.email}`}
@@ -78,7 +80,7 @@ export function SiteFooter() {
         <div className="mt-8 space-y-2 border-t border-line pt-6 text-xs leading-relaxed text-muted">
           <p>
             <strong className="text-foreground">{SITE.name}</strong> is a research tool
-            built on public NBA game logs. Hit rates and matchup numbers are
+            built on public NBA and MLB game logs. Hit rates and matchup numbers are
             descriptive statistics about past performance — they are{' '}
             <strong className="text-foreground">
               not predictions, advice, or a guarantee
@@ -87,7 +89,8 @@ export function SiteFooter() {
             1-800-GAMBLER.
           </p>
           <p>
-            Not affiliated with or endorsed by the NBA. © {year} {SITE.name}.
+            Not affiliated with or endorsed by the NBA, MLB, or any team. © {year}{' '}
+            {SITE.name}.
           </p>
         </div>
       </div>

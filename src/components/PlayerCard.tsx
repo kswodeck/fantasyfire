@@ -6,18 +6,28 @@ import { TeamLogo } from './TeamLogo';
 
 /** Compact, linkable player card: headshot + team-color accent + logo + games. */
 export function PlayerCard({ player }: { player: PlayerListItem }) {
-  const team = getTeam(player.teamAbbreviation);
+  const team = getTeam(player.sport, player.teamAbbreviation);
   return (
     <Link
-      href={`/${player.slug}`}
+      href={`/${player.sport}/${player.slug}`}
       className="flex items-center gap-3 rounded-xl border border-l-4 border-line bg-surface p-3 transition-colors hover:bg-surface-2"
       style={{ borderLeftColor: team.primary }}
     >
-      <PlayerAvatar nbaId={player.nbaId} name={player.fullName} size={44} />
+      <PlayerAvatar
+        sport={player.sport}
+        externalId={player.externalId}
+        name={player.fullName}
+        size={44}
+      />
       <div className="min-w-0 flex-1">
         <div className="truncate font-medium">{player.fullName}</div>
         <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted">
-          <TeamLogo abbr={player.teamAbbreviation} size={14} />
+          <TeamLogo
+            sport={player.sport}
+            externalId={player.teamExternalId}
+            abbr={player.teamAbbreviation}
+            size={14}
+          />
           <span className="truncate">
             {[player.teamAbbreviation, player.position].filter(Boolean).join(' · ') ||
               'Free agent'}

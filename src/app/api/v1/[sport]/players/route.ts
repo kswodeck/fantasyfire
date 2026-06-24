@@ -1,10 +1,11 @@
-// GET /api/v1/players?q=&limit=
+// GET /api/v1/{sport}/players?q=&limit=
 //
 // Player search/list for the website's search box and any future client.
 import type { NextRequest } from 'next/server';
 import { playersQuerySchema } from '@/lib/schemas';
 import { searchPlayers } from '@/lib/server/players';
 import { jsonResponse, preflight } from '@/lib/api';
+import { isSport } from '@/lib/sports';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +13,12 @@ export async function OPTIONS(request: NextRequest) {
   return preflight(request);
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest, ctx: { params: Promise<{ sport: string }> }) {
+  const { sport } = await ctx.params;
+  if (!isSport(sport)) {
+    return jsonResponse({ error: 'Unknown sport' }, { status: 404, request });
+  }
+
   const params = Object.fromEntries(request.nextUrl.searchParams);
   const parsed = playersQuerySchema.safeParse(params);
   if (!parsed.success) {
@@ -24,7 +30,7 @@ export async function GET(request: NextRequest) {
 
   const { q, limit } = parsed.data;
   try {
-    const players = await searchPlayers(q, limit);
+    const players = await searchPlayers(sport, q, limit);
     return jsonResponse({ players }, { request });
   } catch {
     return jsonResponse({ error: 'Service unavailable' }, { status: 503, request });

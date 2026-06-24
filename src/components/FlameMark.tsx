@@ -1,10 +1,17 @@
 // Inline flame logo mark. Pure presentational SVG, no dependencies.
-export function FlameMark({ className }: { className?: string }) {
+export function FlameMark({
+  className,
+  style,
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+}) {
   return (
     <svg
       viewBox="0 0 24 24"
       aria-hidden="true"
       className={className}
+      style={style}
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >

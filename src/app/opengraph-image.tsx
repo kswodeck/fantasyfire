@@ -37,10 +37,10 @@ export default function Image() {
           </div>
         </div>
         <div style={{ display: 'flex', fontSize: 64, fontWeight: 800, lineHeight: 1.1 }}>
-          Honest NBA player-prop research
+          Honest player-prop research
         </div>
         <div style={{ display: 'flex', fontSize: 30, color: '#a8a29e' }}>
-          Hit rates · Defense-vs-Position · sample-size confidence · fair price
+          NBA &amp; MLB · hit rates · matchups · sample-size confidence · fair price
         </div>
       </div>
     ),

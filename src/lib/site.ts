@@ -6,9 +6,9 @@ const rawUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
 export const SITE = {
   name: 'FantasyFire',
   /** Short tagline used in titles and OG. */
-  tagline: 'NBA Player Props Research',
+  tagline: 'Player Props Research',
   description:
-    "NBA player-prop research that's honest about uncertainty: hit rates over L5/L10/L20/season, defense-vs-position matchups, sample-size confidence intervals, and fair-price math — from public game logs.",
+    "NBA and MLB player-prop research that's honest about uncertainty: hit rates over recent windows and the full season, matchup context, sample-size confidence intervals, and fair-price math — from public game logs.",
   /** Canonical origin with no trailing slash. */
   url: rawUrl.replace(/\/+$/, ''),
   /** Public contact email. */

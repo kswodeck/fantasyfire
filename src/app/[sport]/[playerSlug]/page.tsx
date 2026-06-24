@@ -3,61 +3,74 @@ import { notFound } from 'next/navigation';
 import { getTopPlayerSlugs, getPlayerBySlug, getPlayerResearch } from '@/lib/server/players';
 import { absoluteUrl } from '@/lib/site';
 import { getTeam } from '@/lib/teams';
-import { configuredSeason } from '@/lib/season';
+import { currentSeason } from '@/lib/season';
+import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
 import { PlayerResearchClient } from '@/components/PlayerResearchClient';
 import { PlayerAvatar } from '@/components/PlayerAvatar';
 import { TeamLogo } from '@/components/TeamLogo';
 import { PlayerBioBar } from '@/components/PlayerBioBar';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 
-// ISR: statically generate all player pages, revalidate hourly.
+// ISR: statically generate the busiest players, revalidate hourly; the rest
+// render on-demand.
 export const revalidate = 3600;
 export const dynamicParams = true;
 
 export async function generateStaticParams() {
-  // Pre-render the busiest players; the rest render on-demand via ISR.
-  const slugs = await getTopPlayerSlugs(200);
-  return slugs.map((playerSlug) => ({ playerSlug }));
+  const lists = await Promise.all(
+    SPORT_LIST.map(async (sport) => {
+      const slugs = await getTopPlayerSlugs(sport, 100);
+      return slugs.map((playerSlug) => ({ sport, playerSlug }));
+    }),
+  );
+  return lists.flat();
 }
 
 type PageProps = {
-  params: Promise<{ playerSlug: string }>;
+  params: Promise<{ sport: string; playerSlug: string }>;
 };
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { playerSlug } = await params;
-  const player = await getPlayerBySlug(playerSlug);
+  const { sport, playerSlug } = await params;
+  if (!isSport(sport)) return { title: 'Player not found' };
+  const player = await getPlayerBySlug(sport, playerSlug);
   if (!player) return { title: 'Player not found' };
 
+  const cfg = SPORTS[sport];
   const teamBit = player.teamAbbreviation ? ` (${player.teamAbbreviation})` : '';
+  const statsBit =
+    sport === 'mlb'
+      ? 'hits, home runs, RBIs, total bases and strikeout'
+      : 'points, rebounds, assists, 3PM and PRA';
   const title = `${player.fullName} — Hit Rates, Props & Matchup Research`;
   const description =
-    `${player.fullName}${teamBit} prop research: points, rebounds, assists, 3PM and PRA ` +
-    `hit rates over L5/L10/L20/season, defense-vs-position matchup, and sample-size ` +
-    `confidence — from public NBA game logs.`;
-  const url = absoluteUrl(`/${player.slug}`);
+    `${player.fullName}${teamBit} prop research: ${statsBit} hit rates over recent ` +
+    `windows and the full season, matchup context, and sample-size confidence — ` +
+    `from public ${cfg.name} game logs.`;
 
   return {
     title,
     description,
-    alternates: { canonical: `/${player.slug}` },
-    openGraph: { type: 'profile', title, description, url },
+    alternates: { canonical: `/${sport}/${player.slug}` },
+    openGraph: { type: 'profile', title, description, url: `/${sport}/${player.slug}` },
     twitter: { card: 'summary_large_image', title, description },
   };
 }
 
 export default async function PlayerPage({ params }: PageProps) {
-  const { playerSlug } = await params;
+  const { sport: raw, playerSlug } = await params;
+  if (!isSport(raw)) notFound();
+  const sport: Sport = raw;
+  const cfg = SPORTS[sport];
 
-  // SSR the DEFAULT (points) payload so the page stays static/ISR (SEO + speed).
-  // The client reads stat/line from the URL on mount and takes over interactivity
-  // against /api/v1 — deep links like ?stat=pra still work after hydration.
-  const research = await getPlayerResearch(playerSlug, 'pts');
+  // SSR the default-stat payload so the page stays static/ISR (SEO + speed). The
+  // client reads stat/line from the URL on mount and takes over interactivity.
+  const research = await getPlayerResearch(sport, playerSlug);
   if (!research) notFound();
 
   const { player } = research;
-  const team = getTeam(player.teamAbbreviation);
-  const seasonStartYear = Number(configuredSeason().slice(0, 4));
+  const team = getTeam(sport, player.teamAbbreviation);
+  const seasonStartYear = Number(currentSeason(sport).slice(0, 4));
   const experience = research.bio.fromYear
     ? Math.max(1, seasonStartYear - research.bio.fromYear + 1)
     : null;
@@ -68,22 +81,28 @@ export default async function PlayerPage({ params }: PageProps) {
       {
         '@type': 'Person',
         name: player.fullName,
-        jobTitle: 'Basketball Player',
+        jobTitle: sport === 'mlb' ? 'Baseball Player' : 'Basketball Player',
         ...(player.teamName
           ? { affiliation: { '@type': 'SportsTeam', name: player.teamName } }
           : {}),
-        url: absoluteUrl(`/${player.slug}`),
+        url: absoluteUrl(`/${sport}/${player.slug}`),
       },
       {
         '@type': 'BreadcrumbList',
         itemListElement: [
           { '@type': 'ListItem', position: 1, name: 'Home', item: absoluteUrl('/') },
-          { '@type': 'ListItem', position: 2, name: 'Players', item: absoluteUrl('/players') },
+          { '@type': 'ListItem', position: 2, name: cfg.name, item: absoluteUrl(`/${sport}`) },
           {
             '@type': 'ListItem',
             position: 3,
+            name: 'Players',
+            item: absoluteUrl(`/${sport}/players`),
+          },
+          {
+            '@type': 'ListItem',
+            position: 4,
             name: player.fullName,
-            item: absoluteUrl(`/${player.slug}`),
+            item: absoluteUrl(`/${sport}/${player.slug}`),
           },
         ],
       },
@@ -107,7 +126,8 @@ export default async function PlayerPage({ params }: PageProps) {
         className="mb-4"
         items={[
           { label: 'Home', href: '/' },
-          { label: 'Players', href: '/players' },
+          { label: cfg.name, href: `/${sport}` },
+          { label: 'Players', href: `/${sport}/players` },
           { label: player.fullName },
         ]}
       />
@@ -120,14 +140,20 @@ export default async function PlayerPage({ params }: PageProps) {
       >
         <div className="flex items-center gap-4 p-5">
           <PlayerAvatar
-            nbaId={player.nbaId}
+            sport={sport}
+            externalId={player.externalId}
             name={player.fullName}
             size={84}
             ring={team.primary}
           />
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 text-sm text-muted">
-              <TeamLogo abbr={player.teamAbbreviation} size={18} />
+              <TeamLogo
+                sport={sport}
+                externalId={player.teamExternalId}
+                abbr={player.teamAbbreviation}
+                size={18}
+              />
               <span className="truncate">{player.teamName ?? player.teamAbbreviation}</span>
             </div>
             <h1 className="mt-1 text-3xl font-bold tracking-tight">{player.fullName}</h1>
@@ -146,7 +172,7 @@ export default async function PlayerPage({ params }: PageProps) {
         </div>
       </header>
 
-      <PlayerBioBar bio={research.bio} experience={experience} />
+      <PlayerBioBar bio={research.bio} experience={experience} sport={sport} />
 
       <PlayerResearchClient
         slug={player.slug}

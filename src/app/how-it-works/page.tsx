@@ -21,7 +21,7 @@ export default function HowItWorksPage() {
 
       <Prose>
         <p>
-          Every number on {SITE.name} is computed from public NBA game logs — no black
+          Every number on {SITE.name} is computed from public NBA and MLB game logs — no black
           box, no proprietary &ldquo;model&rdquo; you have to take on faith. Here&rsquo;s
           exactly what we do.
         </p>
@@ -46,21 +46,22 @@ export default function HowItWorksPage() {
           sample for a real edge.
         </p>
 
-        <h2>Defense vs. Position (DvP)</h2>
+        <h2>Matchup context</h2>
         <p>
-          For each opponent we average how much of a stat they allow to a player&rsquo;s
-          position bucket (Guard / Forward / Center) and rank all 30 teams, where rank 1
-          allows the most (the softest matchup). Positions are intentionally coarse — NBA
-          labels are loose and many players are multi-position — so we keep three buckets
+          In the NBA we compute <strong>Defense vs. Position</strong>: for each opponent we
+          average how much of a stat they allow to a player&rsquo;s position bucket (Guard /
+          Forward / Center) and rank all 30 teams, where rank 1 allows the most (the
+          softest matchup). In MLB we show the opposing pitching staff&rsquo;s allowed rate
+          for a hitting stat, ranked across the league. Either way we keep buckets coarse
           for denser samples and always show the sample size rather than over-claiming
           precision.
         </p>
 
         <h2>The minutes filter</h2>
         <p>
-          Garbage-time cameos and injury exits distort prop research. By default we
-          exclude games under ten minutes, so the rates reflect games a player actually
-          factored into.
+          Garbage-time cameos and injury exits distort prop research. In the NBA we exclude
+          games under ten minutes by default, so the rates reflect games a player actually
+          factored into. (MLB lines use every appearance.)
         </p>
 
         <h2>Fair price</h2>
@@ -74,9 +75,9 @@ export default function HowItWorksPage() {
 
         <h2>Data &amp; freshness</h2>
         <p>
-          Player profiles, box scores, and matchups come from publicly available NBA game
-          logs and are refreshed nightly. The current season is determined automatically
-          by the calendar. Lines are entered by you — {SITE.name} does not pull live
+          Player profiles, box scores, and matchups come from publicly available NBA and
+          MLB game logs and are refreshed nightly. The current season is determined
+          automatically by the calendar. Lines are entered by you — {SITE.name} does not pull live
           sportsbook odds.
         </p>
 

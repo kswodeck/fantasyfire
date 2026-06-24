@@ -24,6 +24,7 @@ import { NbaStatsClient, NbaLikelyBlockedError, slugify } from './nba';
 import type { PlayerGameLogRow, PlayerIndexRow } from './nba';
 import { configuredSeason, previousNbaSeason } from '../lib/season';
 
+const SPORT = 'nba';
 const CHUNK = 1000;
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -96,24 +97,31 @@ async function main() {
 
   for (const t of teamByNbaId.values()) {
     await db.team.upsert({
-      where: { nbaId: t.nbaId },
-      create: { nbaId: t.nbaId, abbreviation: t.abbreviation, name: t.abbreviation },
+      where: { sport_externalId: { sport: SPORT, externalId: t.nbaId } },
+      create: { sport: SPORT, externalId: t.nbaId, abbreviation: t.abbreviation, name: t.abbreviation },
       update: { abbreviation: t.abbreviation },
     });
   }
   const teamRows = await db.team.findMany({
-    select: { id: true, nbaId: true, abbreviation: true },
+    where: { sport: SPORT },
+    select: { id: true, externalId: true, abbreviation: true },
   });
-  const teamIdByNbaId = new Map(teamRows.map((t) => [t.nbaId, t.id]));
+  const teamIdByNbaId = new Map(teamRows.map((t) => [t.externalId, t.id]));
   const teamIdByAbbr = new Map(teamRows.map((t) => [t.abbreviation, t.id]));
   console.log(`[ingest] upserted ${teamRows.length} teams`);
 
   // Normalize slugs to clean ASCII (NBA slugs can contain accents, e.g.
-  // "luka-dončić") and de-duplicate to satisfy the unique constraint. Sorting by
-  // personId makes the assignment deterministic across runs (stable URLs).
-  const usedSlugs = new Set<string>();
-  const slugByNbaId = new Map<number, string>();
+  // "luka-dončić") and de-duplicate. Existing players KEEP their slug (stable
+  // URLs across re-ingests); new players get a deduped slug seeded with slugs
+  // already taken so they never collide with an existing row.
+  const existingPlayers = await db.player.findMany({
+    where: { sport: SPORT },
+    select: { externalId: true, slug: true },
+  });
+  const slugByNbaId = new Map<number, string>(existingPlayers.map((e) => [e.externalId, e.slug]));
+  const usedSlugs = new Set<string>(existingPlayers.map((e) => e.slug));
   for (const p of [...players].sort((a, b) => a.personId - b.personId)) {
+    if (slugByNbaId.has(p.personId)) continue;
     const base = slugify(p.slug || `${p.firstName} ${p.lastName}`) || `player-${p.personId}`;
     let slug = base;
     let i = 2;
@@ -132,9 +140,10 @@ async function main() {
         const teamId = p.teamId ? teamIdByNbaId.get(p.teamId) : undefined;
         const slug = slugByNbaId.get(p.personId)!;
         return db.player.upsert({
-          where: { nbaId: p.personId },
+          where: { sport_externalId: { sport: SPORT, externalId: p.personId } },
           create: {
-            nbaId: p.personId,
+            sport: SPORT,
+            externalId: p.personId,
             firstName: p.firstName,
             lastName: p.lastName,
             slug,
@@ -154,7 +163,6 @@ async function main() {
           update: {
             firstName: p.firstName,
             lastName: p.lastName,
-            slug,
             position: p.position ?? undefined,
             posBucket: p.posBucket ?? undefined,
             jersey: p.jerseyNumber ?? undefined,
@@ -172,14 +180,17 @@ async function main() {
       }),
     );
   }
-  const playerRows = await db.player.findMany({ select: { id: true, nbaId: true } });
-  const playerIdByNbaId = new Map(playerRows.map((p) => [p.nbaId, p.id]));
+  const playerRows = await db.player.findMany({
+    where: { sport: SPORT },
+    select: { id: true, externalId: true },
+  });
+  const playerIdByNbaId = new Map(playerRows.map((p) => [p.externalId, p.id]));
   console.log(`[ingest] upserted ${playerRows.length} players`);
 
   // ---- 3) Games: one distinct row per GAME_ID with home/away resolved ----
   const gameByNbaId = new Map<
     string,
-    { nbaId: string; date: Date; season: string; homeTeamId: number; awayTeamId: number }
+    { sport: string; externalId: string; date: Date; season: string; homeTeamId: number; awayTeamId: number }
   >();
   for (const row of logs) {
     if (gameByNbaId.has(row.gameId)) continue;
@@ -189,7 +200,8 @@ async function main() {
     const homeTeamId = row.isHome ? teamId : oppId;
     const awayTeamId = row.isHome ? oppId : teamId;
     gameByNbaId.set(row.gameId, {
-      nbaId: row.gameId,
+      sport: SPORT,
+      externalId: row.gameId,
       date: new Date(row.gameDate),
       season,
       homeTeamId,
@@ -201,8 +213,11 @@ async function main() {
     const res = await db.game.createMany({ data: part, skipDuplicates: true });
     gamesInserted += res.count;
   }
-  const gameRows = await db.game.findMany({ select: { id: true, nbaId: true } });
-  const gameIdByNbaId = new Map(gameRows.map((g) => [g.nbaId, g.id]));
+  const gameRows = await db.game.findMany({
+    where: { sport: SPORT },
+    select: { id: true, externalId: true },
+  });
+  const gameIdByNbaId = new Map(gameRows.map((g) => [g.externalId, g.id]));
   console.log(
     `[ingest] games: ${gameByNbaId.size} distinct, ${gamesInserted} newly inserted`,
   );
@@ -220,6 +235,7 @@ async function main() {
       continue;
     }
     statData.push({
+      sport: SPORT,
       playerId,
       gameId,
       teamId,

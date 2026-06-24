@@ -1,18 +1,20 @@
 'use client';
 
-import { STAT_DEFS, STAT_KEYS, type StatKey } from '@/lib/stats';
+import { STAT_DEFS, type StatKey } from '@/lib/stats';
 
-/** Chip row for picking the stat to research. */
+/** Chip row for picking the stat to research (keys are sport/role-specific). */
 export function StatSelector({
   value,
+  keys,
   onChange,
 }: {
   value: StatKey;
+  keys: StatKey[];
   onChange: (stat: StatKey) => void;
 }) {
   return (
     <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Choose stat">
-      {STAT_KEYS.map((k) => {
+      {keys.map((k) => {
         const active = k === value;
         return (
           <button

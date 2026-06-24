@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import type { PlayerResearch } from '@/lib/types';
-import { STAT_DEFS, type StatKey } from '@/lib/stats';
+import { STAT_DEFS, statKeysForSport, type StatKey } from '@/lib/stats';
 import { statKeySchema, lineSchema } from '@/lib/schemas';
 import { fairPriceReadout } from '@/lib/odds';
 import { num1, pct } from '@/lib/format';
@@ -40,6 +40,8 @@ export function PlayerResearchClient({
   initialStat: StatKey;
 }) {
   const pathname = usePathname();
+  const sport = initialResearch.player.sport;
+  const statKeys = statKeysForSport(sport, initialResearch.player.posBucket);
   const [stat, setStat] = useState<StatKey>(initialStat);
   const [line, setLine] = useState<number | undefined>(undefined);
   const [overOdds, setOverOdds] = useState<number | null>(null);
@@ -54,7 +56,7 @@ export function PlayerResearchClient({
     const params = new URLSearchParams(window.location.search);
     const sp = statKeySchema.safeParse(params.get('stat') ?? undefined);
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (sp.success && sp.data !== initialStat) setStat(sp.data);
+    if (sp.success && statKeys.includes(sp.data) && sp.data !== initialStat) setStat(sp.data);
     const lp = params.get('line');
     if (lp !== null) {
       const parsed = lineSchema.safeParse(lp);
@@ -68,6 +70,7 @@ export function PlayerResearchClient({
   // data look fresh and suppress the refetch.
   const isInitialKey = stat === initialStat && line === undefined;
   const query = useHitRate({
+    sport,
     slug,
     stat,
     line,
@@ -122,7 +125,7 @@ export function PlayerResearchClient({
     <div>
       {/* Controls */}
       <div className="mb-5 space-y-3 rounded-xl border border-line bg-surface-2 p-4">
-        <StatSelector value={stat} onChange={handleStat} />
+        <StatSelector value={stat} keys={statKeys} onChange={handleStat} />
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted">Line</span>
@@ -158,6 +161,7 @@ export function PlayerResearchClient({
           dvp={data.dvp}
           opponentAbbreviation={data.recentOpponent?.abbreviation ?? null}
           isHome={data.recentOpponent?.isHome ?? null}
+          sport={sport}
         />
         <WhyReadout text={data.why} />
       </section>

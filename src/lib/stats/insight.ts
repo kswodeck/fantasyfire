@@ -18,6 +18,8 @@ export interface WhyInput {
   dvp?: {
     cell: DvpCell;
     opponentAbbreviation: string;
+    /** Whom the average is allowed to, e.g. "guards" (NBA) or "hitters" (MLB). */
+    unitLabel?: string;
   } | null;
 }
 
@@ -60,15 +62,15 @@ export function buildWhyText(input: WhyInput): string {
     );
   }
 
-  // 2) Matchup (DvP).
+  // 2) Matchup (DvP / opposing-pitching allowed).
   if (dvp) {
-    const { cell, opponentAbbreviation } = dvp;
+    const { cell, opponentAbbreviation, unitLabel = 'this group' } = dvp;
     const word = matchupWord(cell.rank, cell.totalRanked);
     const sample = cell.lowSample ? ' (small sample — read with caution)' : '';
     sentences.push(
-      `${opponentAbbreviation} has been ${word} matchup for ${cell.posBucket}s this season, ` +
+      `${opponentAbbreviation} has been ${word} matchup for ${unitLabel} this season, ` +
         `allowing the ${ordinal(cell.rank)}-most ${short} of ${cell.totalRanked} teams ` +
-        `to the position (${num1(cell.avgAllowed)} per game)${sample}.`,
+        `(${num1(cell.avgAllowed)} per game)${sample}.`,
     );
   }
 

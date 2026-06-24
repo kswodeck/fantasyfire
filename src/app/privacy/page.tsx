@@ -55,10 +55,10 @@ export default function PrivacyPage() {
         <h2>Service providers</h2>
         <ul>
           <li><strong>Vercel</strong> — application hosting and delivery.</li>
-          <li><strong>Supabase</strong> — the database storing public NBA statistics.</li>
+          <li><strong>Supabase</strong> — the database storing public NBA and MLB statistics.</li>
           <li>
-            <strong>NBA CDN</strong> — player headshots and team logos are loaded directly
-            by your browser from the NBA&rsquo;s content network.
+            <strong>League CDNs</strong> — player headshots and team logos are loaded
+            directly by your browser from the NBA&rsquo;s and MLB&rsquo;s content networks.
           </li>
         </ul>
 

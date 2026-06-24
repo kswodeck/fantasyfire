@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { PlayerResearch } from '@/lib/types';
 import type { StatKey } from '@/lib/stats';
+import type { Sport } from '@/lib/sports';
 
 /**
  * Fetch a player's research payload for a stat/line from the versioned API.
@@ -10,22 +11,24 @@ import type { StatKey } from '@/lib/stats';
  * stat/line changes refetch while keeping the previous data on screen.
  */
 export function useHitRate({
+  sport,
   slug,
   stat,
   line,
   initialData,
 }: {
+  sport: Sport;
   slug: string;
   stat: StatKey;
   line?: number;
   initialData?: PlayerResearch;
 }) {
   return useQuery<PlayerResearch>({
-    queryKey: ['hitrate', slug, stat, line ?? null],
+    queryKey: ['hitrate', sport, slug, stat, line ?? null],
     queryFn: async ({ signal }) => {
       const params = new URLSearchParams({ playerSlug: slug, stat });
       if (line !== undefined) params.set('line', String(line));
-      const res = await fetch(`/api/v1/hitrate?${params.toString()}`, { signal });
+      const res = await fetch(`/api/v1/${sport}/hitrate?${params.toString()}`, { signal });
       if (!res.ok) throw new Error(`Request failed (${res.status})`);
       return (await res.json()) as PlayerResearch;
     },

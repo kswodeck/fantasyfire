@@ -1,61 +1,115 @@
+import Link from 'next/link';
 import { FlameMark } from '@/components/FlameMark';
-import { SearchForm } from '@/components/SearchForm';
 import { PlayerCard } from '@/components/PlayerCard';
-import { searchPlayers } from '@/lib/server/players';
+import { searchPlayers, getSportSummary } from '@/lib/server/players';
+import { SPORT_LIST, SPORTS, type Sport } from '@/lib/sports';
 import type { PlayerListItem } from '@/lib/types';
 
 export const revalidate = 3600;
 
-export default async function Home() {
-  let trending: PlayerListItem[] = [];
+async function loadSport(sport: Sport) {
   try {
-    trending = await searchPlayers(undefined, 12);
+    const [summary, trending] = await Promise.all([
+      getSportSummary(sport),
+      searchPlayers(sport, undefined, 6),
+    ]);
+    return { summary, trending };
   } catch {
-    // DB unavailable — render the hero without the trending grid.
+    return { summary: null, trending: [] as PlayerListItem[] };
   }
+}
+
+export default async function Home() {
+  const data = Object.fromEntries(
+    await Promise.all(SPORT_LIST.map(async (s) => [s, await loadSport(s)] as const)),
+  ) as Record<Sport, Awaited<ReturnType<typeof loadSport>>>;
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4">
-      <section className="flex flex-col items-center gap-6 py-16 text-center">
+      <section className="flex flex-col items-center gap-6 py-14 text-center">
         <FlameMark className="h-14 w-14 text-brand" />
         <h1 className="max-w-2xl text-4xl font-bold tracking-tight sm:text-5xl">
-          Honest NBA player-prop research
+          Honest player-prop research
         </h1>
         <p className="max-w-xl text-lg text-muted">
-          Hit rates, defense-vs-position matchups, sample-size confidence, and fair-price
-          math — computed from public game logs, with the uncertainty shown rather than
-          hidden.
+          Hit rates, matchup context, sample-size confidence, and fair-price math across
+          the NBA and MLB — computed from public game logs, with the uncertainty shown
+          rather than hidden.
         </p>
-        <div className="w-full max-w-xl">
-          <SearchForm />
-        </div>
       </section>
 
-      {trending.length > 0 && (
-        <section className="pb-8">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
-            Most active players
-          </h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {trending.map((p) => (
-              <PlayerCard key={p.slug} player={p} />
-            ))}
-          </div>
-        </section>
-      )}
+      {/* Per-sport dashboard panels */}
+      <section className="grid gap-5 pb-10 md:grid-cols-2">
+        {SPORT_LIST.map((sport) => {
+          const cfg = SPORTS[sport];
+          const { summary, trending } = data[sport];
+          return (
+            <div
+              key={sport}
+              className="overflow-hidden rounded-2xl border border-line bg-surface"
+              style={{ borderTop: `3px solid ${cfg.accent}` }}
+            >
+              <div className="flex items-start justify-between gap-3 p-5">
+                <div>
+                  <h2 className="text-2xl font-bold tracking-tight">{cfg.name}</h2>
+                  <p className="mt-1 max-w-xs text-sm text-muted">{cfg.tagline}</p>
+                </div>
+                <Link
+                  href={`/${sport}`}
+                  className="shrink-0 rounded-full px-4 py-2 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: cfg.accent }}
+                >
+                  Open {cfg.name} →
+                </Link>
+              </div>
 
-      <section className="grid gap-4 pb-8 sm:grid-cols-3">
+              {summary && (
+                <div className="flex gap-6 border-y border-line bg-surface-2 px-5 py-3 text-sm">
+                  <span>
+                    <span className="font-semibold tabular-nums">{summary.players}</span>{' '}
+                    <span className="text-muted">players</span>
+                  </span>
+                  <span>
+                    <span className="font-semibold tabular-nums">{summary.games}</span>{' '}
+                    <span className="text-muted">games</span>
+                  </span>
+                  <span className="text-muted">Season {summary.season}</span>
+                </div>
+              )}
+
+              <div className="space-y-2 p-4">
+                <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted">
+                  Most active players
+                </h3>
+                {trending.length === 0 ? (
+                  <p className="px-1 py-4 text-sm text-muted">No data available yet.</p>
+                ) : (
+                  trending.map((p) => <PlayerCard key={p.slug} player={p} />)
+                )}
+                <Link
+                  href={`/${sport}/players`}
+                  className="mt-1 block rounded-lg px-1 py-2 text-sm font-medium text-brand transition-colors hover:text-brand-strong"
+                >
+                  Browse all {cfg.name} players →
+                </Link>
+              </div>
+            </div>
+          );
+        })}
+      </section>
+
+      <section className="grid gap-4 pb-10 sm:grid-cols-3">
         <FeatureCard
           title="Hit rates that don't lie"
-          body="Over/under rates across L5, L10, L20 and the full season — with the raw game-by-game bars, not just a number."
+          body="Over/under rates across recent windows and the full season — with the raw game-by-game bars, not just a number."
         />
         <FeatureCard
           title="Sample-size honesty"
-          body="A Wilson confidence interval on every hit rate, so a 4/5 streak doesn't masquerade as a real edge."
+          body="A Wilson confidence interval on every hit rate, so a short hot streak doesn't masquerade as a real edge."
         />
         <FeatureCard
           title="Matchup context"
-          body="Defense-vs-position: how many points, rebounds or assists each opponent gives up to a player's role."
+          body="How the most-recent opponent stacks up — defense-vs-position in the NBA, opposing pitching in MLB."
         />
       </section>
     </div>

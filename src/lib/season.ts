@@ -40,3 +40,30 @@ export function configuredSeason(now: Date = new Date()): string {
   if (override && /^\d{4}-\d{2}$/.test(override)) return override;
   return currentNbaSeason(now);
 }
+
+// ---- MLB (single calendar year; season runs ~March–October) ----
+
+/** Current MLB season as a year string ("2026"). MLB_SEASON can override it. */
+export function currentMlbSeason(now: Date = new Date()): string {
+  const override = process.env.MLB_SEASON?.trim();
+  if (override && /^\d{4}$/.test(override)) return override;
+  // Jan/Feb still belong to the prior (completed) season.
+  return String(now.getMonth() >= 2 ? now.getFullYear() : now.getFullYear() - 1);
+}
+
+/** The MLB season before the given one: "2026" -> "2025". */
+export function previousMlbSeason(season: string): string {
+  return String(Number.parseInt(season, 10) - 1);
+}
+
+// ---- Sport-generic helpers ----
+
+import type { Sport } from './sports';
+
+export function currentSeason(sport: Sport, now: Date = new Date()): string {
+  return sport === 'mlb' ? currentMlbSeason(now) : configuredSeason(now);
+}
+
+export function previousSeason(sport: Sport, season: string): string {
+  return sport === 'mlb' ? previousMlbSeason(season) : previousNbaSeason(season);
+}

@@ -1,10 +1,9 @@
-// FantasyFire Prisma schema — see docs/PLAN.md §4.
+// FantasyFire Prisma schema — multi-sport (NBA + MLB).
 //
-// Prisma 7 notes:
-//  - generator provider is the new `prisma-client` (TS output, driver-adapter based)
-//  - `output` is REQUIRED; the client is generated into src/generated/prisma
-//  - connection URLs live in prisma.config.ts (env: DATABASE_URL / DIRECT_URL),
-//    NOT in the datasource block.
+// One set of tables serves both sports, discriminated by `sport` ("nba" | "mlb").
+// PlayerGameStat holds a nullable superset of both sports' per-game stats; each
+// row populates only its sport's columns. The pure compute layer reads them via
+// a stat registry, so hit rates / confidence / charts are shared across sports.
 
 generator client {
   provider = "prisma-client"
@@ -17,8 +16,9 @@ datasource db {
 
 model Team {
   id           Int     @id @default(autoincrement())
-  nbaId        Int     @unique
-  abbreviation String  @unique
+  sport        String // "nba" | "mlb"
+  externalId   Int // league team id (NBA TEAM_ID / MLB team id)
+  abbreviation String
   name         String
   conference   String?
   division     String?
@@ -28,38 +28,45 @@ model Team {
   awayGames       Game[]           @relation("away")
   playerGameStats PlayerGameStat[] @relation("statTeam")
   opponentStats   PlayerGameStat[] @relation("statOpponent")
+
+  @@unique([sport, externalId])
+  @@unique([sport, abbreviation])
 }
 
 model Player {
-  id        Int     @id @default(autoincrement())
-  nbaId     Int     @unique // PERSON_ID / PLAYER_ID
-  firstName String
-  lastName  String
-  slug      String  @unique // for SEO URLs, e.g. "lebron-james"
-  position  String? // raw, e.g. "G", "F-C"
-  posBucket String? // normalized: "G" | "F" | "C"
-  jersey    String? // jersey number (string: can be "00")
-  height    String? // e.g. "6-6"
-  weight    Int? // pounds
+  id          Int     @id @default(autoincrement())
+  sport       String
+  externalId  Int // PERSON_ID / MLB person id
+  firstName   String
+  lastName    String
+  slug        String
+  position    String?
+  posBucket   String? // NBA: G/F/C ; MLB: H (hitter) / P (pitcher)
+  jersey      String?
+  height      String?
+  weight      Int?
   college     String?
   country     String?
   draftYear   Int?
   draftRound  Int?
-  draftNumber Int? // overall pick; null = undrafted
-  fromYear    Int? // first NBA season year (for experience)
-  teamId    Int?
-  team      Team?   @relation(fields: [teamId], references: [id])
+  draftNumber Int?
+  fromYear    Int?
+  teamId      Int?
+  team        Team?   @relation(fields: [teamId], references: [id])
 
   gameStats PlayerGameStat[]
 
-  @@index([lastName])
+  @@unique([sport, externalId])
+  @@unique([sport, slug])
+  @@index([sport, lastName])
 }
 
 model Game {
   id         Int      @id @default(autoincrement())
-  nbaId      String   @unique // NBA GAME_ID is a zero-padded string
+  sport      String
+  externalId String // game id (NBA zero-padded GAME_ID / MLB gamePk)
   date       DateTime
-  season     String // "2025-26"
+  season     String
   homeTeamId Int
   awayTeamId Int
   homeTeam   Team     @relation("home", fields: [homeTeamId], references: [id])
@@ -67,36 +74,63 @@ model Game {
 
   stats PlayerGameStat[]
 
-  @@index([date])
+  @@unique([sport, externalId])
+  @@index([sport, date])
 }
 
 model PlayerGameStat {
   id             Int      @id @default(autoincrement())
+  sport          String
   playerId       Int
   gameId         Int
   teamId         Int
   opponentTeamId Int
   isHome         Boolean
   season         String
-  gameDate       DateTime // denormalized for fast "last N" queries
-  minutes        Float?
-  points         Int
-  rebounds       Int
-  oreb           Int      @default(0) // offensive rebounds
-  dreb           Int      @default(0) // defensive rebounds
-  assists        Int
-  steals         Int
-  blocks         Int
-  turnovers      Int
-  fouls          Int      @default(0) // personal fouls (PF)
-  fgm            Int
-  fga            Int
-  fg3m           Int
-  fg3a           Int
-  ftm            Int
-  fta            Int
-  wl             String? // "W" | "L"
-  plusMinus      Int?
+  gameDate       DateTime
+  minutes        Float? // NBA
+  wl             String?
+  plusMinus      Int? // NBA
+
+  // NBA box score (nullable)
+  points    Int?
+  rebounds  Int?
+  oreb      Int?
+  dreb      Int?
+  assists   Int?
+  steals    Int?
+  blocks    Int?
+  turnovers Int?
+  fouls     Int?
+  fgm       Int?
+  fga       Int?
+  fg3m      Int?
+  fg3a      Int?
+  ftm       Int?
+  fta       Int?
+
+  // MLB hitting (nullable)
+  atBats      Int?
+  hits        Int?
+  doubles     Int?
+  triples     Int?
+  homeRuns    Int?
+  runs        Int?
+  rbi         Int?
+  walks       Int?
+  strikeouts  Int? // batter
+  stolenBases Int?
+  totalBases  Int?
+  hbp         Int?
+
+  // MLB pitching (nullable)
+  outs              Int? // outs recorded (IP * 3)
+  hitsAllowed       Int?
+  runsAllowed       Int?
+  earnedRuns        Int?
+  walksAllowed      Int?
+  strikeoutsPitched Int?
+  pitcherWin        Boolean?
 
   player       Player @relation(fields: [playerId], references: [id])
   game         Game   @relation(fields: [gameId], references: [id])
@@ -104,6 +138,6 @@ model PlayerGameStat {
   opponentTeam Team   @relation("statOpponent", fields: [opponentTeamId], references: [id])
 
   @@unique([playerId, gameId])
-  @@index([playerId, gameDate])
-  @@index([opponentTeamId, season])
+  @@index([sport, playerId, gameDate])
+  @@index([sport, opponentTeamId, season])
 }

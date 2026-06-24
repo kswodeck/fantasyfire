@@ -7,9 +7,6 @@ export default defineConfig({
   schema: 'prisma/schema.prisma',
   migrations: {
     path: 'prisma/migrations',
-    // Demo seed (clearly-labeled SYNTHETIC data) so the UI is runnable without
-    // live NBA access. The real data path is `pnpm ingest` (stats.nba.com).
-    seed: 'tsx prisma/seed-demo.ts',
   },
   datasource: {
     // The CLI (migrations) uses a DIRECT, non-pooled connection. Neon/Supabase

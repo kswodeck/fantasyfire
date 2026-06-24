@@ -2,19 +2,22 @@
 
 import { useState } from 'react';
 import { playerHeadshotUrl } from '@/lib/teams';
+import type { Sport } from '@/lib/sports';
 
 /**
- * Official NBA headshot (by PERSON_ID), cropped to a circle. Falls back to the
- * player's initials if the image fails to load. Uses a plain <img> (remote CDN +
- * onError fallback; next/image would need remotePatterns and can't do onError).
+ * Official league headshot (by external id), cropped to a circle. Falls back to
+ * the player's initials if the image fails to load. Uses a plain <img> (remote
+ * CDN + onError fallback; next/image would need remotePatterns and can't onError).
  */
 export function PlayerAvatar({
-  nbaId,
+  sport,
+  externalId,
   name,
   size = 44,
   ring,
 }: {
-  nbaId: number;
+  sport: Sport;
+  externalId: number;
   name: string;
   size?: number;
   ring?: string;
@@ -23,7 +26,7 @@ export function PlayerAvatar({
   const dim = { width: size, height: size, minWidth: size };
   const ringStyle = ring ? { boxShadow: `0 0 0 2px ${ring}` } : undefined;
 
-  if (failed || !nbaId) {
+  if (failed || !externalId) {
     const initials = name
       .split(/\s+/)
       .map((w) => w[0])
@@ -44,7 +47,7 @@ export function PlayerAvatar({
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={playerHeadshotUrl(nbaId, size > 120 ? 'lg' : 'sm')}
+      src={playerHeadshotUrl(sport, externalId, size > 120 ? 'lg' : 'sm')}
       alt={name}
       width={size}
       height={size}

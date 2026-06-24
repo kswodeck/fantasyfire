@@ -1,17 +1,26 @@
+import type { Sport } from '@/lib/sports';
+import { SPORTS } from '@/lib/sports';
+
 /**
  * No-JS search form (progressive enhancement baseline). Submits a GET to
- * /players?q=… so search works without client JS and is crawlable. Phase 4 adds
- * a live client-side variant on top.
+ * /{sport}/players?q=… so search works without client JS and is crawlable.
  */
-export function SearchForm({ defaultValue = '' }: { defaultValue?: string }) {
+export function SearchForm({
+  sport,
+  defaultValue = '',
+}: {
+  sport: Sport;
+  defaultValue?: string;
+}) {
+  const noun = SPORTS[sport].name;
   return (
-    <form action="/players" className="flex w-full gap-2">
+    <form action={`/${sport}/players`} className="flex w-full gap-2">
       <input
         type="search"
         name="q"
         defaultValue={defaultValue}
-        placeholder="Search players (e.g. Jokic, Edwards)…"
-        aria-label="Search players"
+        placeholder={`Search ${noun} players…`}
+        aria-label={`Search ${noun} players`}
         className="w-full rounded-full border border-line bg-surface px-4 py-2.5 text-sm outline-none focus:border-brand"
       />
       <button

@@ -14,10 +14,13 @@ export function SiteHeader() {
         </Link>
         <nav className="flex items-center gap-5 text-sm text-muted">
           <Link href="/" className="transition-colors hover:text-foreground">
-            Search
+            Home
           </Link>
-          <Link href="/players" className="transition-colors hover:text-foreground">
-            Players
+          <Link href="/nba" className="transition-colors hover:text-foreground">
+            NBA
+          </Link>
+          <Link href="/mlb" className="transition-colors hover:text-foreground">
+            MLB
           </Link>
         </nav>
       </div>

@@ -1,11 +1,12 @@
-// GET /api/v1/players/[slug]?stat=&line=
+// GET /api/v1/{sport}/players/[slug]?stat=&line=
 //
-// RESTful per-player research payload (same data as /api/v1/hitrate, keyed by a
-// path slug) — convenient for a future mobile client.
+// RESTful per-player research payload (same data as /api/v1/{sport}/hitrate,
+// keyed by a path slug) — convenient for a future mobile client.
 import type { NextRequest } from 'next/server';
 import { getPlayerResearch } from '@/lib/server/players';
 import { playerSlugSchema, playerResearchQuerySchema } from '@/lib/schemas';
 import { jsonResponse, preflight } from '@/lib/api';
+import { isSport } from '@/lib/sports';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,15 +16,17 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function GET(
   request: NextRequest,
-  ctx: { params: Promise<{ slug: string }> },
+  ctx: { params: Promise<{ sport: string; slug: string }> },
 ) {
-  const { slug } = await ctx.params;
+  const { sport, slug } = await ctx.params;
+  if (!isSport(sport)) {
+    return jsonResponse({ error: 'Unknown sport' }, { status: 404, request });
+  }
   if (!playerSlugSchema.safeParse(slug).success) {
     return jsonResponse({ error: 'Invalid slug' }, { status: 400, request });
   }
 
-  // Validate stat/line consistently with /api/v1/hitrate (400 on bad input,
-  // not silent coercion).
+  // Validate stat/line consistently with the hitrate route (400 on bad input).
   const parsed = playerResearchQuerySchema.safeParse(
     Object.fromEntries(request.nextUrl.searchParams),
   );
@@ -35,11 +38,7 @@ export async function GET(
   }
 
   try {
-    const research = await getPlayerResearch(
-      slug,
-      parsed.data.stat ?? 'pts',
-      parsed.data.line,
-    );
+    const research = await getPlayerResearch(sport, slug, parsed.data.stat, parsed.data.line);
     if (!research) {
       return jsonResponse({ error: 'Player not found' }, { status: 404, request });
     }

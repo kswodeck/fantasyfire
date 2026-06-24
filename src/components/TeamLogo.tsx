@@ -1,22 +1,27 @@
 import { getTeam, teamLogoUrl } from '@/lib/teams';
+import type { Sport } from '@/lib/sports';
 
-/** Official NBA team logo (SVG by TEAM_ID). Renders nothing for unknown teams. */
+/** Official team logo (SVG by external TEAM_ID). Renders nothing for unknown teams. */
 export function TeamLogo({
+  sport,
+  externalId,
   abbr,
   size = 18,
   className,
 }: {
-  abbr: string | null | undefined;
+  sport: Sport;
+  externalId: number | null | undefined;
+  abbr?: string | null;
   size?: number;
   className?: string;
 }) {
-  const team = getTeam(abbr);
-  if (!team.nbaId) return null;
+  if (!externalId) return null;
+  const team = getTeam(sport, abbr);
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={teamLogoUrl(team.nbaId)}
-      alt={`${team.fullName} logo`}
+      src={teamLogoUrl(sport, externalId)}
+      alt={`${team.fullName || abbr || 'Team'} logo`}
       width={size}
       height={size}
       loading="lazy"

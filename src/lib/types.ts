@@ -8,10 +8,12 @@ import type {
   Confidence,
   PosBucket,
 } from '@/lib/stats';
+import type { Sport } from '@/lib/sports';
 
 export interface PlayerSummary {
-  /** NBA PERSON_ID — used for the official headshot URL. */
-  nbaId: number;
+  sport: Sport;
+  /** League PERSON_ID — used for the official headshot URL. */
+  externalId: number;
   slug: string;
   firstName: string;
   lastName: string;
@@ -23,6 +25,8 @@ export interface PlayerSummary {
   weight: number | null; // lbs
   teamAbbreviation: string | null;
   teamName: string | null;
+  /** League TEAM_ID for the current team — used for the team logo URL. */
+  teamExternalId: number | null;
 }
 
 export interface PlayerListItem extends PlayerSummary {

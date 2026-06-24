@@ -4,7 +4,8 @@ CREATE SCHEMA IF NOT EXISTS "public";
 -- CreateTable
 CREATE TABLE "Team" (
     "id" SERIAL NOT NULL,
-    "nbaId" INTEGER NOT NULL,
+    "sport" TEXT NOT NULL,
+    "externalId" INTEGER NOT NULL,
     "abbreviation" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "conference" TEXT,
@@ -16,12 +17,22 @@ CREATE TABLE "Team" (
 -- CreateTable
 CREATE TABLE "Player" (
     "id" SERIAL NOT NULL,
-    "nbaId" INTEGER NOT NULL,
+    "sport" TEXT NOT NULL,
+    "externalId" INTEGER NOT NULL,
     "firstName" TEXT NOT NULL,
     "lastName" TEXT NOT NULL,
     "slug" TEXT NOT NULL,
     "position" TEXT,
     "posBucket" TEXT,
+    "jersey" TEXT,
+    "height" TEXT,
+    "weight" INTEGER,
+    "college" TEXT,
+    "country" TEXT,
+    "draftYear" INTEGER,
+    "draftRound" INTEGER,
+    "draftNumber" INTEGER,
+    "fromYear" INTEGER,
     "teamId" INTEGER,
 
     CONSTRAINT "Player_pkey" PRIMARY KEY ("id")
@@ -30,7 +41,8 @@ CREATE TABLE "Player" (
 -- CreateTable
 CREATE TABLE "Game" (
     "id" SERIAL NOT NULL,
-    "nbaId" TEXT NOT NULL,
+    "sport" TEXT NOT NULL,
+    "externalId" TEXT NOT NULL,
     "date" TIMESTAMP(3) NOT NULL,
     "season" TEXT NOT NULL,
     "homeTeamId" INTEGER NOT NULL,
@@ -42,6 +54,7 @@ CREATE TABLE "Game" (
 -- CreateTable
 CREATE TABLE "PlayerGameStat" (
     "id" SERIAL NOT NULL,
+    "sport" TEXT NOT NULL,
     "playerId" INTEGER NOT NULL,
     "gameId" INTEGER NOT NULL,
     "teamId" INTEGER NOT NULL,
@@ -50,48 +63,72 @@ CREATE TABLE "PlayerGameStat" (
     "season" TEXT NOT NULL,
     "gameDate" TIMESTAMP(3) NOT NULL,
     "minutes" DOUBLE PRECISION,
-    "points" INTEGER NOT NULL,
-    "rebounds" INTEGER NOT NULL,
-    "assists" INTEGER NOT NULL,
-    "steals" INTEGER NOT NULL,
-    "blocks" INTEGER NOT NULL,
-    "turnovers" INTEGER NOT NULL,
-    "fgm" INTEGER NOT NULL,
-    "fga" INTEGER NOT NULL,
-    "fg3m" INTEGER NOT NULL,
-    "fg3a" INTEGER NOT NULL,
-    "ftm" INTEGER NOT NULL,
-    "fta" INTEGER NOT NULL,
+    "wl" TEXT,
+    "plusMinus" INTEGER,
+    "points" INTEGER,
+    "rebounds" INTEGER,
+    "oreb" INTEGER,
+    "dreb" INTEGER,
+    "assists" INTEGER,
+    "steals" INTEGER,
+    "blocks" INTEGER,
+    "turnovers" INTEGER,
+    "fouls" INTEGER,
+    "fgm" INTEGER,
+    "fga" INTEGER,
+    "fg3m" INTEGER,
+    "fg3a" INTEGER,
+    "ftm" INTEGER,
+    "fta" INTEGER,
+    "atBats" INTEGER,
+    "hits" INTEGER,
+    "doubles" INTEGER,
+    "triples" INTEGER,
+    "homeRuns" INTEGER,
+    "runs" INTEGER,
+    "rbi" INTEGER,
+    "walks" INTEGER,
+    "strikeouts" INTEGER,
+    "stolenBases" INTEGER,
+    "totalBases" INTEGER,
+    "hbp" INTEGER,
+    "outs" INTEGER,
+    "hitsAllowed" INTEGER,
+    "runsAllowed" INTEGER,
+    "earnedRuns" INTEGER,
+    "walksAllowed" INTEGER,
+    "strikeoutsPitched" INTEGER,
+    "pitcherWin" BOOLEAN,
 
     CONSTRAINT "PlayerGameStat_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Team_nbaId_key" ON "Team"("nbaId");
+CREATE UNIQUE INDEX "Team_sport_externalId_key" ON "Team"("sport", "externalId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Team_abbreviation_key" ON "Team"("abbreviation");
+CREATE UNIQUE INDEX "Team_sport_abbreviation_key" ON "Team"("sport", "abbreviation");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Player_nbaId_key" ON "Player"("nbaId");
+CREATE INDEX "Player_sport_lastName_idx" ON "Player"("sport", "lastName");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Player_slug_key" ON "Player"("slug");
+CREATE UNIQUE INDEX "Player_sport_externalId_key" ON "Player"("sport", "externalId");
 
 -- CreateIndex
-CREATE INDEX "Player_lastName_idx" ON "Player"("lastName");
+CREATE UNIQUE INDEX "Player_sport_slug_key" ON "Player"("sport", "slug");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Game_nbaId_key" ON "Game"("nbaId");
+CREATE INDEX "Game_sport_date_idx" ON "Game"("sport", "date");
 
 -- CreateIndex
-CREATE INDEX "Game_date_idx" ON "Game"("date");
+CREATE UNIQUE INDEX "Game_sport_externalId_key" ON "Game"("sport", "externalId");
 
 -- CreateIndex
-CREATE INDEX "PlayerGameStat_playerId_gameDate_idx" ON "PlayerGameStat"("playerId", "gameDate");
+CREATE INDEX "PlayerGameStat_sport_playerId_gameDate_idx" ON "PlayerGameStat"("sport", "playerId", "gameDate");
 
 -- CreateIndex
-CREATE INDEX "PlayerGameStat_opponentTeamId_season_idx" ON "PlayerGameStat"("opponentTeamId", "season");
+CREATE INDEX "PlayerGameStat_sport_opponentTeamId_season_idx" ON "PlayerGameStat"("sport", "opponentTeamId", "season");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "PlayerGameStat_playerId_gameId_key" ON "PlayerGameStat"("playerId", "gameId");

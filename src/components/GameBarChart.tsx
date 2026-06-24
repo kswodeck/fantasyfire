@@ -81,15 +81,15 @@ export function GameBarChart({
           const x = m.left + i * step + (step - barW) / 2;
           const barY = y(p.value);
           const barH = Math.max(baselineY - barY, 1);
+          // Single string child — React requires <title> children to be one
+          // string (an array of nodes warns and breaks hydration).
+          const tip =
+            `${p.gameDate} ${p.isHome ? 'vs' : '@'} ${p.opponentAbbreviation}` +
+            `${p.wl ? ` (${p.wl})` : ''}: ${p.value} ${statShort}, ${p.result}` +
+            `${p.plusMinus != null ? `, ${p.plusMinus > 0 ? '+' : ''}${p.plusMinus} +/-` : ''}`;
           return (
             <g key={`${p.gameDate}-${i}`}>
-              <title>
-                {p.gameDate} {p.isHome ? 'vs' : '@'} {p.opponentAbbreviation}
-                {p.wl ? ` (${p.wl})` : ''}: {p.value} {statShort}, {p.result}
-                {p.plusMinus != null
-                  ? `, ${p.plusMinus > 0 ? '+' : ''}${p.plusMinus} +/-`
-                  : ''}
-              </title>
+              <title>{tip}</title>
               <rect
                 x={x}
                 y={barY}

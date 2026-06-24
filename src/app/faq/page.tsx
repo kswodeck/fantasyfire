@@ -13,11 +13,11 @@ export const metadata: Metadata = {
 const FAQS: { q: string; a: string }[] = [
   {
     q: 'What is FantasyFire?',
-    a: 'FantasyFire is an NBA player-prop research tool. Search any player to see hit rates, matchups, sample-size confidence, and fair-price math — all computed from public game logs.',
+    a: 'FantasyFire is an NBA and MLB player-prop research tool. Search any player to see hit rates, matchups, sample-size confidence, and fair-price math — all computed from public game logs.',
   },
   {
     q: 'Where does the data come from?',
-    a: 'Everything is computed from publicly available NBA game logs, refreshed nightly. FantasyFire is independent and is not affiliated with the NBA.',
+    a: 'Everything is computed from publicly available NBA and MLB game logs, refreshed nightly. FantasyFire is independent and is not affiliated with the NBA, MLB, or any team.',
   },
   {
     q: 'Do you sell picks or give betting advice?',
@@ -52,8 +52,8 @@ const FAQS: { q: string; a: string }[] = [
     a: "Enter a sportsbook's American odds and we show the implied probability, the no-vig fair price when both sides are entered, and the edge versus the player's historical hit rate. It's history versus the price you entered — not a prediction.",
   },
   {
-    q: 'Do you offer sports other than the NBA?',
-    a: 'Not yet — FantasyFire is NBA-only for now.',
+    q: 'Which sports do you cover?',
+    a: 'FantasyFire currently covers the NBA and MLB, each with its own home, player pages, and stat markets. More sports may follow.',
   },
 ];
 
