@@ -6,7 +6,7 @@ import { SiteFooter } from '@/components/SiteFooter';
 import { Providers } from './providers';
 import { Analytics } from '@/components/Analytics';
 import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister';
-import { SITE } from '@/lib/site';
+import { SITE, absoluteUrl } from '@/lib/site';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -55,6 +55,31 @@ export const viewport: Viewport = {
   colorScheme: 'dark light',
 };
 
+// Site-wide Organization + WebSite identity (E-E-A-T / trust signal). Content is
+// static and trusted (no user input), so a plain stringify is safe here.
+const orgJsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      '@id': `${SITE.url}/#organization`,
+      name: SITE.name,
+      url: SITE.url,
+      email: SITE.email,
+      description: SITE.description,
+      logo: absoluteUrl('/icons/icon-192.png'),
+    },
+    {
+      '@type': 'WebSite',
+      '@id': `${SITE.url}/#website`,
+      name: SITE.name,
+      url: SITE.url,
+      description: SITE.description,
+      publisher: { '@id': `${SITE.url}/#organization` },
+    },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -66,6 +91,10 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
+        />
         <Providers>
           <SiteHeader />
           <main className="flex-1">{children}</main>

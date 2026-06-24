@@ -20,6 +20,9 @@ import {
 
 const SPORT = 'mlb';
 const CHUNK = 1000;
+// Games within this many days are re-UPSERTED so late stat corrections land;
+// older rows take the faster insert-only path.
+const RECENT_DAYS = 5;
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -216,13 +219,33 @@ async function main() {
       pitcherWin: r.pitcherWin ?? null,
     });
   }
+  // Split: recent games (last RECENT_DAYS) get an UPSERT so corrected box scores
+  // overwrite; settled older games take the fast insert-only path.
+  const recentCutoff = new Date();
+  recentCutoff.setUTCDate(recentCutoff.getUTCDate() - RECENT_DAYS);
+  recentCutoff.setUTCHours(0, 0, 0, 0);
+  const recentStats = statData.filter((s) => s.gameDate >= recentCutoff);
+  const historicalStats = statData.filter((s) => s.gameDate < recentCutoff);
+
   let statsInserted = 0;
-  for (const part of chunk(statData, CHUNK)) {
+  for (const part of chunk(historicalStats, CHUNK)) {
     const res = await db.playerGameStat.createMany({ data: part, skipDuplicates: true });
     statsInserted += res.count;
   }
+  for (const part of chunk(recentStats, 50)) {
+    await Promise.all(
+      part.map(({ playerId, gameId, ...rest }) =>
+        db.playerGameStat.upsert({
+          where: { playerId_gameId: { playerId, gameId } },
+          create: { playerId, gameId, ...rest },
+          update: rest,
+        }),
+      ),
+    );
+  }
   console.log(
-    `[mlb] stats: ${statData.length} rows ready, ${statsInserted} newly inserted` +
+    `[mlb] stats: ${statData.length} rows ready, ${statsInserted} historical inserted, ` +
+      `${recentStats.length} recent upserted` +
       (skipped ? `, ${skipped} skipped` : ''),
   );
 
@@ -233,6 +256,7 @@ async function main() {
     gamesDistinct: gameByPk.size,
     gamesInserted,
     statsInserted,
+    statsRecentUpserted: recentStats.length,
   });
 }
 

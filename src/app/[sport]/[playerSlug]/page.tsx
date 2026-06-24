@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTopPlayerSlugs, getPlayerBySlug, getPlayerResearch } from '@/lib/server/players';
 import { absoluteUrl } from '@/lib/site';
+import { formatIsoDate } from '@/lib/format';
 import { getTeam } from '@/lib/teams';
 import { currentSeason } from '@/lib/season';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
@@ -106,6 +107,17 @@ export default async function PlayerPage({ params }: PageProps) {
           },
         ],
       },
+      {
+        '@type': 'Dataset',
+        name: `${player.fullName} game-by-game stats & hit rates`,
+        description:
+          `Per-game ${cfg.name} box-score stats and over/under hit rates for ` +
+          `${player.fullName}, computed from public game logs.`,
+        url: absoluteUrl(`/${sport}/${player.slug}`),
+        isAccessibleForFree: true,
+        creator: { '@type': 'Organization', name: 'FantasyFire' },
+        ...(research.lastGameDate ? { dateModified: research.lastGameDate } : {}),
+      },
     ],
   };
 
@@ -168,6 +180,12 @@ export default async function PlayerPage({ params }: PageProps) {
                 .filter(Boolean)
                 .join(' · ')}
             </p>
+            {research.lastGameDate && (
+              <p className="mt-1 text-xs text-muted">
+                Stats updated through {formatIsoDate(research.lastGameDate)} — nightly box
+                scores, not live.
+              </p>
+            )}
           </div>
         </div>
       </header>

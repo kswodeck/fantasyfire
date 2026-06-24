@@ -134,9 +134,15 @@ tests/e2e/               Playwright
   generated from the flame mark with `node scripts/make-icons.mjs`.
 - **OG images**: dynamic per-player (`src/app/[playerSlug]/opengraph-image.tsx`) and
   a site default (`src/app/opengraph-image.tsx`), rendered with `next/og`.
-- **Analytics**: off by default. Set `NEXT_PUBLIC_ANALYTICS_ENABLED=true` plus
-  `NEXT_PUBLIC_ANALYTICS_SRC` and `NEXT_PUBLIC_ANALYTICS_DOMAIN` (Plausible/Umami-
-  style, cookieless) to enable. No third-party scripts otherwise.
+- **Analytics**: cookieless [Umami](https://umami.is) (free Hobby tier), wired
+  into `src/components/Analytics.tsx` with the site's website id baked in. It
+  loads **only on the production deployment** (off in local dev and Vercel
+  previews so they don't skew the stats); set `NEXT_PUBLIC_ANALYTICS_ENABLED=true`
+  to force it on elsewhere, or `NEXT_PUBLIC_UMAMI_WEBSITE_ID` /
+  `NEXT_PUBLIC_UMAMI_SRC` to override the site or point at a self-hosted instance.
+  Page views are automatic and a few funnel events (`stat_switched`,
+  `line_entered`, `fairprice_used`) fire via `src/lib/analytics.ts`. No other
+  third-party scripts.
 
 ## Deployment (Vercel + Neon/Supabase + GitHub Actions)
 

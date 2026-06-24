@@ -7,6 +7,7 @@ import { STAT_DEFS, statKeysForSport, type StatKey } from '@/lib/stats';
 import { statKeySchema, lineSchema } from '@/lib/schemas';
 import { fairPriceReadout } from '@/lib/odds';
 import { num1, pct } from '@/lib/format';
+import { track } from '@/lib/analytics';
 import { useHitRate } from '@/hooks/useHitRate';
 import { StatSelector } from './StatSelector';
 import { LineInput } from './LineInput';
@@ -89,16 +90,19 @@ export function PlayerResearchClient({
     setStat(next);
     setLine(undefined); // reset to the new stat's default line
     syncUrl(next, undefined);
+    track('stat_switched', { sport, stat: next });
   }
 
   function handleLine(next: number) {
     setLine(next);
     syncUrl(stat, next);
+    track('line_entered', { sport, stat });
   }
 
   function handleOdds(side: 'over' | 'under', value: number | null) {
     if (side === 'over') setOverOdds(value);
     else setUnderOdds(value);
+    if (value !== null) track('fairprice_used', { sport });
   }
 
   const statDef = STAT_DEFS[data.stat];

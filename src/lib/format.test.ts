@@ -7,6 +7,8 @@ import {
   americanOdds,
   roundToHalf,
   roundToHalfLine,
+  median,
+  formatIsoDate,
 } from './format';
 
 describe('pct', () => {
@@ -63,5 +65,37 @@ describe('signed / americanOdds / roundToHalf', () => {
     expect(roundToHalfLine(24.5)).toBe(24.5);
     expect(roundToHalfLine(0.4)).toBe(0.5);
     expect(roundToHalfLine(0)).toBe(0.5);
+  });
+});
+
+describe('median', () => {
+  it('odd-length: the middle value', () => {
+    expect(median([3, 1, 2])).toBe(2);
+    expect(median([7])).toBe(7);
+  });
+  it('even-length: the mean of the two middle values', () => {
+    expect(median([1, 2, 3, 4])).toBe(2.5);
+    expect(median([10, 0])).toBe(5);
+  });
+  it('empty -> 0 and does not mutate the input', () => {
+    expect(median([])).toBe(0);
+    const xs = [3, 1, 2];
+    median(xs);
+    expect(xs).toEqual([3, 1, 2]);
+  });
+  it('is lower than the mean on a right-skewed sample (the whole point)', () => {
+    const xs = [0, 0, 1, 1, 2, 30]; // mean = 5.67, median = 1
+    expect(median(xs)).toBe(1);
+  });
+});
+
+describe('formatIsoDate', () => {
+  it('formats an ISO date without time-zone drift', () => {
+    expect(formatIsoDate('2026-06-23')).toBe('Jun 23, 2026');
+    expect(formatIsoDate('2026-01-01')).toBe('Jan 1, 2026');
+    expect(formatIsoDate('2026-12-09T00:00:00.000Z')).toBe('Dec 9, 2026');
+  });
+  it('passes through an unparseable string', () => {
+    expect(formatIsoDate('not-a-date')).toBe('not-a-date');
   });
 });

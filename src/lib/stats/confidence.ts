@@ -45,10 +45,17 @@ export function wilsonInterval(
   return { successes, n, pHat, center, lower, upper, width: upper - lower };
 }
 
+/**
+ * Interval-width cutoffs for the confidence badge (narrower interval = more
+ * certain). Exported so the public methodology page documents the exact numbers
+ * the code uses, with no chance of drift.
+ */
+export const CONFIDENCE_BADGE_WIDTHS = { high: 0.25, medium: 0.45 } as const;
+
 /** Map an interval width to a 3-level confidence badge (PLAN §5c). */
 export function confidenceBadge(width: number): ConfidenceBadge {
-  if (width < 0.25) return 'High';
-  if (width < 0.45) return 'Medium';
+  if (width < CONFIDENCE_BADGE_WIDTHS.high) return 'High';
+  if (width < CONFIDENCE_BADGE_WIDTHS.medium) return 'Medium';
   return 'Low';
 }
 

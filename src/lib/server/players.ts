@@ -20,7 +20,7 @@ import {
   blendedRoleThreshold,
   RECENT_GAMES_WINDOW,
 } from '@/lib/stats';
-import { roundToHalfLine } from '@/lib/format';
+import { roundToHalfLine, median } from '@/lib/format';
 import { currentSeason, previousSeason } from '@/lib/season';
 import { getTeam } from '@/lib/teams';
 import type { Sport } from '@/lib/sports';
@@ -266,6 +266,30 @@ export async function getAllPlayerSlugs(sport: Sport): Promise<string[]> {
 }
 
 /**
+ * Slug + last game date for every player in a sport, for accurate per-URL
+ * sitemap `lastModified` (a real recrawl signal instead of a blanket "now").
+ * Two cheap queries (players + a grouped max(gameDate)) joined in memory.
+ */
+export async function getPlayerSlugsWithFreshness(
+  sport: Sport,
+): Promise<{ slug: string; lastGameDate: Date | null }[]> {
+  const [players, freshness] = await Promise.all([
+    db.player.findMany({
+      where: { sport },
+      select: { id: true, slug: true },
+      orderBy: { slug: 'asc' },
+    }),
+    db.playerGameStat.groupBy({
+      by: ['playerId'],
+      where: { sport },
+      _max: { gameDate: true },
+    }),
+  ]);
+  const lastByPlayer = new Map(freshness.map((f) => [f.playerId, f._max.gameDate ?? null]));
+  return players.map((p) => ({ slug: p.slug, lastGameDate: lastByPlayer.get(p.id) ?? null }));
+}
+
+/**
  * Slugs for the busiest players in a sport, used by generateStaticParams. The
  * rest render on-demand (ISR) on first visit — keeps build time bounded while
  * every player stays in the sitemap and indexable.
@@ -414,17 +438,21 @@ async function getMlbHitterMatchup(
   return cells.find((c) => c.opponentTeamId === opponentTeamId) ?? null;
 }
 
-/** Default line: season average for the stat, rounded to the nearest 0.5. */
+/**
+ * Default line: the season MEDIAN for the stat, rounded to the nearest 0.5.
+ * The median (not the mean) is used because counting stats are right-skewed —
+ * the mean sits above the typical game, which would bias the default toward the
+ * Over on every page. The user can still type any line.
+ */
 function defaultLine(games: GameStatLine[], stat: StatKey): number {
   if (games.length === 0) return 0.5;
-  const mean = games.reduce((a, g) => a + statValue(stat, g), 0) / games.length;
-  return roundToHalfLine(mean);
+  return roundToHalfLine(median(games.map((g) => statValue(stat, g))));
 }
 
 /**
  * The full research payload for a player page / API response, computed for a
  * stat + line. `stat` defaults to the sport/role default; `line` to the season
- * average rounded to 0.5. An out-of-sport stat falls back to the default.
+ * median rounded to 0.5. An out-of-sport stat falls back to the default.
  */
 export async function getPlayerResearch(
   sport: Sport,
@@ -522,6 +550,9 @@ export async function getPlayerResearch(
     line,
     seasonAverage: seasonResult.mean,
     gamesPlayed: games.length,
+    // Freshness: the most recent game in the DB for this player (unfiltered by
+    // the qualify cutoff), so the "updated through" stamp reflects real data age.
+    lastGameDate: allGames[0]?.gameDate ?? null,
     chart,
     windows,
     recentOpponent,

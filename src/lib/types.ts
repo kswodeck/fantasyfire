@@ -76,6 +76,8 @@ export interface PlayerResearch {
   line: number;
   seasonAverage: number | null;
   gamesPlayed: number;
+  /** ISO date (YYYY-MM-DD) of this player's most recent game; null if none. */
+  lastGameDate: string | null;
   /** Last 20 games, most-recent-first, for the bar chart. */
   chart: ChartPoint[];
   windows: WindowResult[];

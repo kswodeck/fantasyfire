@@ -42,3 +42,31 @@ export function roundToHalf(x: number): number {
 export function roundToHalfLine(x: number): number {
   return Math.max(0.5, Math.round(x - 0.5) + 0.5);
 }
+
+/**
+ * Median of a numeric list (0 for an empty list). Does not mutate the input.
+ * Preferred over the mean for a default prop line: counting stats are
+ * right-skewed, so the mean sits above the typical game and biases the default
+ * toward the Over.
+ */
+export function median(xs: number[]): number {
+  if (xs.length === 0) return 0;
+  const sorted = [...xs].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+const MONTHS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+/**
+ * Format an ISO `YYYY-MM-DD` date as e.g. "Jun 23, 2026". Parses the string parts
+ * directly (no `new Date()`), so it never drifts a day across time zones.
+ */
+export function formatIsoDate(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return iso;
+  const [, y, mo, d] = m;
+  return `${MONTHS[Number(mo) - 1] ?? mo} ${Number(d)}, ${y}`;
+}

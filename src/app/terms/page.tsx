@@ -75,6 +75,27 @@ export default function TermsPage() {
           identification only.
         </p>
 
+        <h2>Copyright &amp; DMCA</h2>
+        <p>
+          {SITE.name}{' '}respects intellectual-property rights. If you believe content on
+          the Service infringes a copyright you hold, email{' '}
+          <a href={`mailto:${SITE.email}`}>{SITE.email}</a> with: your contact information;
+          identification of the work and where it appears on the Service; a statement that
+          you have a good-faith belief the use is not authorized; a statement, under penalty
+          of perjury, that your notice is accurate and that you are authorized to act on the
+          owner&rsquo;s behalf; and your physical or electronic signature. We respond to
+          valid notices and remove infringing material where appropriate.
+        </p>
+
+        <h2>Reporting a security issue</h2>
+        <p>
+          Found a security or data-handling issue? Email{' '}
+          <a href={`mailto:${SITE.email}`}>{SITE.email}</a> — the current contact is also
+          published at{' '}
+          <a href="/.well-known/security.txt">/.well-known/security.txt</a>. Please give us a
+          reasonable opportunity to address an issue before disclosing it publicly.
+        </p>
+
         <h2>Changes</h2>
         <p>
           We may update these Terms from time to time; continued use after changes means
