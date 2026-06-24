@@ -4,3 +4,6 @@ export * from './confidence';
 export * from './dvp';
 export * from './insight';
 export * from './qualify';
+export * from './projection';
+export * from './consistency';
+export * from './fireScore';

@@ -8,6 +8,11 @@ import {
   CONFIDENCE_BADGE_WIDTHS,
   DVP_LOW_SAMPLE,
   RECENT_GAMES_WINDOW,
+  EWMA_ALPHA,
+  SHRINKAGE_K,
+  CONSISTENCY_CV_THRESHOLDS,
+  FIRESCORE_WEIGHTS,
+  FIRESCORE_MIN_GAMES,
 } from '@/lib/stats';
 
 export const metadata: Metadata = {
@@ -139,6 +144,55 @@ export default function MethodologyPage() {
           prediction</strong> that the over or under will hit.
         </p>
 
+        <h2>Recent-form estimate &amp; the FireScore signal (experimental)</h2>
+        <p>
+          As a quick read we add a <strong>recent-form estimate</strong>: a
+          recency-weighted average (EWMA, α = {EWMA_ALPHA}) of recent games, then regressed
+          toward the player&rsquo;s season average by {SHRINKAGE_K}{' '}pseudo-games so a
+          short hot or cold streak doesn&rsquo;t masquerade as the true level. We always
+          show it as a <strong>range</strong> — last-5 mean, last-10 mean, and median next
+          to the stabilized number — never one hero figure. It is a descriptive summary of
+          past games, <strong>not a forecast</strong> of a specific game, and carries no
+          opponent, rest, injury, or lineup adjustment.
+        </p>
+        <p>
+          <strong>Consistency</strong> reads a player&rsquo;s floor and ceiling (the 20th
+          and 80th percentiles of recent games) and labels the spread Steady, Variable, or
+          Boom-Bust from the coefficient of variation (Steady below{' '}
+          {CONSISTENCY_CV_THRESHOLDS.steady}, Boom-Bust at or above{' '}
+          {CONSISTENCY_CV_THRESHOLDS.boomBust}). The <strong>matchup grade</strong> (A–F)
+          turns the Defense-vs-Position rank into a letter — A = one of the softest matchups
+          for the role, F = one of the toughest — and shows <strong>NR</strong> (not rated)
+          on low-sample cells.
+        </p>
+        <p>
+          <strong>FireScore</strong> blends these descriptive signals into one transparent
+          read of how a line leans — <em>Strong lean</em>, <em>Lean</em>,{' '}
+          <em>Slight lean</em>, <em>No lean</em>, or <em>Pass</em>. It is a{' '}
+          <strong>research signal, not a pick, prediction, or guarantee</strong>, and it is{' '}
+          <strong>experimental</strong> until our planned accuracy page validates it. Two
+          things keep it honest:
+        </p>
+        <ul>
+          <li>
+            It is <strong>gated by the same Wilson lower bound</strong> as the confidence
+            badge, so thin samples and hot streaks are discounted, not rewarded — leans are
+            ranked by the lower bound, never the raw rate.
+          </li>
+          <li>
+            The number is always shown with its <strong>component breakdown</strong> (hit
+            rate, recent-form estimate, consistency, matchup), weighted{' '}
+            {Math.round(FIRESCORE_WEIGHTS.hit * 100)}/
+            {Math.round(FIRESCORE_WEIGHTS.proj * 100)}/
+            {Math.round(FIRESCORE_WEIGHTS.consistency * 100)}/
+            {Math.round(FIRESCORE_WEIGHTS.matchup * 100)}, and any missing input is dropped
+            rather than guessed. Fewer than {FIRESCORE_MIN_GAMES}{' '}games is always a Pass.
+            If you enter a real price, FireScore adds the one legitimate value read — the
+            edge and expected value versus the number you typed, labeled as such and never a
+            guarantee.
+          </li>
+        </ul>
+
         <h2>What we deliberately do not model</h2>
         <p>
           Being honest about the limits is part of the method:
@@ -154,8 +208,10 @@ export default function MethodologyPage() {
             we don&rsquo;t know who is active tonight. Confirm availability yourself.
           </li>
           <li>
-            <strong>No trained projection model.</strong> Everything shown is a
-            descriptive statistic about games that already happened — not a forecast.
+            <strong>No trained/fitted projection model.</strong> The recent-form estimate
+            and FireScore are transparent heuristics with published weights, shown with
+            their uncertainty and labeled experimental until our accuracy backtest validates
+            them — not a fitted forecast of a specific game.
           </li>
           <li>
             <strong>Coarse positions and pitcher matchups.</strong> DvP uses three buckets,

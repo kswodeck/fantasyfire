@@ -69,9 +69,20 @@ async function main() {
     }
   } catch (err) {
     if (err instanceof NbaLikelyBlockedError) {
-      console.error(`\n[ingest] ABORTED — stats.nba.com is blocking this host.\n`);
+      // EXPECTED failure mode, NOT a bug: stats.nba.com blocks many datacenter
+      // IPs (GitHub Actions runners included). Don't fail the whole nightly job
+      // over it — the MLB step still runs and the site keeps serving the last
+      // good NBA data (the "updated through {date}" stamp shows its real age).
+      // Emit a visible GitHub Actions warning and exit 0.
+      //   Recovery, in order: re-run the job (a fresh runner IP is often not
+      //   blocked) → run `pnpm ingest:prod` from a non-cloud host on a cron.
+      //   Set INGEST_STRICT=true to make this a hard failure instead.
+      console.log(
+        '::warning title=NBA ingest skipped::stats.nba.com blocked this runner ' +
+          '(expected cloud-IP block); NBA data was NOT refreshed this run.',
+      );
       console.error(err.message);
-      process.exitCode = 1;
+      if (process.env.INGEST_STRICT === 'true') process.exitCode = 1;
       return;
     }
     throw err;

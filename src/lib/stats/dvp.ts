@@ -32,6 +32,38 @@ export function isLowSample(n: number): boolean {
   return n < DVP_LOW_SAMPLE;
 }
 
+/** A–F matchup grade (plus NR = not rated, for low-sample cells). */
+export type MatchupGrade = 'A' | 'B' | 'C' | 'D' | 'F' | 'NR';
+
+/**
+ * Grade a DvP cell A–F by how SOFT the matchup is. rank 1 = allows the most
+ * (softest), so a high "softness percentile" earns an A. NR when the cell is
+ * low-sample — we don't grade noise.
+ */
+export function matchupGrade(cell: DvpCell): MatchupGrade {
+  if (cell.lowSample || cell.totalRanked <= 1) return 'NR';
+  const softness = (cell.totalRanked - cell.rank + 1) / cell.totalRanked; // 1 = softest
+  if (softness >= 0.8) return 'A';
+  if (softness >= 0.6) return 'B';
+  if (softness >= 0.4) return 'C';
+  if (softness >= 0.2) return 'D';
+  return 'F';
+}
+
+/** Clamp bounds for the opponent (DvP) adjustment — matchup effects are small. */
+export const DVP_MULTIPLIER_BOUNDS = { min: 0.9, max: 1.1 } as const;
+
+/**
+ * A gentle, clamped multiplier (±10%) from how much this opponent allows vs the
+ * league average for the bucket+stat. Forced to 1.0 (no effect) on low-sample
+ * cells. Descriptive nudge only — never let matchup swing an estimate far.
+ */
+export function opponentMultiplier(cell: DvpCell, leagueAvgAllowed: number): number {
+  if (cell.lowSample || leagueAvgAllowed <= 0) return 1;
+  const raw = cell.avgAllowed / leagueAvgAllowed;
+  return Math.min(DVP_MULTIPLIER_BOUNDS.max, Math.max(DVP_MULTIPLIER_BOUNDS.min, raw));
+}
+
 /** Pre-aggregated allowed-average for one team within a bucket. */
 export interface DvpAggregate {
   opponentTeamId: number;

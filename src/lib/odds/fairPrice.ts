@@ -58,6 +58,23 @@ export function edge(historicalHitRateOver: number, referenceProbOver: number): 
   return historicalHitRateOver - referenceProbOver;
 }
 
+/** Profit per $1 staked at American odds (the decimal payout minus the $1 stake). */
+export function profitPerDollar(odds: number): number {
+  if (!Number.isFinite(odds) || odds === 0) {
+    throw new Error(`Invalid American odds: ${odds}`);
+  }
+  return odds > 0 ? odds / 100 : 100 / -odds;
+}
+
+/**
+ * Expected value per $1 staked, given a win probability and American odds:
+ * winProb·profit − (1 − winProb). Positive ⇒ recent history suggests value vs
+ * THIS price — not a guarantee, and only as good as the win-prob estimate.
+ */
+export function evPerDollar(winProb: number, odds: number): number {
+  return winProb * profitPerDollar(odds) - (1 - winProb);
+}
+
 export interface FairPriceReadout {
   impliedOver: number | null;
   impliedUnder: number | null;
@@ -71,6 +88,10 @@ export interface FairPriceReadout {
   referenceProbOver: number | null;
   /** historicalHitRateOver − referenceProbOver (null if neither side entered). */
   edge: number | null;
+  /** Win rate needed to break even at the over price (= its implied prob). */
+  breakEvenOver: number | null;
+  /** EV per $1 on the over, using the historical hit rate as the win prob. */
+  evPerDollarOver: number | null;
 }
 
 /**
@@ -105,12 +126,20 @@ export function fairPriceReadout(params: {
       ? impliedToAmerican(referenceProbOver)
       : null;
 
+  const hasHitRate =
+    historicalHitRateOver !== null && historicalHitRateOver !== undefined;
+
   const edgeValue =
-    historicalHitRateOver === null ||
-    historicalHitRateOver === undefined ||
-    referenceProbOver === null
+    !hasHitRate || referenceProbOver === null
       ? null
       : edge(historicalHitRateOver, referenceProbOver);
+
+  // Break-even = the over price's implied prob; EV uses the historical hit rate
+  // as the win-prob estimate. Both require the over odds (and a hit rate for EV).
+  const evPerDollarOver =
+    !hasHitRate || overOdds === null || overOdds === undefined
+      ? null
+      : evPerDollar(historicalHitRateOver, overOdds);
 
   return {
     impliedOver,
@@ -121,5 +150,7 @@ export function fairPriceReadout(params: {
     fairAmericanOver,
     referenceProbOver,
     edge: edgeValue,
+    breakEvenOver: impliedOver,
+    evPerDollarOver,
   };
 }

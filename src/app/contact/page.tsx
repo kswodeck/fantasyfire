@@ -26,9 +26,9 @@ export default function ContactPage() {
         </p>
 
         <p>
-          <a
+          <a id="contact-email-link"
             href={`mailto:${SITE.email}`}
-            className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-medium text-brand-foreground no-underline transition-colors hover:bg-brand-strong"
+            className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-medium text-brand-foreground! no-underline! transition-colors hover:bg-brand-strong hover:no-underline!"
           >
             {SITE.email}
           </a>

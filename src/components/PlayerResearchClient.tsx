@@ -17,6 +17,7 @@ import { HitRateCard } from './HitRateCard';
 import { GameBarChart } from './GameBarChart';
 import { DvpBlock } from './DvpBlock';
 import { WhyReadout } from './WhyReadout';
+import { VerdictPanel } from './VerdictPanel';
 
 /** Sanitize raw odds: treat 0 / non-finite as "not entered". */
 function cleanOdds(x: number | null): number | null {
@@ -146,6 +147,9 @@ export function PlayerResearchClient({
           )}
         </div>
       </div>
+
+      {/* Verdict — the FireScore "good prop" read + sub-signals */}
+      <VerdictPanel verdict={data.verdict} statShort={statDef.short} line={data.line} />
 
       {/* Hit-rate cards */}
       <section aria-label="Hit rates" className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">

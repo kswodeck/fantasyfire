@@ -19,6 +19,10 @@ import {
   defaultStatForSport,
   blendedRoleThreshold,
   RECENT_GAMES_WINDOW,
+  recentFormEstimate,
+  computeConsistency,
+  matchupGrade,
+  computeFireScore,
 } from '@/lib/stats';
 import { roundToHalfLine, median } from '@/lib/format';
 import { currentSeason, previousSeason } from '@/lib/season';
@@ -543,6 +547,31 @@ export async function getPlayerResearch(
     dvp: dvp ? { cell: dvp, opponentAbbreviation: recentOpponent!.abbreviation, unitLabel } : null,
   });
 
+  // Verdict: the FireScore "good prop" read + its sub-signals, computed on the
+  // qualified games already loaded (no extra query). LEAN mode — VALUE/EV is an
+  // opt-in, per-price client read in the fair-price section.
+  const projection = recentFormEstimate(seasonResult.values, seasonResult.mean);
+  const consistency = computeConsistency(
+    seasonResult.values,
+    seasonResult.mean,
+    seasonResult.stdev,
+    line,
+  );
+  const grade = dvp ? matchupGrade(dvp) : null;
+  const fireScore = computeFireScore({
+    line,
+    windows: windows.map((w) => ({
+      window: w.window,
+      overs: w.hitRate.overs,
+      decided: w.hitRate.decided,
+    })),
+    projection: projection.stabilized,
+    stdev: seasonResult.stdev,
+    cv: consistency.cv,
+    matchup: grade ?? undefined,
+    gamesPlayed: games.length,
+  });
+
   return {
     player,
     bio: toBio(record),
@@ -553,6 +582,7 @@ export async function getPlayerResearch(
     // Freshness: the most recent game in the DB for this player (unfiltered by
     // the qualify cutoff), so the "updated through" stamp reflects real data age.
     lastGameDate: allGames[0]?.gameDate ?? null,
+    verdict: { projection, consistency, matchupGrade: grade, fireScore },
     chart,
     windows,
     recentOpponent,

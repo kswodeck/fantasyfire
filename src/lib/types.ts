@@ -7,6 +7,10 @@ import type {
   HitRateResult,
   Confidence,
   PosBucket,
+  RecentFormEstimate,
+  Consistency,
+  MatchupGrade,
+  FireScoreResult,
 } from '@/lib/stats';
 import type { Sport } from '@/lib/sports';
 
@@ -69,6 +73,17 @@ export interface WindowResult {
   confidence: Confidence;
 }
 
+/** The "good prop" read for a player + stat + line (all on free data). */
+export interface PlayerVerdict {
+  /** Recent-form estimate range (raw L5/L10, EWMA, median, stabilized). */
+  projection: RecentFormEstimate;
+  consistency: Consistency;
+  /** A-F matchup grade from DvP; null when there is no matchup. */
+  matchupGrade: MatchupGrade | null;
+  /** The composite FireScore signal (LEAN mode — no user price). */
+  fireScore: FireScoreResult;
+}
+
 export interface PlayerResearch {
   player: PlayerSummary;
   bio: PlayerBio;
@@ -78,6 +93,8 @@ export interface PlayerResearch {
   gamesPlayed: number;
   /** ISO date (YYYY-MM-DD) of this player's most recent game; null if none. */
   lastGameDate: string | null;
+  /** The FireScore verdict + its sub-reads for this stat + line. */
+  verdict: PlayerVerdict;
   /** Last 20 games, most-recent-first, for the bar chart. */
   chart: ChartPoint[];
   windows: WindowResult[];
