@@ -30,8 +30,8 @@ export function FavoriteToggle({
     <button
       type="button"
       aria-pressed={fav}
-      aria-label={fav ? `Remove ${name} from your players` : `Save ${name} to your players`}
-      title={fav ? 'Saved — click to remove' : 'Save to My Players'}
+      aria-label={fav ? `Remove ${name} from your Playbook` : `Save ${name} to your Playbook`}
+      title={fav ? 'Saved — click to remove' : 'Save player to My Playbook'}
       onClick={() => {
         const nowFav = toggleFavorite({ sport, slug, name, team });
         if (nowFav) track('favorite_added', { sport });

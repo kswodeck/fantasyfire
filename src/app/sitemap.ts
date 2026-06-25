@@ -74,11 +74,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticPages: MetadataRoute.Sitemap = [
     { url: absoluteUrl('/'), changeFrequency: 'daily', priority: 1, lastModified: homeMod },
     { url: absoluteUrl('/how-it-works'), changeFrequency: 'monthly', priority: 0.6, lastModified: now },
-    { url: absoluteUrl('/methodology'), changeFrequency: 'monthly', priority: 0.6, lastModified: now },
     { url: absoluteUrl('/faq'), changeFrequency: 'monthly', priority: 0.5, lastModified: now },
-    { url: absoluteUrl('/glossary'), changeFrequency: 'monthly', priority: 0.5, lastModified: now },
     { url: absoluteUrl('/about'), changeFrequency: 'monthly', priority: 0.4, lastModified: now },
-    { url: absoluteUrl('/contact'), changeFrequency: 'yearly', priority: 0.3, lastModified: now },
     { url: absoluteUrl('/responsible-gaming'), changeFrequency: 'yearly', priority: 0.3, lastModified: now },
     { url: absoluteUrl('/privacy'), changeFrequency: 'yearly', priority: 0.2, lastModified: now },
     { url: absoluteUrl('/terms'), changeFrequency: 'yearly', priority: 0.2, lastModified: now },

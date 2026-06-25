@@ -20,6 +20,7 @@ import { DvpBlock } from './DvpBlock';
 import { WhyReadout } from './WhyReadout';
 import { ParkFactorNote } from './ParkFactorNote';
 import { VerdictPanel } from './VerdictPanel';
+import { SavePropControl } from './SavePropControl';
 import { SplitsPanel } from './SplitsPanel';
 
 /** Sanitize raw odds: treat 0 / non-finite as "not entered". */
@@ -164,6 +165,18 @@ export function PlayerResearchClient({
             <span className="ml-auto animate-pulse text-xs text-brand">updating…</span>
           )}
         </div>
+        <SavePropControl
+          sport={sport}
+          slug={slug}
+          name={data.player.fullName}
+          team={data.player.teamAbbreviation}
+          stat={stat}
+          line={effectiveLine}
+          // Stamp the upcoming game so the pick auto-expires once it's over.
+          // The fallback (off-season "last game") isn't a future game — leave null.
+          gameDate={data.matchupOpponent?.isUpcoming ? data.matchupOpponent.date : null}
+          gameStartTime={data.matchupOpponent?.isUpcoming ? data.matchupOpponent.startTime : null}
+        />
       </div>
 
       {/* Verdict — the FireScore "good prop" read + sub-signals */}
@@ -191,10 +204,12 @@ export function PlayerResearchClient({
       <section className="mb-6 grid gap-4 md:grid-cols-2">
         <DvpBlock
           dvp={data.dvp}
-          opponentAbbreviation={data.recentOpponent?.abbreviation ?? null}
-          opponentExternalId={data.recentOpponent?.externalId ?? null}
-          matchupDate={data.recentOpponent?.date ?? null}
-          isHome={data.recentOpponent?.isHome ?? null}
+          opponentAbbreviation={data.matchupOpponent?.abbreviation ?? null}
+          opponentExternalId={data.matchupOpponent?.externalId ?? null}
+          matchupDate={data.matchupOpponent?.date ?? null}
+          matchupStartTime={data.matchupOpponent?.startTime ?? null}
+          isHome={data.matchupOpponent?.isHome ?? null}
+          isUpcoming={data.matchupOpponent?.isUpcoming ?? null}
           sport={sport}
         />
         <WhyReadout text={data.why} />

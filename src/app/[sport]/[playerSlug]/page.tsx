@@ -14,7 +14,7 @@ import { FavoriteToggle } from '@/components/FavoriteToggle';
 import { ShareButton } from '@/components/ShareButton';
 import { EmbedButton } from '@/components/EmbedButton';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
-import { RelatedLinks } from '@/components/RelatedLinks';
+import { RelatedLinks, MoreLinksRow } from '@/components/RelatedLinks';
 import { sportMeshLinks } from '@/lib/relatedLinks';
 import { PROP_STATS } from '@/lib/propStats';
 import { STAT_DEFS, statKeysForSport } from '@/lib/stats';
@@ -204,7 +204,7 @@ export default async function PlayerPage({ params }: PageProps) {
               team={player.teamAbbreviation}
             />
             <ShareButton />
-            <EmbedButton sport={sport} slug={player.slug} />
+            {/* <EmbedButton sport={sport} slug={player.slug} /> */}
           </div>
         </div>
       </header>
@@ -217,19 +217,21 @@ export default async function PlayerPage({ params }: PageProps) {
         initialStat={research.stat}
       />
 
-      <RelatedLinks
-        links={[
-          ...statKeysForSport(sport, player.posBucket)
-            .filter((s) => PROP_STATS[sport].includes(s) && s !== research.stat)
-            .slice(0, 3)
-            .map((s) => ({
-              label: `${player.lastName} ${STAT_DEFS[s].label}`,
-              href: `/${sport}/${player.slug}/${s}`,
-              hint: `${STAT_DEFS[s].label} hit rates and trends.`,
-            })),
-          ...sportMeshLinks(sport).slice(0, 5),
-        ]}
+      {/* The player's other prop pages — a compact link row (not big tiles) so it
+          doesn't duplicate the stat selector above, while keeping the crawlable
+          internal-link mesh into the per-stat SEO pages. */}
+      <MoreLinksRow
+        label={`More ${player.lastName} props`}
+        links={statKeysForSport(sport, player.posBucket)
+          .filter((s) => PROP_STATS[sport].includes(s) && s !== research.stat)
+          .map((s) => ({
+            label: STAT_DEFS[s].label,
+            href: `/${sport}/${player.slug}/${s}`,
+          }))}
       />
+
+      {/* Keep exploring — only links to genuinely different pages. */}
+      <RelatedLinks links={sportMeshLinks(sport).slice(0, 5)} />
     </div>
   );
 }

@@ -13,68 +13,11 @@ the code already supports are marked **✅ shipped**; the few **[Dev]** items ar
 
 ## ⭐ If you only do five things this week
 
-1. **[Owner]** Verify the domain in **Google Search Console** and **submit `sitemap.xml`**. Nothing ranks until Google crawls it. (§1) DONE
-2. **[Owner]** **Bing Webmaster Tools** → one-click "Import from GSC". Powers Bing + DuckDuckGo + Copilot. (§1) DONE
 3. **[Owner]** Post one genuinely useful link (a streak board or a player card) in **r/sportsbook / a PrizePicks Discord** when it actually answers someone's "is this number good?". (§4)
 4. **[Owner]** Submit to 3–5 **"best free prop tools" directories / roundups**. (§4)
 5. **[Owner]** Reserve the **social handles** + set the Bluesky `@fantasyfire.app` domain handle (free "official account" proof). (§5)
 
 Everything below is the fuller list, roughly in priority order.
-
----
-
-## 1. Search indexing groundwork — the highest-leverage hour you can spend
-
-You have **hundreds of programmatic pages** (per-player, per-stat, per-matchup,
-leaders, boards). They compound only once they're indexed.
-
-- **[Owner] Google Search Console** — <https://search.google.com/search-console>
-  - Add a **Domain property** for `fantasyfire.app` (verify by DNS TXT — covers all
-    subdomains/protocols). _Alternative if you can't touch DNS:_ a **URL-prefix**
-    property verified by the **HTML tag** — set `GOOGLE_SITE_VERIFICATION` (✅ the
-    meta tag is already wired into the app; just paste the token).
-  - **Submit the sitemap:** Sitemaps → `sitemap.xml` (✅ dynamic, accurate per-player
-    `lastmod`).
-  - **URL Inspection → Request indexing** for `/`, `/nba`, `/mlb`, `/nfl`,
-    `/methodology`, and 1–2 flagship player pages. Don't mass-request — the sitemap
-    handles bulk.
-- **[Owner] Bing Webmaster Tools** — <https://www.bing.com/webmasters> → **Import
-  from GSC** (auto-verifies, pulls the sitemap). Free Bing/DDG/Copilot reach.
-- **✅ IndexNow** is shipped — the nightly ingest pings Bing/Yandex/DDG with the
-  exact URLs that changed (changed player pages + in-season boards). Just confirm the
-  `NEXT_PUBLIC_SITE_URL` repo variable is set so it targets the live apex.
-- **[Owner] Validate structured data** with the **Rich Results Test**
-  (<https://search.google.com/test/rich-results>): confirm Organization / WebSite /
-  Person / Dataset / BreadcrumbList / FAQPage all parse. (✅ all emitted.)
-- **[Owner] Watch crawl health** in GSC → Pages: make sure off-season pages aren't
-  flagged as **soft-404s** and that thin pages stay out (✅ `qualify.ts` gating
-  already prevents most thin content).
-
----
-
-## 2. On-page & technical SEO — quick wins (mostly already done — verify, then extend)
-
-Most of the technical SEO moat is built. The job is to **confirm it's live in
-production** and squeeze the last few points.
-
-- **✅ One-sentence computed-answer H1** on per-stat pages (the featured-snippet /
-  AI-Overview target). _Extend:_ make sure every high-value page leads with a
-  crawlable, factual answer sentence — that's what wins "position zero".
-- **✅ Internal-link mesh** (`RelatedLinks`) so nothing is orphaned. _Quick win:_
-  spot-check a few deep pages and confirm they each link to 4–6 siblings.
-- **✅ Daily freshness signals** ("Stats updated through {date}", per-URL sitemap
-  `lastmod`). Fresh pages get recrawled more — keep the nightly ingest healthy
-  (✅ `/status` now shows this).
-- **✅ Fast + mobile-first + no layout shift.** Enable **Vercel Speed Insights** in
-  the dashboard (✅ component shipped, production-gated) and run **PageSpeed Insights**
-  (<https://pagespeed.web.dev>) once on a player page — Core Web Vitals are a ranking
-  input.
-- **✅ Canonical tags, OpenGraph + Twitter cards, dynamic per-player & per-stat OG
-  images** (the per-stat card now bakes in the Wilson badge). Validate once with the
-  **Meta Sharing Debugger** and **LinkedIn Post Inspector** before your first share
-  (each platform caches separately).
-- **[Owner] `robots.txt` / crawl budget** (✅ emitted) — no action unless GSC reports
-  crawl waste.
 
 ---
 
@@ -84,20 +27,9 @@ production** and squeeze the last few points.
 points prop", "[player] vs [team]", "NBA defense vs position", "[player] last 10
 games". These are exactly the queries paywalled competitors **can't** rank for.
 
-- **✅ Per-player / per-stat / per-matchup / leaders pages** already target these.
-  _Quick win:_ in GSC → Performance, after a few weeks, find queries where you rank
-  #5–15 and **strengthen those exact pages** (tighten the H1 answer, add an internal
-  link from a board).
-- **[Dev, small] A few evergreen informational pages** to catch top-of-funnel
-  queries: "How to read a hit rate", "What is a Wilson interval", "Defense vs
-  position, explained". (✅ `/methodology`, `/how-it-works`, `/glossary` already do
-  much of this — consider 2–3 more targeted at real search phrases.)
 - **[Owner] Seasonal/event spikes** — playoffs, opening day, a big primetime game
   drive search. Share the relevant board/player pages **into those moments**; that's
   when "is this number good?" volume peaks.
-- **Avoid** thin combinatorial pages (e.g. `/compare/[a-vs-b]`) — Google penalizes
-  near-duplicates (✅ already deferred in the plan).
-
 ---
 
 ## 4. Off-site, backlinks & being the citable source

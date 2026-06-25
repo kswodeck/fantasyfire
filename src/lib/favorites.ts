@@ -9,7 +9,7 @@ export interface FavoritePlayer {
   sport: Sport;
   slug: string;
   name: string;
-  /** Team abbreviation, for display on /my-players. */
+  /** Team abbreviation, for display on /playbook. */
   team?: string | null;
 }
 

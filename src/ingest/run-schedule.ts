@@ -48,8 +48,10 @@ async function ingestSport(
       continue;
     }
     const date = new Date(`${r.dateIso}T00:00:00Z`);
+    const startTime = r.startTimeIso ? new Date(r.startTimeIso) : null;
     const common = {
       date,
+      startTime: startTime && !Number.isNaN(startTime.getTime()) ? startTime : null,
       season: r.dateIso.slice(0, 4),
       homeTeamId,
       awayTeamId,

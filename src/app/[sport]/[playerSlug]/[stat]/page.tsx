@@ -178,7 +178,7 @@ export default async function PlayerStatPage({ params }: PageProps) {
               team={player.teamAbbreviation}
             />
             <ShareButton />
-            <EmbedButton sport={sport} slug={player.slug} />
+            {/* <EmbedButton sport={sport} slug={player.slug} /> */}
           </div>
         </div>
       </header>

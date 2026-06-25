@@ -168,7 +168,8 @@ model ScheduledGame {
   id                  Int      @id @default(autoincrement())
   sport               String
   externalId          String // MLB gamePk / NBA (ESPN) event id
-  date                DateTime // game date (date-only, UTC midnight)
+  date                DateTime // game date (date-only, UTC midnight) — slate windowing key
+  startTime           DateTime? // exact first-pitch / kickoff (UTC); null if feed omits it
   season              String
   homeTeamId          Int
   awayTeamId          Int

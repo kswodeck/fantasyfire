@@ -8,6 +8,8 @@ export interface ScheduleGameRow {
   externalId: string;
   /** YYYY-MM-DD game date. */
   dateIso: string;
+  /** Full ISO start datetime (UTC) when the feed gives one; undefined otherwise. */
+  startTimeIso?: string;
   status: string;
   /** Team match keys: MLB = team externalId; NBA = (normalized) abbreviation. */
   homeKey: string;
@@ -47,6 +49,8 @@ export async function fetchMlbSchedule(date: string): Promise<ScheduleGameRow[]>
   return games.map((g) => ({
     externalId: String(g.gamePk),
     dateIso: (g.officialDate ?? g.gameDate ?? date).slice(0, 10),
+    // gameDate is the full UTC first-pitch timestamp; officialDate is date-only.
+    startTimeIso: g.gameDate,
     status: g.status?.detailedState ?? 'Scheduled',
     homeKey: String(g.teams.home.team.id),
     awayKey: String(g.teams.away.team.id),
@@ -100,6 +104,8 @@ export async function fetchNbaSchedule(date: string): Promise<ScheduleGameRow[]>
       return {
         externalId: String(e.id),
         dateIso: (e.date ?? `${date}T00:00Z`).slice(0, 10),
+        // ESPN `date` is the full UTC tip-off / kickoff timestamp.
+        startTimeIso: e.date,
         status: comp?.status?.type?.description ?? 'Scheduled',
         homeKey: home?.team?.abbreviation ? normalizeNbaAbbr(home.team.abbreviation) : '',
         awayKey: away?.team?.abbreviation ? normalizeNbaAbbr(away.team.abbreviation) : '',
@@ -126,6 +132,8 @@ export async function fetchNflSchedule(date: string): Promise<ScheduleGameRow[]>
       return {
         externalId: String(e.id),
         dateIso: (e.date ?? `${date}T00:00Z`).slice(0, 10),
+        // ESPN `date` is the full UTC tip-off / kickoff timestamp.
+        startTimeIso: e.date,
         status: comp?.status?.type?.description ?? 'Scheduled',
         homeKey: home?.team?.abbreviation ? normalizeNflAbbr(home.team.abbreviation) : '',
         awayKey: away?.team?.abbreviation ? normalizeNflAbbr(away.team.abbreviation) : '',

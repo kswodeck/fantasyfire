@@ -4,7 +4,8 @@ import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { FilterableTrends } from '@/components/FilterableTrends';
 import { FreshnessNote } from '@/components/FreshnessNote';
 import { RelatedLinks } from '@/components/RelatedLinks';
-import { getTrendBoard, getDataFreshness } from '@/lib/server/players';
+import { OffSeasonFallback } from '@/components/OffSeasonFallback';
+import { getTrendBoard, getDataFreshness, hasUpcomingGames } from '@/lib/server/players';
 import { sportMeshLinks } from '@/lib/relatedLinks';
 import { JsonLd } from '@/components/JsonLd';
 import { breadcrumbList, datasetNode, graph } from '@/lib/jsonLd';
@@ -40,10 +41,17 @@ export default async function TrendsPage({ params }: PageProps) {
   const sport: Sport = raw;
   const cfg = SPORTS[sport];
 
+  // Off-season (no scheduled games) → last-10 "form" describes a finished season,
+  // so we show a season-leaders fallback. Default to in-season on error.
+  const upcoming = await hasUpcomingGames(sport).catch(() => true);
+
   let rows: TrendRow[] = [];
   let freshness: string | null = null;
   try {
-    [rows, freshness] = await Promise.all([getTrendBoard(sport), getDataFreshness(sport)]);
+    [rows, freshness] = await Promise.all([
+      upcoming ? getTrendBoard(sport) : Promise.resolve([]),
+      getDataFreshness(sport),
+    ]);
   } catch {
     // DB unavailable — render the empty state.
   }
@@ -77,9 +85,11 @@ export default async function TrendsPage({ params }: PageProps) {
       </p>
       <FreshnessNote date={freshness} className="mt-2" />
 
-      {rows.length === 0 ? (
+      {!upcoming ? (
+        <OffSeasonFallback sport={sport} what="form trends" />
+      ) : rows.length === 0 ? (
         <p className="mt-6 rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
-          No trends to show right now (likely the off-season). Check back after the next nightly update.
+          No trends to show right now. Check back after the next nightly update.
         </p>
       ) : (
         <div className="mt-5">

@@ -11,8 +11,8 @@ import { useFavorites } from '@/hooks/useFavorites';
 import { track } from '@/lib/analytics';
 
 /**
- * Value-first push opt-in. Rendered on /my-players (a high-intent surface — the
- * user has saved players), never as an interstitial. Hides itself entirely when
+ * Value-first push opt-in. Rendered on /playbook (a high-intent surface — the
+ * user has saved players/props), never as an interstitial. Hides itself entirely when
  * push is unconfigured/unsupported, so it never shows a dead button.
  */
 export function PushOptIn() {

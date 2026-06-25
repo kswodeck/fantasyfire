@@ -103,7 +103,12 @@ export interface PlayerResearch {
   /** Last 20 games, most-recent-first, for the bar chart. */
   chart: ChartPoint[];
   windows: WindowResult[];
-  recentOpponent: {
+  /**
+   * The opponent the matchup card + DvP are computed against: the player's next
+   * scheduled game (or today's, if already started), falling back to the last
+   * completed game off-season. `isUpcoming` distinguishes the two.
+   */
+  matchupOpponent: {
     teamId: number;
     abbreviation: string;
     isHome: boolean;
@@ -111,6 +116,10 @@ export interface PlayerResearch {
     externalId: number;
     /** ISO date of the game this matchup is from. */
     date: string;
+    /** Full ISO start datetime (UTC) for local-time display; null when unknown. */
+    startTime: string | null;
+    /** true = next/current scheduled game; false = last completed (off-season fallback). */
+    isUpcoming: boolean;
   } | null;
   dvp: DvpCell | null;
   why: string;

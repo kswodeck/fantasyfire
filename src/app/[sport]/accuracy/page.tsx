@@ -124,8 +124,8 @@ export default async function AccuracyPage({ params }: PageProps) {
           <p className="mt-3 text-xs leading-relaxed text-muted">
             &ldquo;Side won&rdquo; = the player&rsquo;s next game landed on the side we leaned (pushes
             excluded). Early buckets are small — read the confidence interval, not just the
-            percentage. A coin flip is 50%. See <Link href="/methodology">methodology</Link> for how
-            FireScore is computed.
+            percentage. A coin flip is 50%. See <Link href="/how-it-works">how it works</Link> for
+            how FireScore is computed.
           </p>
         </>
       )}

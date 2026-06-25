@@ -23,13 +23,13 @@ export function SiteHeader() {
             <SportMenu key={s} sport={s} />
           ))}
           <Link
-            href="/my-players"
+            href="/playbook"
             className="transition-colors hover:text-foreground"
-            title="My Players"
-            aria-label="My Players"
+            title="My Playbook"
+            aria-label="My Playbook"
           >
             <span aria-hidden="true">★</span>
-            <span className="sr-only">My Players</span>
+            <span className="sr-only">My Playbook</span>
           </Link>
           <ThemeToggle className="-mr-1.5" />
         </nav>

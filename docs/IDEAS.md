@@ -3,3 +3,6 @@ We would post like a top 3 picks or top 5 picks, etc. It would be even better if
 I want this to be fully automated every day.
 
 2. 
+
+
+I noticed that the save feature only saved players. I think its even more important/desired to be able to save specific players, stats, lines/props, and specific bet direction combinations. I want you to allow this feature. Perhaps there can be a way to just save a player AND/OR a way to save a specific stat, line/prop, direction combo for that player. The My Players page could potential be rebranded to something like "My Props", "My Bets", "My Playbook", etc. This page should be categorized into different sports (only show a sport if a player from that sport is saved), into different players, then it could breakdown into which specific player stats, lines/props, and specific bet direction combinations have been saved. This would show all those details. Perhaps have a way to click to open some sort of popup menu or toggle in order to more details. It would first show at a glance, then click something to show deeper details. I want you to architect the best possible useful, feasible, yet simple features here and use your own creativity while using my ideas as a starting point to iterate off of. I want a super useful product for what users would use it for. Do deep research and implement the best easy solution

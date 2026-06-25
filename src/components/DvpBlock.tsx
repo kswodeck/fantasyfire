@@ -4,6 +4,7 @@ import { num1, ordinal, formatIsoDate } from '@/lib/format';
 import { getTeam } from '@/lib/teams';
 import type { Sport } from '@/lib/sports';
 import { TeamLogo } from './TeamLogo';
+import { MatchupTime } from './MatchupTime';
 
 const POS_LABEL: Record<string, string> = {
   G: 'guards',
@@ -16,24 +17,29 @@ const POS_LABEL: Record<string, string> = {
 };
 
 /**
- * Matchup block for the player's most-recent opponent: rank, raw average
- * allowed, and a low-sample flag — tinted in the opponent's team color, with
- * their logo and the game date. NBA/NFL = defense-vs-position; MLB = the opposing
- * pitching staff's allowed rate. Coarse on purpose — sample size is surfaced.
+ * Matchup block for the player's upcoming opponent (next/current scheduled game;
+ * off-season it falls back to the last game, flagged via `isUpcoming`): rank, raw
+ * average allowed, and a low-sample flag — tinted in the opponent's team color,
+ * with their logo and the game date. NBA/NFL = defense-vs-position; MLB = the
+ * opposing pitching staff's allowed rate. Coarse on purpose — sample size shown.
  */
 export function DvpBlock({
   dvp,
   opponentAbbreviation,
   opponentExternalId,
   matchupDate,
+  matchupStartTime,
   isHome,
+  isUpcoming,
   sport,
 }: {
   dvp: DvpCell | null;
   opponentAbbreviation: string | null;
   opponentExternalId: number | null;
   matchupDate: string | null;
+  matchupStartTime: string | null;
   isHome: boolean | null;
+  isUpcoming: boolean | null;
   sport: Sport;
 }) {
   if (!dvp || !opponentAbbreviation) {
@@ -57,16 +63,18 @@ export function DvpBlock({
       : softness >= 2 / 3
         ? { label: 'Tough', cls: 'text-under' }
         : { label: 'Neutral', cls: 'text-muted' };
+  // "Next" for the upcoming/current game; "Last" off-season (last completed game).
+  const matchupLabel = isUpcoming == null ? 'Matchup' : isUpcoming ? 'Next matchup' : 'Last matchup';
 
   return (
     <div
-      className="overflow-hidden rounded-xl border border-line p-4"
+      className="flex h-full flex-col overflow-hidden rounded-xl border border-line p-4"
       style={{
         background: `linear-gradient(120deg, color-mix(in srgb, ${team.primary} 16%, var(--surface)) 0%, var(--surface) 62%)`,
         borderTop: `2px solid ${team.primary}`,
       }}
     >
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-start justify-between gap-2">
         <h3 className="flex min-w-0 items-center gap-1.5 text-sm font-medium text-muted">
           <TeamLogo
             sport={sport}
@@ -74,11 +82,11 @@ export function DvpBlock({
             abbr={opponentAbbreviation}
             size={18}
           />
-          Matchup — {isHome ? 'vs' : '@'} {opponentAbbreviation}
+          {matchupLabel} — {isHome ? 'vs' : '@'} {opponentAbbreviation}
         </h3>
-        <div className="flex shrink-0 items-center gap-2 text-xs">
-          {matchupDate && <span className="text-muted">{formatIsoDate(matchupDate)}</span>}
-          <span className={`font-semibold ${tone.cls}`}>{tone.label}</span>
+        <div className="flex shrink-0 flex-col items-end gap-0.5 text-xs leading-tight text-muted">
+          {matchupDate && <span>{formatIsoDate(matchupDate)}</span>}
+          <MatchupTime iso={matchupStartTime} className="tabular-nums text-muted/85" />
         </div>
       </div>
 
@@ -97,14 +105,17 @@ export function DvpBlock({
         per game to {unit} (rank 1 = allows the most).
       </p>
 
-      <p className="mt-2 text-xs text-muted">
-        Sample: {dvp.sampleSize} {sport === 'mlb' ? 'games' : 'player-games'}
-        {dvp.lowSample && (
-          <span className="ml-1 rounded bg-surface-warn px-1.5 py-0.5 font-medium text-conf-med">
-            low sample — interpret with caution
-          </span>
-        )}
-      </p>
+      <div className="mt-auto flex items-end justify-between gap-2 pt-3">
+        <p className="text-xs text-muted">
+          Sample: {dvp.sampleSize} {sport === 'mlb' ? 'games' : 'player-games'}
+          {dvp.lowSample && (
+            <span className="ml-1 rounded bg-surface-warn px-1.5 py-0.5 font-medium text-conf-med">
+              low sample — interpret with caution
+            </span>
+          )}
+        </p>
+        <span className={`shrink-0 text-xs font-semibold ${tone.cls}`}>{tone.label}</span>
+      </div>
     </div>
   );
 }

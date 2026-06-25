@@ -4,12 +4,13 @@ import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { FilterableBoard } from '@/components/FilterableBoard';
 import { SlatePaster } from '@/components/SlatePaster';
-import { getBoard, getCalibration } from '@/lib/server/players';
+import { getBoard, getCalibration, hasUpcomingGames } from '@/lib/server/players';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
 import type { BoardRow, Calibration } from '@/lib/types';
 import { calibrationVerdict } from '@/lib/calibrationVerdict';
 import { CalibrationStatusBadge } from '@/components/CalibrationStatusBadge';
 import { RelatedLinks } from '@/components/RelatedLinks';
+import { OffSeasonFallback } from '@/components/OffSeasonFallback';
 import { sportMeshLinks } from '@/lib/relatedLinks';
 
 export const revalidate = 3600;
@@ -41,12 +42,18 @@ export default async function BoardPage({ params }: PageProps) {
   const sport: Sport = raw;
   const cfg = SPORTS[sport];
 
+  // Off-season (no scheduled games) → the auto board's "current" leans are stale,
+  // so we show a season-leaders fallback instead. Default to in-season on error.
+  const upcoming = await hasUpcomingGames(sport).catch(() => true);
+
   let rows: BoardRow[] = [];
-  try {
-    rows = await getBoard(sport, { limit: 150, perStatCap: 30 });
-  } catch {
-    // DB unavailable — fall through to the empty state rather than erroring.
-    rows = [];
+  if (upcoming) {
+    try {
+      rows = await getBoard(sport, { limit: 150, perStatCap: 30 });
+    } catch {
+      // DB unavailable — fall through to the empty state rather than erroring.
+      rows = [];
+    }
   }
 
   let cal: Calibration = { totalGraded: 0, overallWinRate: null, trackingSince: null, buckets: [] };
@@ -89,22 +96,28 @@ export default async function BoardPage({ params }: PageProps) {
         <SlatePaster sport={sport} />
       </div>
 
-      <h2 className="mb-2 mt-2 text-xs font-semibold uppercase tracking-wide text-muted">
-        Auto board — strongest leans vs our typical line
-      </h2>
-
-      {rows.length === 0 ? (
-        <p className="mt-2 rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
-          No board data yet — check back after the next nightly update, or{' '}
-          <Link href={`/${sport}/players`} className="text-brand hover:text-brand-strong">
-            browse all {cfg.name} players
-          </Link>
-          .
-        </p>
+      {!upcoming ? (
+        <OffSeasonFallback sport={sport} what="live top leans" />
       ) : (
-        <div className="mt-5">
-          <FilterableBoard sport={sport} rows={rows} />
-        </div>
+        <>
+          <h2 className="mb-2 mt-2 text-xs font-semibold uppercase tracking-wide text-muted">
+            Auto board — strongest leans vs our typical line
+          </h2>
+
+          {rows.length === 0 ? (
+            <p className="mt-2 rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
+              No board data yet — check back after the next nightly update, or{' '}
+              <Link href={`/${sport}/players`} className="text-brand hover:text-brand-strong">
+                browse all {cfg.name} players
+              </Link>
+              .
+            </p>
+          ) : (
+            <div className="mt-5">
+              <FilterableBoard sport={sport} rows={rows} />
+            </div>
+          )}
+        </>
       )}
 
       <RelatedLinks links={sportMeshLinks(sport, 'board')} />

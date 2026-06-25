@@ -73,9 +73,32 @@ export default function AboutPage() {
           their respective owners.
         </p>
 
+        <h2 id="contact">Contact</h2>
         <p>
-          Have feedback or spotted a bug? <Link href="/contact">Get in touch</Link> — we
-          read everything.
+          Questions, feedback, a data correction, a partnership, or press? Email us and a
+          human will read it.
+        </p>
+        <p>
+          <a
+            href={`mailto:${SITE.email}`}
+            className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-medium text-brand-foreground! no-underline! transition-colors hover:bg-brand-strong hover:no-underline!"
+          >
+            {SITE.email}
+          </a>
+        </p>
+        <p>
+          <strong>Good things to email about:</strong>
+        </p>
+        <ul>
+          <li>Bugs, wrong numbers, or a player/matchup that looks off</li>
+          <li>Feature requests and feedback</li>
+          <li>Partnership, advertising, or media inquiries</li>
+        </ul>
+        <p>
+          We&rsquo;re a small, independent team, so please allow a few days for a reply.
+          One thing we <strong>can&rsquo;t</strong> help with: picks or betting advice —
+          {SITE.name}{' '}is a research tool, not a tout service (
+          <Link href="/responsible-gaming">why</Link>).
         </p>
       </Prose>
     </div>

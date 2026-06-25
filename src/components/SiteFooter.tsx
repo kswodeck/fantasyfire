@@ -6,6 +6,7 @@ const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
   {
     title: 'Sports',
     links: [
+      { label: 'My Playbook', href: '/playbook' },
       { label: 'NBA', href: '/nba' },
       { label: 'MLB', href: '/mlb' },
       { label: 'NFL', href: '/nfl' },
@@ -14,13 +15,9 @@ const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
   {
     title: 'Company',
     links: [
-      { label: 'My Players', href: '/my-players' },
       { label: 'About', href: '/about' },
       { label: 'How it works', href: '/how-it-works' },
-      { label: 'Methodology', href: '/methodology' },
-      { label: 'Glossary', href: '/glossary' },
       { label: 'Status', href: '/status' },
-      { label: 'Contact', href: '/contact' },
     ],
   },
   {
@@ -28,7 +25,7 @@ const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
     links: [
       { label: 'Privacy', href: '/privacy' },
       { label: 'Terms', href: '/terms' },
-      { label: 'FAQ', href: '/faq' },
+      { label: 'FAQ & glossary', href: '/faq' },
       { label: 'Responsible gaming', href: '/responsible-gaming' },
     ],
   },

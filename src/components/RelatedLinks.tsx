@@ -39,3 +39,28 @@ export function RelatedLinks({
     </section>
   );
 }
+
+/**
+ * A compact inline row of related links (e.g. a player's other props). Same
+ * crawlable <a> mesh as RelatedLinks, but as small text links — used where big
+ * tiles would just duplicate an on-page control (like the stat selector).
+ */
+export function MoreLinksRow({ label, links }: { label: string; links: RelatedLink[] }) {
+  if (links.length === 0) return null;
+  return (
+    <nav aria-label={label} className="mt-8 text-sm">
+      <span className="text-muted">{label}: </span>
+      {links.map((l, i) => (
+        <span key={l.href}>
+          {i > 0 && <span className="text-muted"> · </span>}
+          <Link
+            href={l.href}
+            className="font-medium text-brand transition-colors hover:text-brand-strong hover:underline"
+          >
+            {l.label}
+          </Link>
+        </span>
+      ))}
+    </nav>
+  );
+}

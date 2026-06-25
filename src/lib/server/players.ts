@@ -28,6 +28,7 @@ import {
   STAT_DEFS,
   FIRESCORE_MIN_GAMES,
   defaultLine,
+  defaultPropLine,
 } from '@/lib/stats';
 import { fairPriceReadout } from '@/lib/odds';
 import { parseSlate, normalizeName } from '@/lib/slate';
@@ -187,7 +188,7 @@ type PlayerRecord = {
   draftRound: number | null;
   draftNumber: number | null;
   fromYear: number | null;
-  team: { abbreviation: string; name: string; externalId: number } | null;
+  team: { id: number; abbreviation: string; name: string; externalId: number } | null;
 };
 
 // Wrapped in React cache() so generateMetadata + the page (same render) share
@@ -212,7 +213,7 @@ const getPlayerRecord = cache(async (sport: Sport, slug: string): Promise<Player
       draftRound: true,
       draftNumber: true,
       fromYear: true,
-      team: { select: { abbreviation: true, name: true, externalId: true } },
+      team: { select: { id: true, abbreviation: true, name: true, externalId: true } },
     },
   });
   return p ? { ...p, sport } : null;
@@ -355,6 +356,56 @@ export async function getPlayerGames(playerId: number): Promise<PlayerGame[]> {
     include: { opponentTeam: { select: { abbreviation: true, externalId: true } } },
   });
   return rows.map(toPlayerGame);
+}
+
+/** One opponent the matchup card / DvP is computed against. */
+export type MatchupOpponent = {
+  /** Opponent's internal Team.id (the key DvP tables are grouped by). */
+  teamId: number;
+  abbreviation: string;
+  /** Whether the player's team is home in this game. */
+  isHome: boolean;
+  /** Opponent's league team id (for the logo). */
+  externalId: number;
+  /** ISO date (YYYY-MM-DD) of the game. */
+  date: string;
+  /** Full ISO start datetime (UTC), for client-side local-time display; null if unknown. */
+  startTime: string | null;
+};
+
+/**
+ * The player's team's NEXT scheduled opponent — the soonest game on/after today
+ * (UTC), from the schedule feed. A game that already started today still counts
+ * (its date is today's UTC date), so an in-progress game is treated as "next".
+ * Returns null off-season / when the team has no upcoming game, letting callers
+ * fall back to the last completed opponent.
+ */
+async function getNextOpponent(sport: Sport, teamId: number): Promise<MatchupOpponent | null> {
+  const todayUtc = new Date();
+  todayUtc.setUTCHours(0, 0, 0, 0);
+  const game = await db.scheduledGame.findFirst({
+    where: {
+      sport,
+      date: { gte: todayUtc },
+      OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }],
+    },
+    orderBy: { date: 'asc' },
+    include: {
+      homeTeam: { select: { id: true, abbreviation: true, externalId: true } },
+      awayTeam: { select: { id: true, abbreviation: true, externalId: true } },
+    },
+  });
+  if (!game) return null;
+  const isHome = game.homeTeamId === teamId;
+  const opp = isHome ? game.awayTeam : game.homeTeam;
+  return {
+    teamId: opp.id,
+    abbreviation: opp.abbreviation,
+    isHome,
+    externalId: opp.externalId,
+    date: game.date.toISOString().slice(0, 10),
+    startTime: game.startTime ? game.startTime.toISOString() : null,
+  };
 }
 
 /** All slugs for a sport (sitemap — every player stays crawlable). */
@@ -672,7 +723,9 @@ export async function getPlayerResearch(
     if (opp == null) return true; // role not opportunity-filtered (MLB pitchers)
     return opp > 0 && opp >= cutoff;
   });
-  const line = lineParam ?? defaultLine(games, stat);
+  // The player page shows a book-style half-point default; the board/snapshots
+  // keep the balanced typical-game line (defaultLine) for ranking + grading.
+  const line = lineParam ?? defaultPropLine(games, stat);
 
   const windows: WindowResult[] = STAT_WINDOWS.map((w) => {
     const hitRate = computeHitRate(games, stat, line, w);
@@ -684,28 +737,39 @@ export async function getPlayerResearch(
   });
 
   const seasonResult = windows.find((w) => w.window === 'season')!.hitRate;
+
+  // The matchup card + DvP describe the player's NEXT game (or today's, if it's
+  // already started), not a past one. Prefer the next scheduled opponent; fall
+  // back to the last completed opponent off-season, flagged so the UI can say so.
   const recentGame = games[0];
-  const recentOpponent = recentGame
+  const recentOpponent: MatchupOpponent | null = recentGame
     ? {
         teamId: recentGame.opponentTeamId,
         abbreviation: recentGame.opponentAbbreviation,
         isHome: recentGame.isHome,
         externalId: recentGame.opponentExternalId,
         date: recentGame.gameDate,
+        startTime: null,
       }
     : null;
+  const upcoming = record.team ? await getNextOpponent(sport, record.team.id) : null;
+  const matchupOpponent = upcoming
+    ? { ...upcoming, isUpcoming: true }
+    : recentOpponent
+      ? { ...recentOpponent, isUpcoming: false }
+      : null;
 
   let dvp: DvpCell | null = null;
   let unitLabel: string | undefined;
-  if (recentOpponent) {
+  if (matchupOpponent) {
     if (sport === 'nba' && player.posBucket) {
-      dvp = await getNbaDvp(player.posBucket, stat, recentOpponent.teamId, season);
+      dvp = await getNbaDvp(player.posBucket, stat, matchupOpponent.teamId, season);
       unitLabel = POS_LABEL[player.posBucket] ?? 'this position';
     } else if (sport === 'mlb' && player.posBucket === 'H') {
-      dvp = await getMlbHitterMatchup(stat, recentOpponent.teamId, season);
+      dvp = await getMlbHitterMatchup(stat, matchupOpponent.teamId, season);
       unitLabel = 'hitters';
     } else if (sport === 'nfl' && player.posBucket) {
-      dvp = await getNflDvp(player.posBucket, stat, recentOpponent.teamId, season);
+      dvp = await getNflDvp(player.posBucket, stat, matchupOpponent.teamId, season);
       unitLabel = POS_LABEL[player.posBucket] ?? 'this position';
     }
   }
@@ -730,7 +794,7 @@ export async function getPlayerResearch(
     line,
     recent: l10,
     season: seasonResult,
-    dvp: dvp ? { cell: dvp, opponentAbbreviation: recentOpponent!.abbreviation, unitLabel } : null,
+    dvp: dvp ? { cell: dvp, opponentAbbreviation: matchupOpponent!.abbreviation, unitLabel } : null,
   });
 
   // Verdict: the FireScore "good prop" read + its sub-signals, computed on the
@@ -773,7 +837,7 @@ export async function getPlayerResearch(
     splits,
     chart,
     windows,
-    recentOpponent,
+    matchupOpponent,
     dvp,
     why,
   };
