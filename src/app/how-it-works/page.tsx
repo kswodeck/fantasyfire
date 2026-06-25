@@ -199,13 +199,7 @@ export default function HowItWorksPage() {
           <strong>FireScore</strong> blends these descriptive signals into one transparent
           read of how a line leans — <em>Strong lean</em>, <em>Lean</em>,{' '}
           <em>Slight lean</em>, <em>No lean</em>, or <em>Pass</em>. It is a{' '}
-          <strong>research signal, not a pick, prediction, or guarantee</strong>. Its status is
-          decided by each sport&rsquo;s public accuracy page (
-          <Link href="/nba/accuracy">NBA</Link>, <Link href="/mlb/accuracy">MLB</Link>,{' '}
-          <Link href="/nfl/accuracy">NFL</Link>), whose badge moves from{' '}
-          <strong>experimental</strong> → <strong>developing</strong> →{' '}
-          <strong>validated</strong> based on whether the stronger tiers actually win more often
-          (with the 95% Wilson lower bound above a coin flip) as graded results accumulate. Two
+          <strong>research signal, not a pick, prediction, or guarantee</strong>. Two
           things keep it honest:
         </p>
         <ul>
@@ -247,8 +241,7 @@ export default function HowItWorksPage() {
           <li>
             <strong>No trained/fitted projection model.</strong> The recent-form estimate
             and FireScore are transparent heuristics with published weights, shown with
-            their uncertainty and labeled experimental until our accuracy backtest validates
-            them — not a fitted forecast of a specific game.
+            their uncertainty — not a fitted forecast of a specific game.
           </li>
           <li>
             <strong>Coarse positions and pitcher matchups.</strong> DvP uses three buckets,

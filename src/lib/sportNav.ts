@@ -10,6 +10,5 @@ export const SPORT_SECTIONS: { label: string; seg: string; desc: string }[] = [
   { label: 'Trends', seg: 'trends', desc: 'Heating up vs the baseline' },
   { label: 'Leaders', seg: 'leaders', desc: 'Per-game stat leaders' },
   { label: 'Matchups', seg: 'matchups', desc: 'Defense / pitching allowed' },
-  { label: 'Accuracy', seg: 'accuracy', desc: 'How our leans have held up' },
   { label: 'Players', seg: 'players', desc: 'Browse + filter every player' },
 ];

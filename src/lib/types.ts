@@ -92,6 +92,9 @@ export interface PlayerResearch {
   bio: PlayerBio;
   stat: StatKey;
   line: number;
+  /** The book this line came from (e.g. "prizepicks"); null when it's our computed
+   * line (no provided line for the chosen source, or the feature is off). */
+  lineSource: string | null;
   seasonAverage: number | null;
   gamesPlayed: number;
   /** ISO date (YYYY-MM-DD) of this player's most recent game; null if none. */
@@ -217,33 +220,13 @@ export interface SlateResult {
   evPerDollar?: number | null;
 }
 
-/** One row of the /accuracy calibration: how a FireScore tier actually fared. */
-export interface CalibrationBucket {
-  label: string;
-  /** Graded predictions in this tier (pushes excluded). */
-  decided: number;
-  /** Predictions where the leaned side actually won. */
-  wins: number;
-  winRate: number | null;
-  /** 95% Wilson interval on the win rate. */
-  lower: number;
-  upper: number;
-}
-
-export interface Calibration {
-  /** Total graded leans (pushes excluded). */
-  totalGraded: number;
-  overallWinRate: number | null;
-  /** ISO date of the earliest graded prediction. */
-  trackingSince: string | null;
-  buckets: CalibrationBucket[];
-}
-
 /** One game on the "tonight" slate (from the free schedule feed). */
 export interface TonightGame {
   externalId: string;
   /** ISO date (YYYY-MM-DD) of the game. */
   date: string;
+  /** Full ISO start datetime (UTC) for local-time display; null when unknown. */
+  startTime: string | null;
   status: string | null;
   home: { abbr: string | null; name: string | null; externalId: number | null };
   away: { abbr: string | null; name: string | null; externalId: number | null };

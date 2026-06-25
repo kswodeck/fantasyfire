@@ -21,8 +21,9 @@ Origins and the original single-sport spec: [`docs/PLAN.md`](docs/PLAN.md)
 - **FireScore** — a descriptive lean signal (tier + 0–100, gated by the Wilson
   lower bound) on the per-sport **Top Leans** board. Never a pick or +EV claim.
 - **Daily-changing boards** — Today's slate, Streaks, Trends, Leaders, Matchups.
-- **/accuracy** — a public, self-accumulating calibration backtest (snapshots are
-  frozen nightly and graded once the game lands). Honest track record, not a pick log.
+- **Real lines (optional, off by default)** — a SportsGameOdds feed can populate the
+  actual PrizePicks / Underdog / DK Pick6 / Sleeper number into `ProvidedLine`; when
+  enabled the board + player pages prefer it over our median line. See `.env.example`.
 - **Fair-price readout** — enter the book's odds → implied probability, no-vig fair
   price, and edge vs. the historical hit rate.
 - **Programmatic SEO** — indexable per-player, per-stat, per-matchup, and leader
@@ -40,7 +41,7 @@ Origins and the original single-sport spec: [`docs/PLAN.md`](docs/PLAN.md)
 | Client state | TanStack Query v5                                            |
 | Tests        | Vitest (unit) + Playwright (e2e)                            |
 | Ingest       | stats.nba.com · statsapi.mlb.com · ESPN football/nfl → Postgres (GitHub Actions) |
-| Hosting      | Vercel (web) + GitHub Actions (nightly ingest + grading)     |
+| Hosting      | Vercel (web) + GitHub Actions (nightly ingest)              |
 
 ## Prerequisites
 
@@ -125,9 +126,7 @@ The hard part of this product is the data, not the math.
 | `pnpm ingest:mlb`   | Pull MLB data (statsapi.mlb.com → Postgres)           |
 | `pnpm ingest:nfl`   | Pull NFL data (ESPN football/nfl → Postgres)          |
 | `pnpm schedule`     | Pull the upcoming slate (schedule feeds) → Postgres   |
-| `pnpm snapshot`     | Freeze tonight's FireScore leans for grading          |
-| `pnpm grade`        | Grade matured snapshots → /accuracy calibration       |
-| `pnpm backtest`     | Backfill historical snapshots/grades                  |
+| `pnpm ingest:providedlines` | Pull real prop lines (SportsGameOdds) → Postgres (opt-in) |
 | `pnpm db:migrate`   | Create + apply a dev migration                        |
 | `pnpm db:deploy`    | Apply migrations (CI/prod)                            |
 | `pnpm db:studio`    | Prisma Studio                                         |
@@ -139,7 +138,7 @@ Each data job has a `:prod` variant (e.g. `pnpm ingest:prod`) that loads
 
 ```
 GitHub Actions (cron) ── NBA / MLB / NFL pulls ──▶ PostgreSQL ◀── reads ── Next.js (Vercel)
-   ingest + schedule + grade + snapshot          upsert via Prisma          ISR pages
+   ingest + schedule                             upsert via Prisma          ISR pages
    workers (TS)                                                             /api/v1 route handlers
 ```
 
@@ -162,7 +161,7 @@ src/
 │  ├─ [sport]/                /nba, /mlb, /nfl section hub + boards:
 │  │  ├─ page.tsx                sport home
 │  │  ├─ [playerSlug]/           player page (+ /[stat] SEO page, OG image)
-│  │  ├─ board, today, streaks, trends, leaders, matchups, accuracy, players
+│  │  ├─ board, today, streaks, trends, leaders, matchups, players
 │  ├─ api/v1/[sport]/         versioned JSON API (hitrate, players, slate)
 │  ├─ methodology, about, faq, glossary, how-it-works,
 │  │  privacy, terms, responsible-gaming, contact
@@ -181,8 +180,8 @@ src/
 └─ ingest/
    ├─ nba/                    stats.nba.com client
    ├─ nfl/                    ESPN football/nfl client
-   ├─ mlb.ts · espn.ts · espn-fallback.ts · schedule.ts · snapshot-lib.ts
-   └─ run-*.ts                ingest / schedule / snapshot / grade / backtest
+   ├─ mlb.ts · espn.ts · espn-fallback.ts · schedule.ts · sportsgameodds.ts
+   └─ run-*.ts                ingest / schedule / providedlines / push
 prisma/                       schema.prisma + migrations
 tests/e2e/                    Playwright
 ```
@@ -219,7 +218,7 @@ Full step-by-step (Supabase pooler ports, env, domain) is in
    Postgres, so the DB must be reachable from the Vercel build.
 5. **Nightly ingest on GitHub Actions** — add the `DATABASE_URL` secret (on the
    `Production` environment). The [`ingest.yml`](.github/workflows/ingest.yml) workflow
-   runs daily and on manual dispatch: NBA → MLB → NFL → schedule → grade → snapshot,
+   runs daily and on manual dispatch: NBA → MLB → NFL → schedule,
    writing to the **same** Postgres the web app reads. Seasons are computed from the
    date in code; set `NBA_SEASON` / `MLB_SEASON` / `NFL_SEASON` repo variables only to
    force a specific season (e.g. a backfill).

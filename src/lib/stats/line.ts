@@ -5,9 +5,9 @@ import { median } from '../format';
 /**
  * Our "typical-game" line for a stat: the season MEDIAN game, floored to 0.5.
  *
- * Used wherever we RANK or grade leans — the board, streaks, trends, and the
- * accuracy snapshots (the board literally labels these "our typical-game (median)
- * line"). The raw median sits at the typical game, and with pushes (games exactly
+ * Used wherever we RANK leans — the board, streaks, and trends (the board
+ * literally labels these "our typical-game (median) line"). The raw median sits
+ * at the typical game, and with pushes (games exactly
  * on the line) excluded from the hit rate, Over/Under comes out balanced — so a
  * lean reflects real recent form, not where the line was placed. Rounding the
  * median UP to the next half-point instead put the line above the typical game and

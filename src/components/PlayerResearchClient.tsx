@@ -22,6 +22,8 @@ import { ParkFactorNote } from './ParkFactorNote';
 import { VerdictPanel } from './VerdictPanel';
 import { SavePropControl } from './SavePropControl';
 import { SplitsPanel } from './SplitsPanel';
+import { SourceSelector } from './SourceSelector';
+import { sourceLabel } from '@/lib/providedSources';
 
 /** Sanitize raw odds: treat 0 / non-finite as "not entered". */
 function cleanOdds(x: number | null): number | null {
@@ -41,6 +43,8 @@ export function PlayerResearchClient({
   initialResearch,
   initialStat,
   statHrefBase,
+  availableSources = [],
+  initialSource,
 }: {
   slug: string;
   initialResearch: PlayerResearch;
@@ -49,6 +53,10 @@ export function PlayerResearchClient({
    * hub at this path with ?stat= instead of swapping in place — keeping the URL,
    * header, and content in sync. */
   statHrefBase?: string;
+  /** Books with lines for this sport (drives the source dropdown). [] hides it. */
+  availableSources?: string[];
+  /** The book the SSR payload's line came from (default selection). */
+  initialSource: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -56,6 +64,7 @@ export function PlayerResearchClient({
   const statKeys = statKeysForSport(sport, initialResearch.player.posBucket);
   const [stat, setStat] = useState<StatKey>(initialStat);
   const [line, setLine] = useState<number | undefined>(undefined);
+  const [source, setSource] = useState<string>(initialSource);
   const [overOdds, setOverOdds] = useState<number | null>(null);
   const [underOdds, setUnderOdds] = useState<number | null>(null);
   const [edgeWindow, setEdgeWindow] = useState<string>('season');
@@ -80,12 +89,13 @@ export function PlayerResearchClient({
   // Seed React Query with the SSR payload ONLY for the initial stat/line key.
   // Passing it for other keys would (with staleTime) make the previous stat's
   // data look fresh and suppress the refetch.
-  const isInitialKey = stat === initialStat && line === undefined;
+  const isInitialKey = stat === initialStat && line === undefined && source === initialSource;
   const query = useHitRate({
     sport,
     slug,
     stat,
     line,
+    source,
     initialData: isInitialKey ? initialResearch : undefined,
   });
   const data = query.data ?? initialResearch;
@@ -115,6 +125,12 @@ export function PlayerResearchClient({
     track('line_entered', { sport, stat });
   }
 
+  function handleSource(next: string) {
+    setSource(next);
+    setLine(undefined); // show the new book's line, not a stale custom line
+    track('source_switched', { sport, source: next });
+  }
+
   function handleOdds(side: 'over' | 'under', value: number | null) {
     if (side === 'over') setOverOdds(value);
     else setUnderOdds(value);
@@ -123,6 +139,16 @@ export function PlayerResearchClient({
 
   const statDef = STAT_DEFS[data.stat];
   const effectiveLine = line ?? data.line;
+  // Where the shown line comes from: the user's own entry, the chosen book, or our
+  // computed line (when that book has no line for this player+stat).
+  const lineSourceLabel =
+    line !== undefined
+      ? 'your line'
+      : data.lineSource
+        ? `${sourceLabel(data.lineSource)} line`
+        : availableSources.length > 0
+          ? 'our line'
+          : null;
   const seasonWindow = data.windows.find((w) => w.window === 'season');
   const seasonOver = seasonWindow?.hitRate.hitRateOver ?? null;
   // Alt-line table is line-independent (values don't move), so it recomputes on
@@ -154,7 +180,15 @@ export function PlayerResearchClient({
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted">Line</span>
             <LineInput value={effectiveLine} onCommit={handleLine} />
+            {lineSourceLabel && (
+              <span className="rounded-full bg-surface px-2 py-0.5 text-[11px] font-medium text-muted">
+                {lineSourceLabel}
+              </span>
+            )}
           </div>
+          {availableSources.length > 0 && (
+            <SourceSelector sources={availableSources} value={source} onChange={handleSource} />
+          )}
           <span className="text-sm text-muted">
             {statDef.label}
             {data.seasonAverage !== null && (

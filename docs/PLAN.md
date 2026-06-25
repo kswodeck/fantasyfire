@@ -5,11 +5,11 @@ NBA player-props/pickem research tool. v1 = free data only, lowest-hanging fruit
 > **⚠️ Historical — superseded.** This is the original single-sport (NBA) MVP spec
 > and build prompts. The shipped product has since grown to **three sports
 > (NBA + MLB + NFL)** with a retention/trust engine on top (FireScore leans,
-> streaks/trends/leaders, a "today" slate, projection snapshots + a public
-> `/accuracy` calibration, methodology/E-E-A-T pages). Treat §4 (schema), §7
+> streaks/trends/leaders, a "today" slate, methodology/E-E-A-T pages, and an
+> optional real-lines feed (`ProvidedLine`)). Treat §4 (schema), §7
 > (folder tree), and §6 (phases) as **history, not current state** — the live
 > schema is multi-sport with a `sport` discriminator, NFL columns,
-> `ScheduledGame`, and `ProjectionSnapshot`, and routes live under `/[sport]/…`.
+> `ScheduledGame`, and `ProvidedLine`, and routes live under `/[sport]/…`.
 > For current state see the [README](../README.md); for current strategy see
 > [`GROWTH-PLAN.md`](GROWTH-PLAN.md). The §3b mobile-ready API principles and the
 > §5 algorithm definitions are still accurate and worth keeping.

@@ -31,9 +31,9 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ sport: 
     );
   }
 
-  const { playerSlug, stat, line } = parsed.data;
+  const { playerSlug, stat, line, source } = parsed.data;
   try {
-    const research = await getPlayerResearch(sport, playerSlug, stat, line);
+    const research = await getPlayerResearch(sport, playerSlug, stat, line, source);
     if (!research) {
       return jsonResponse({ error: 'Player not found' }, { status: 404, request });
     }

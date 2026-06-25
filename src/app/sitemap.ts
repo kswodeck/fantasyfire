@@ -59,7 +59,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       { url: absoluteUrl(`/${sport}/streaks`), changeFrequency: 'daily', priority: 0.7, lastModified: sportMod },
       { url: absoluteUrl(`/${sport}/trends`), changeFrequency: 'daily', priority: 0.7, lastModified: sportMod },
       { url: absoluteUrl(`/${sport}/matchups`), changeFrequency: 'daily', priority: 0.7, lastModified: sportMod },
-      { url: absoluteUrl(`/${sport}/accuracy`), changeFrequency: 'daily', priority: 0.6, lastModified: sportMod },
       ...LEADER_STATS[sport].map((stat) => ({
         url: absoluteUrl(`/${sport}/leaders/${stat}`),
         changeFrequency: 'daily' as const,

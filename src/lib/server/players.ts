@@ -50,10 +50,10 @@ import type {
   LeaderRow,
   SlateResult,
   TonightGame,
-  Calibration,
-  CalibrationBucket,
 } from '@/lib/types';
 import { PROP_STATS } from '@/lib/propStats';
+import { getProvidedLine, getProvidedLineMap } from '@/lib/server/providedLines';
+import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 
 /**
  * The season the app reads for a sport. Computed from today's date, falling back
@@ -695,6 +695,7 @@ export async function getPlayerResearch(
   slug: string,
   statParam?: StatKey,
   lineParam?: number,
+  source?: string,
 ): Promise<PlayerResearch | null> {
   const record = await getPlayerRecord(sport, slug);
   if (!record) return null;
@@ -723,9 +724,13 @@ export async function getPlayerResearch(
     if (opp == null) return true; // role not opportunity-filtered (MLB pitchers)
     return opp > 0 && opp >= cutoff;
   });
-  // The player page shows a book-style half-point default; the board/snapshots
-  // keep the balanced typical-game line (defaultLine) for ranking + grading.
-  const line = lineParam ?? defaultPropLine(games, stat);
+  // Line precedence: an explicit caller line wins; else the chosen book's real
+  // line (only when PROVIDED_LINES_ENABLED + that book has one); else the
+  // book-style half-point default. lineSource records where `line` came from.
+  const src = source ?? DEFAULT_PROVIDED_SOURCE;
+  const providedLine = lineParam == null ? await getProvidedLine(sport, record.id, stat, src) : null;
+  const line = lineParam ?? providedLine ?? defaultPropLine(games, stat);
+  const lineSource = lineParam == null && providedLine != null ? src : null;
 
   const windows: WindowResult[] = STAT_WINDOWS.map((w) => {
     const hitRate = computeHitRate(games, stat, line, w);
@@ -828,6 +833,7 @@ export async function getPlayerResearch(
     bio: toBio(record),
     stat,
     line,
+    lineSource,
     seasonAverage: seasonResult.mean,
     gamesPlayed: games.length,
     // Freshness: the most recent game in the DB for this player (unfiltered by
@@ -878,6 +884,8 @@ export interface BoardOptions {
   perPlayerCap?: number;
   /** Max rows per stat (default 10). */
   perStatCap?: number;
+  /** Which book's real line to rank against (when PROVIDED_LINES_ENABLED). */
+  source?: string;
 }
 
 export async function getBoard(sport: Sport, opts: BoardOptions = {}): Promise<BoardRow[]> {
@@ -901,6 +909,15 @@ export async function getBoard(sport: Sport, opts: BoardOptions = {}): Promise<B
     if (list) list.push(toPlayerGame(r));
     else gamesByPlayer.set(r.playerId, [toPlayerGame(r)]);
   }
+
+  // Real lines from the chosen book, keyed `${playerId}:${stat}`. Empty map (no
+  // query) when PROVIDED_LINES_ENABLED is off — so the board falls back to the
+  // computed default line and behaves exactly as before.
+  const providedLines = await getProvidedLineMap(
+    sport,
+    players.map((p) => p.id),
+    opts.source,
+  );
 
   const out: Omit<BoardRow, 'rank'>[] = [];
   for (const p of players) {
@@ -937,7 +954,9 @@ export async function getBoard(sport: Sport, opts: BoardOptions = {}): Promise<B
     };
 
     for (const stat of boardStatsFor(sport, p.posBucket)) {
-      const line = defaultLine(games, stat);
+      // Prefer a real provided line when present (feature-flagged); else our
+      // balanced typical-game (median) line.
+      const line = providedLines.get(`${p.id}:${stat}`) ?? defaultLine(games, stat);
       // Skip degenerate low-volume props: a 0.5 line means the player's typical
       // game is 0 of this stat, so any "lean" is a trivial under, not a real read.
       if (line <= 0.5) continue;
@@ -1420,6 +1439,7 @@ export async function getTonightSlate(
   const games: TonightGame[] = rows.map((r) => ({
     externalId: r.externalId,
     date: r.date.toISOString().slice(0, 10),
+    startTime: r.startTime ? r.startTime.toISOString() : null,
     status: r.status,
     home: {
       abbr: r.homeTeam.abbreviation,
@@ -1436,41 +1456,4 @@ export async function getTonightSlate(
   }));
 
   return { date: dayStart.toISOString().slice(0, 10), games };
-}
-
-/**
- * Calibration of the FireScore lean signal: across graded snapshots, how often
- * did the leaned side actually win, broken down by tier. An honest, descriptive
- * backtest of past performance — the higher tiers should win more often if the
- * signal has value. Pushes are excluded; every bucket carries a Wilson interval.
- */
-export async function getCalibration(sport: Sport): Promise<Calibration> {
-  const rows = await db.projectionSnapshot.findMany({
-    where: { sport, graded: true, outcome: { in: ['over', 'under'] } },
-    select: { fireTier: true, predictedSide: true, outcome: true, snapshotDate: true },
-  });
-
-  const decided = rows.length;
-  const wins = rows.filter((r) => r.predictedSide === r.outcome).length;
-  let since: Date | null = null;
-  for (const r of rows) if (!since || r.snapshotDate < since) since = r.snapshotDate;
-
-  // Bucket by the STORED tier label (written when the lean was recorded), not by
-  // re-deriving from numeric cutoffs — so the table can never drift from the
-  // cutoffs the board/snapshot actually used.
-  const labels = ['Strong lean', 'Lean', 'Slight lean', 'No lean'];
-  const buckets: CalibrationBucket[] = labels.map((label) => {
-    const inBucket = rows.filter((r) => r.fireTier === label);
-    const d = inBucket.length;
-    const w = inBucket.filter((r) => r.predictedSide === r.outcome).length;
-    const iv = wilsonInterval(w, d);
-    return { label, decided: d, wins: w, winRate: d ? w / d : null, lower: iv.lower, upper: iv.upper };
-  });
-
-  return {
-    totalGraded: decided,
-    overallWinRate: decided ? wins / decided : null,
-    trackingSince: since ? since.toISOString().slice(0, 10) : null,
-    buckets,
-  };
 }

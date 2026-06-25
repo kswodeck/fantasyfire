@@ -44,9 +44,9 @@ This is where near-zero traffic actually turns into traffic.
   "prop research tools", indie-tool directories, and pitch "best free prop tools"
   roundup authors. Each is a backlink + a trickle of qualified traffic.
 - **[Owner/Dev] Be the citable source (Answer-Engine Optimization).** AI Overviews
-  and writers cite primary sources. Your **methodology page, the public `/accuracy`
-  calibration, and the `Dataset` schema** make you that source — this is the hedge
-  against zero-click search. Keep them sharp and link them from posts.
+  and writers cite primary sources. Your **methodology page and the `Dataset` schema**
+  make you that source — this is the hedge against zero-click search. Keep them sharp
+  and link them from posts.
 - **✅ Embeddable card widget** (`/embed/[sport]/[slug]`) — anyone can paste the
   `<iframe>` (the **Embed** button on every player page copies it) and it carries a
   **"View on FantasyFire" backlink**. That's a self-replicating backlink engine —
@@ -90,9 +90,9 @@ to **surface** them.
   branded, Wilson-badged card into group chats. Every share is a tiny ad.
 - **[Dev, small] PWA "install" nudge** — a subtle "Add to home screen" prompt for
   repeat visitors turns the PWA (✅ manifest + SW already shipped) into a one-tap app.
-- **✅ Trust = retention** — the methodology page, named author, accuracy track
-  record, and "updated through {date}" stamps are why a skeptical bettor trusts the
-  numbers enough to return. Keep them honest.
+- **✅ Trust = retention** — the methodology page, named author, transparent
+  Wilson-gated confidence, and "updated through {date}" stamps are why a skeptical
+  bettor trusts the numbers enough to return. Keep them honest.
 
 ---
 

@@ -3,12 +3,13 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { FilterableBoard } from '@/components/FilterableBoard';
+import { SourcedBoard } from '@/components/SourcedBoard';
 import { SlatePaster } from '@/components/SlatePaster';
-import { getBoard, getCalibration, hasUpcomingGames } from '@/lib/server/players';
+import { getBoard, hasUpcomingGames } from '@/lib/server/players';
+import { getAvailableSources } from '@/lib/server/providedLines';
+import { DEFAULT_PROVIDED_SOURCE, sourceLabel } from '@/lib/providedSources';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
-import type { BoardRow, Calibration } from '@/lib/types';
-import { calibrationVerdict } from '@/lib/calibrationVerdict';
-import { CalibrationStatusBadge } from '@/components/CalibrationStatusBadge';
+import type { BoardRow } from '@/lib/types';
 import { RelatedLinks } from '@/components/RelatedLinks';
 import { OffSeasonFallback } from '@/components/OffSeasonFallback';
 import { sportMeshLinks } from '@/lib/relatedLinks';
@@ -46,23 +47,38 @@ export default async function BoardPage({ params }: PageProps) {
   // so we show a season-leaders fallback instead. Default to in-season on error.
   const upcoming = await hasUpcomingGames(sport).catch(() => true);
 
+  // Real book lines available for this sport (PrizePicks, Underdog, …). Empty when
+  // the feature is off / nothing's ingested — then we fall back to our median line.
+  const sources = upcoming ? await getAvailableSources(sport).catch(() => []) : [];
+  const hasSources = sources.length > 0;
+  const initialSource = sources.includes(DEFAULT_PROVIDED_SOURCE)
+    ? DEFAULT_PROVIDED_SOURCE
+    : (sources[0] ?? DEFAULT_PROVIDED_SOURCE);
+
+  // Pre-compute one board per book (ranked vs that book's real line) so the dropdown
+  // switches instantly and the page stays static/ISR. No sources → a single board
+  // vs our median line (prior behavior).
+  let boardsBySource: Record<string, BoardRow[]> = {};
   let rows: BoardRow[] = [];
   if (upcoming) {
     try {
-      rows = await getBoard(sport, { limit: 150, perStatCap: 30 });
+      if (hasSources) {
+        const entries = await Promise.all(
+          sources.map(
+            async (s) =>
+              [s, await getBoard(sport, { limit: 150, perStatCap: 30, source: s })] as const,
+          ),
+        );
+        boardsBySource = Object.fromEntries(entries);
+        rows = boardsBySource[initialSource] ?? [];
+      } else {
+        rows = await getBoard(sport, { limit: 150, perStatCap: 30 });
+      }
     } catch {
       // DB unavailable — fall through to the empty state rather than erroring.
       rows = [];
     }
   }
-
-  let cal: Calibration = { totalGraded: 0, overallWinRate: null, trackingSince: null, buckets: [] };
-  try {
-    cal = await getCalibration(sport);
-  } catch {
-    // Non-fatal: the board still renders; the badge falls back to "experimental".
-  }
-  const verdict = calibrationVerdict(cal);
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8">
@@ -74,22 +90,24 @@ export default async function BoardPage({ params }: PageProps) {
           { label: 'Board' },
         ]}
       />
-      <div className="flex items-center gap-2">
-        <h1 className="text-3xl font-bold tracking-tight">{cfg.name} Top Leans</h1>
-        <Link href={`/${sport}/accuracy`} title={verdict.headline}>
-          <CalibrationStatusBadge status={verdict.status} />
-        </Link>
-      </div>
+      <h1 className="text-3xl font-bold tracking-tight">{cfg.name} Top Leans</h1>
       <p className="mt-2 max-w-2xl text-sm text-muted">
         The strongest recent-form leans across the most active {cfg.name} players, ranked by our
-        sample-size-adjusted <strong className="text-foreground">FireScore</strong>. The lines shown are{' '}
-        <strong className="text-foreground">our own typical-game (median) line</strong>, not a sportsbook
-        line — so this is a research starting point. Open a player to enter the real line and odds for the full
-        read. See how these leans have actually held up on the{' '}
-        <Link href={`/${sport}/accuracy`} className="text-brand hover:text-brand-strong">
-          accuracy page
-        </Link>
-        .
+        sample-size-adjusted <strong className="text-foreground">FireScore</strong>.{' '}
+        {hasSources ? (
+          <>
+            Lines are the real numbers from{' '}
+            <strong className="text-foreground">{sourceLabel(initialSource)}</strong> — switch books
+            with the selector below. Open a player to enter your own line and odds for the full read.
+          </>
+        ) : (
+          <>
+            The lines shown are{' '}
+            <strong className="text-foreground">our own typical-game (median) line</strong>, not a
+            sportsbook line — so this is a research starting point. Open a player to enter the real line
+            and odds for the full read.
+          </>
+        )}
       </p>
 
       <div className="mt-6">
@@ -100,10 +118,6 @@ export default async function BoardPage({ params }: PageProps) {
         <OffSeasonFallback sport={sport} what="live top leans" />
       ) : (
         <>
-          <h2 className="mb-2 mt-2 text-xs font-semibold uppercase tracking-wide text-muted">
-            Auto board — strongest leans vs our typical line
-          </h2>
-
           {rows.length === 0 ? (
             <p className="mt-2 rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
               No board data yet — check back after the next nightly update, or{' '}
@@ -114,7 +128,21 @@ export default async function BoardPage({ params }: PageProps) {
             </p>
           ) : (
             <div className="mt-5">
-              <FilterableBoard sport={sport} rows={rows} />
+              {hasSources ? (
+                <SourcedBoard
+                  sport={sport}
+                  boardsBySource={boardsBySource}
+                  sources={sources}
+                  defaultSource={initialSource}
+                />
+              ) : (
+                <>
+                  <h2 className="mb-2 mt-2 text-xs font-semibold uppercase tracking-wide text-muted">
+                    Auto board — strongest leans vs our typical line
+                  </h2>
+                  <FilterableBoard sport={sport} rows={rows} />
+                </>
+              )}
             </div>
           )}
         </>

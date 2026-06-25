@@ -8,15 +8,23 @@ export const playerSlugSchema = z
   .max(100)
   .regex(/^[a-z0-9-]+$/, 'Slug must be lowercase letters, numbers, and hyphens');
 
+/** A provided-line source id (book), e.g. "prizepicks". Lowercase id-ish. */
+export const providedSourceSchema = z
+  .string()
+  .min(1)
+  .max(30)
+  .regex(/^[a-z0-9_]+$/, 'Invalid source');
+
 /**
- * Query for GET /api/v1/hitrate?playerSlug=&stat=&line=
- * `line` is optional — when omitted the server uses the stat's season average
- * rounded to 0.5 (useful when switching stats client-side).
+ * Query for GET /api/v1/hitrate?playerSlug=&stat=&line=&source=
+ * `line` is optional — when omitted the server uses the chosen book's line, else
+ * the stat's season median to 0.5. `source` picks which book's line to prefer.
  */
 export const hitRateQuerySchema = z.object({
   playerSlug: playerSlugSchema,
   stat: statKeySchema,
   line: lineSchema.optional(),
+  source: providedSourceSchema.optional(),
 });
 export type HitRateQuery = z.infer<typeof hitRateQuerySchema>;
 
@@ -27,10 +35,11 @@ export const playersQuerySchema = z.object({
 });
 export type PlayersQuery = z.infer<typeof playersQuerySchema>;
 
-/** Optional stat/line query for the per-player REST endpoint (slug is in the path). */
+/** Optional stat/line/source query for the per-player REST endpoint (slug in path). */
 export const playerResearchQuerySchema = z.object({
   stat: statKeySchema.optional(),
   line: lineSchema.optional(),
+  source: providedSourceSchema.optional(),
 });
 export type PlayerResearchQuery = z.infer<typeof playerResearchQuerySchema>;
 

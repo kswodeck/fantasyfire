@@ -5,14 +5,23 @@ concrete files it touches so it can be picked up directly._
 
 > **Update 2026-06-25 — NFL added + FireScore.** A third sport, **NFL** (ESPN
 > `football/nfl` ingest), now rides the same shared schema and section routes
-> (board / streaks / trends / leaders / matchups / accuracy / players / today), so
+> (board / streaks / trends / leaders / matchups / players / today), so
 > the "two sports" framing below is now **three** (NBA + MLB + NFL). The "projection /
 > lean" idea from X1/X5 shipped concretely as **FireScore** (`src/lib/stats/fireScore.ts`)
 > — a descriptive, Wilson-lower-bound-gated tier + 0–100 signal powering the per-sport
-> **Top Leans** board and the `ProjectionSnapshot` → `/accuracy` calibration. NFL is
-> **weekly**, not nightly, so the snapshot/grade/slate cadence needs an NFL-specific
-> pass (tracked separately). Everything below predates these two changes; read it with
-> that in mind.
+> **Top Leans** board. NFL is **weekly**, not nightly, so the slate cadence needs an
+> NFL-specific pass (tracked separately). Everything below predates these changes;
+> read it with that in mind.
+
+> **Update 2026-06-25 — Accuracy removed; real lines added.** The public
+> `/[sport]/accuracy` calibration and its `ProjectionSnapshot` pipeline (snapshot /
+> grade / backtest) have been **removed** — a moving-target track record proved too
+> costly to maintain and live up to. FireScore stays (it still powers the Top Leans
+> board). In its place: a new **`ProvidedLine`** model + a SportsGameOdds ingest
+> (`src/ingest/run-ingest-providedlines.ts`), OFF by default behind
+> `PROVIDED_LINES_ENABLED`, so the board / player pages can show the real
+> PrizePicks / Underdog / etc. line instead of our median. Mentions of `/accuracy`
+> below are historical.
 
 ## ✅ Shipped status (2026-06-24)
 
@@ -27,7 +36,7 @@ concrete files it touches so it can be picked up directly._
     `RelatedLinks` mesh, a `SportNav` sub-nav, JSON-LD (BreadcrumbList + Dataset) + sitemap coverage.
   - **X4** ⏸️ deferred — nightly precompute tables. ISR already amortizes the DvP query to once/revalidation;
     revisit only if traffic makes per-revalidation compute a real cost.
-  - **X5** ✅ projection snapshots + grading + public `/[sport]/accuracy` (recalibrated; tiers now discriminate).
+  - **X5** ❌ removed (2026-06-25) — projection snapshots + grading + public `/[sport]/accuracy` shipped, then were pulled (track record too costly to maintain as a moving target). FireScore itself stays. Replaced by the opt-in `ProvidedLine` real-lines feed.
 - **LATER:** **L1** ✅ schedule → `/[sport]/today`; **L5** ✅ ESPN ingest fallback. L2 (push), L3 (favorites),
   L4 (OG cards), L6 (park factors) remain.
 
@@ -191,7 +200,9 @@ DvP + the streak/trends scan into small `DvpSnapshot` / `TrendSnapshot` tables v
 read snapshots first, fall back to the live query for the offseason. This is the engine the boards, push
 digest, and accuracy page all read from.
 
-**X5. THE BIGGEST BET — projection snapshot + grading + public `/accuracy`.**
+**X5. ❌ REMOVED (2026-06-25) — projection snapshot + grading + public `/accuracy`.**
+_Shipped, then pulled: a moving-target track record was too costly to maintain and live up to.
+The section below is kept as history. Replaced by the opt-in `ProvidedLine` real-lines feed._
 The single highest-trust asset a no-picks tool can own: a self-accumulating, verifiable record.
 - New `ProjectionSnapshot` model; nightly `run-snapshot.ts` freezes each qualified (player, stat)
   projection (L10 hit rate, Wilson lower bound) keyed to the player's **next game**; `run-grade.ts` grades

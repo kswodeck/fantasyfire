@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTopPlayerSlugs, getPlayerBySlug, getPlayerResearch } from '@/lib/server/players';
+import { getAvailableSources } from '@/lib/server/providedLines';
+import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import { absoluteUrl } from '@/lib/site';
 import { formatIsoDate } from '@/lib/format';
 import { getTeam } from '@/lib/teams';
@@ -75,7 +77,12 @@ export default async function PlayerPage({ params }: PageProps) {
 
   // SSR the default-stat payload so the page stays static/ISR (SEO + speed). The
   // client reads stat/line from the URL on mount and takes over interactivity.
-  const research = await getPlayerResearch(sport, playerSlug);
+  // Default to the user's preferred book (PrizePicks) when available.
+  const availableSources = await getAvailableSources(sport);
+  const initialSource = availableSources.includes(DEFAULT_PROVIDED_SOURCE)
+    ? DEFAULT_PROVIDED_SOURCE
+    : (availableSources[0] ?? DEFAULT_PROVIDED_SOURCE);
+  const research = await getPlayerResearch(sport, playerSlug, undefined, undefined, initialSource);
   if (!research) notFound();
 
   const { player } = research;
@@ -215,6 +222,8 @@ export default async function PlayerPage({ params }: PageProps) {
         slug={player.slug}
         initialResearch={research}
         initialStat={research.stat}
+        availableSources={availableSources}
+        initialSource={initialSource}
       />
 
       {/* The player's other prop pages — a compact link row (not big tiles) so it

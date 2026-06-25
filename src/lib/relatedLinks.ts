@@ -22,7 +22,6 @@ export function sportMeshLinks(
       href: `/${sport}/matchups`,
       hint: 'Which teams give up the most of each stat.',
     },
-    { seg: 'accuracy', label: `${name} Accuracy`, href: `/${sport}/accuracy`, hint: 'How our leans have actually held up.' },
     { seg: 'players', label: `All ${name} players`, href: `/${sport}/players`, hint: 'Browse and filter every player.' },
   ];
   return items

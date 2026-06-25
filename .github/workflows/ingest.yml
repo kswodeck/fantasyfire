@@ -94,16 +94,6 @@ jobs:
         if: ${{ success() || failure() }}
         run: pnpm schedule
 
-      # Grow the /accuracy calibration: grade yesterday's snapshots against the
-      # box scores just ingested, then freeze today's. Non-fatal.
-      - name: Grade projections
-        if: ${{ success() || failure() }}
-        run: pnpm grade
-
-      - name: Snapshot projections
-        if: ${{ success() || failure() }}
-        run: pnpm snapshot
-
       # Ping IndexNow (Bing/Yandex/DDG) with tonight's changed URLs — changed
       # player pages + in-season boards — for near-instant recrawl. Best-effort
       # and non-fatal; Google ignores IndexNow (the sitemap covers it). Needs

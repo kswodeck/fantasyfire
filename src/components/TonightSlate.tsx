@@ -1,6 +1,7 @@
 import type { TonightGame } from '@/lib/types';
 import type { Sport } from '@/lib/sports';
 import { TeamLogo } from './TeamLogo';
+import { MatchupTime } from './MatchupTime';
 
 /** The night's matchups (presentational). MLB rows show probable pitchers. */
 export function TonightSlate({ sport, games }: { sport: Sport; games: TonightGame[] }) {
@@ -16,7 +17,10 @@ export function TonightSlate({ sport, games }: { sport: Sport; games: TonightGam
               <TeamLogo sport={sport} externalId={g.home.externalId} abbr={g.home.abbr} size={18} />
               <span className="font-semibold">{g.home.abbr}</span>
             </span>
-            <span className="shrink-0 text-[11px] text-muted">{g.status}</span>
+            <span className="flex shrink-0 flex-col items-end gap-0.5 text-[11px] leading-tight text-muted">
+              <MatchupTime iso={g.startTime} className="font-medium text-foreground" />
+              <span>{g.status}</span>
+            </span>
           </div>
           {sport === 'mlb' && (g.awayProbablePitcher || g.homeProbablePitcher) && (
             <div className="mt-1.5 text-[11px] text-muted">

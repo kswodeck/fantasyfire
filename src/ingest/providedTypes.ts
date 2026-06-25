@@ -1,0 +1,23 @@
+// Shared shape produced by every provided-line source (SportsGameOdds, PrizePicks,
+// Underdog, …) and consumed by run-ingest-providedlines.ts. Kept provider-neutral
+// so each client file depends on this, not on each other.
+import type { Sport } from '../lib/sports';
+import type { StatKey } from '../lib/stats';
+
+/** One real line for a player + stat from a single source/book. */
+export interface ProvidedLineRow {
+  sport: Sport;
+  /** Source id, e.g. "prizepicks" | "underdog" | "fanduel". */
+  source: string;
+  /** The source's own player id (debug / future exact match). */
+  externalPlayerId: string;
+  /** Display name used to match our Player rows. */
+  externalPlayerName: string;
+  stat: StatKey;
+  line: number;
+  /** American odds for over/under when the source posts them (DFS pick'em often null). */
+  overOdds: number | null;
+  underOdds: number | null;
+  /** Date-only (UTC midnight) the line applies to. */
+  gameDate: Date;
+}

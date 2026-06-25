@@ -21,8 +21,6 @@ const JOB_LABELS: Record<JobName, string> = {
   mlb: 'MLB ingest',
   nfl: 'NFL ingest',
   schedule: 'Schedule pull',
-  grade: 'Grade projections',
-  snapshot: 'Snapshot projections',
   indexnow: 'IndexNow ping',
 };
 

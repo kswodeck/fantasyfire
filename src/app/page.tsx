@@ -1,27 +1,15 @@
 import Link from 'next/link';
 import { FlameMark } from '@/components/FlameMark';
 import { BoardTable } from '@/components/BoardTable';
-import { CalibrationStatusBadge } from '@/components/CalibrationStatusBadge';
-import { getBoard, getCalibration, hasUpcomingGames } from '@/lib/server/players';
-import { calibrationVerdict, type CalibrationStatus } from '@/lib/calibrationVerdict';
+import { getBoard, hasUpcomingGames } from '@/lib/server/players';
 import { SPORT_LIST, SPORTS, type Sport } from '@/lib/sports';
-import type { BoardRow, Calibration } from '@/lib/types';
+import type { BoardRow } from '@/lib/types';
 
 export const revalidate = 3600;
 
-const EMPTY_CAL: Calibration = {
-  totalGraded: 0,
-  overallWinRate: null,
-  trackingSince: null,
-  buckets: [],
-};
-
 async function loadSport(sport: Sport) {
-  const [leans, cal] = await Promise.all([
-    getBoard(sport, { limit: 6 }).catch(() => [] as BoardRow[]),
-    getCalibration(sport).catch(() => EMPTY_CAL),
-  ]);
-  return { leans, status: calibrationVerdict(cal).status as CalibrationStatus };
+  const leans = await getBoard(sport, { limit: 6 }).catch(() => [] as BoardRow[]);
+  return { leans };
 }
 
 export default async function Home() {
@@ -62,7 +50,7 @@ export default async function Home() {
         <section className={`grid gap-5 pb-10 ${gridCols}`}>
           {activeSports.map((sport) => {
             const cfg = SPORTS[sport];
-            const { leans, status } = data[sport];
+            const { leans } = data[sport];
             return (
               <div
                 key={sport}
@@ -84,11 +72,8 @@ export default async function Home() {
                 </div>
 
                 <div className="space-y-2 border-t border-line p-4">
-                  <h3 className="flex items-center gap-1.5 px-1 text-xs font-semibold uppercase tracking-wide text-muted">
+                  <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted">
                     Top leans
-                    <Link href={`/${sport}/accuracy`} className="normal-case">
-                      <CalibrationStatusBadge status={status} />
-                    </Link>
                   </h3>
                   {leans.length === 0 ? (
                     <p className="px-1 py-4 text-sm text-muted">No data available yet.</p>

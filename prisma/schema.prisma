@@ -57,8 +57,8 @@ model Player {
   teamId      Int?
   team        Team?   @relation(fields: [teamId], references: [id])
 
-  gameStats           PlayerGameStat[]
-  projectionSnapshots ProjectionSnapshot[]
+  gameStats     PlayerGameStat[]
+  providedLines ProvidedLine[]
 
   @@unique([sport, externalId])
   @@unique([sport, slug])
@@ -184,32 +184,32 @@ model ScheduledGame {
   @@index([sport, date])
 }
 
-// A frozen FireScore "lean" prediction, later graded against the player's next
-// game — the data behind the public /accuracy calibration page. Honest backtest
-// of past performance, never a pick record.
-model ProjectionSnapshot {
-  id            Int      @id @default(autoincrement())
-  sport         String
-  playerId      Int
-  stat          String
-  line          Float
-  snapshotDate  DateTime // date the prediction was made (date-only)
-  predictedSide String // 'over' | 'under'
-  overHitRate   Float? // predicted over probability at snapshot
-  wilsonLower   Float?
-  fireScore     Int
-  fireTier      String
-
-  // Grading (filled once the target game completes):
-  targetGameDate DateTime?
-  actualValue    Float?
-  outcome        String? // 'over' | 'under' | 'push'
-  graded         Boolean   @default(false)
+// OPTIONAL real prop lines pulled from a DFS/sportsbook feed (e.g. SportsGameOdds),
+// so the app can show the number a user actually sees on PrizePicks / Underdog /
+// DK Pick6 / Sleeper instead of our derived median line. Additive and OFF by
+// default (gated by PROVIDED_LINES_ENABLED) — when empty or disabled, every
+// surface falls back to the computed default line, so nothing changes.
+//
+// One row per (sport, player, stat, source, day). Keyed by `source` so multiple
+// books can coexist, and by `gameDate` so lines are preserved as history rather
+// than overwritten. Populated by src/ingest/run-ingest-providedlines.ts.
+model ProvidedLine {
+  id        Int      @id @default(autoincrement())
+  sport     String // "nba" | "mlb" | "nfl"
+  playerId  Int
+  stat      String // internal StatKey, e.g. "pts" | "passYds"
+  source    String // bookmakerID: "prizepicks" | "underdog" | "draftkings" | "sleeper" | ...
+  line      Float
+  overOdds  Int? // American odds for the over, when the source posts them (DFS pick'em are fixed-payout → usually null)
+  underOdds Int?
+  gameDate  DateTime // the slate/game day this line applies to (date-only, UTC midnight)
+  fetchedAt DateTime @default(now())
 
   player Player @relation(fields: [playerId], references: [id])
 
-  @@unique([playerId, stat, snapshotDate])
-  @@index([sport, graded])
+  @@unique([sport, playerId, stat, source, gameDate])
+  @@index([sport, gameDate])
+  @@index([playerId, stat])
 }
 
 // A browser Web Push subscription. The subscription endpoint IS the identity —
@@ -234,7 +234,7 @@ model PushSubscription {
 // run and succeed?" is answerable even when a job wrote zero rows.
 model IngestRun {
   id          Int      @id @default(autoincrement())
-  job         String // "nba" | "mlb" | "nfl" | "schedule" | "snapshot" | "grade" | "indexnow"
+  job         String // "nba" | "mlb" | "nfl" | "schedule" | "providedlines" | "indexnow"
   status      String // "success" | "failure"
   startedAt   DateTime
   finishedAt  DateTime

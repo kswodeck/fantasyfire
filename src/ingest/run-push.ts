@@ -12,7 +12,8 @@ import 'dotenv/config';
 import webpush from 'web-push';
 import { db } from '../lib/db';
 import { recordIngestRun } from './ingestRun';
-import { STAT_DEFS, type StatKey } from '../lib/stats';
+import { getBoard } from '../lib/server/players';
+import { SPORT_LIST } from '../lib/sports';
 
 const VAPID_PUBLIC = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY ?? '';
@@ -22,8 +23,34 @@ const MIN_DAYS_BETWEEN = 2;
 /** Leans per notification body. */
 const PICKS_PER_PUSH = 3;
 
-function statShort(stat: string): string {
-  return STAT_DEFS[stat as StatKey]?.short ?? stat.toUpperCase();
+interface Lean {
+  sport: string;
+  statShort: string;
+  line: number;
+  side: 'over' | 'under';
+  firstName: string;
+  lastName: string;
+}
+
+/** Today's strongest leans across sports, from the live board (was the snapshot table). */
+async function strongestLeans(): Promise<Lean[]> {
+  const leans: Lean[] = [];
+  for (const sport of SPORT_LIST) {
+    const rows = await getBoard(sport, { limit: 40 }).catch(() => []);
+    for (const r of rows) {
+      if (r.fireScore.tier !== 'Strong lean') continue;
+      leans.push({
+        sport,
+        statShort: r.statShort,
+        line: r.line,
+        side: r.fireScore.side,
+        firstName: r.player.firstName,
+        lastName: r.player.lastName,
+      });
+    }
+  }
+  // Already strong-lean only; the board returns them score-desc per sport.
+  return leans;
 }
 
 async function main(): Promise<number> {
@@ -33,22 +60,7 @@ async function main(): Promise<number> {
   }
   webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
 
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
-
-  // Today's strongest leans, freshest snapshot, with player names.
-  const leans = await db.projectionSnapshot.findMany({
-    where: { fireTier: 'Strong lean', snapshotDate: today, graded: false },
-    orderBy: { fireScore: 'desc' },
-    take: 40,
-    select: {
-      sport: true,
-      stat: true,
-      line: true,
-      predictedSide: true,
-      player: { select: { firstName: true, lastName: true } },
-    },
-  });
+  const leans = await strongestLeans();
   if (leans.length === 0) {
     console.log('[push] no strong leans today — nothing to send.');
     return 0;
@@ -71,10 +83,7 @@ async function main(): Promise<number> {
     if (picks.length === 0) continue; // no leans in this user's sports today
 
     const body = picks
-      .map(
-        (p) =>
-          `${p.player.firstName.charAt(0)}. ${p.player.lastName} ${p.predictedSide} ${p.line} ${statShort(p.stat)}`,
-      )
+      .map((p) => `${p.firstName.charAt(0)}. ${p.lastName} ${p.side} ${p.line} ${p.statShort}`)
       .join('  ·  ');
     const payload = JSON.stringify({
       title: "Today's top leans 🔥",

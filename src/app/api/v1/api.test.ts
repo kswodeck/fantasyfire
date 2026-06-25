@@ -37,7 +37,7 @@ describe('GET /api/v1/{sport}/hitrate', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.player.slug).toBe('luka-doncic');
-    expect(mockResearch).toHaveBeenCalledWith('nba', 'luka-doncic', 'pts', 25.5);
+    expect(mockResearch).toHaveBeenCalledWith('nba', 'luka-doncic', 'pts', 25.5, undefined);
   });
 
   it('omitted line passes undefined (server computes the default)', async () => {
@@ -48,7 +48,7 @@ describe('GET /api/v1/{sport}/hitrate', () => {
       sportCtx('nba'),
     );
     expect(res.status).toBe(200);
-    expect(mockResearch).toHaveBeenCalledWith('nba', 'nikola-jokic', 'reb', undefined);
+    expect(mockResearch).toHaveBeenCalledWith('nba', 'nikola-jokic', 'reb', undefined, undefined);
   });
 
   it('works for an MLB stat key', async () => {
@@ -59,7 +59,18 @@ describe('GET /api/v1/{sport}/hitrate', () => {
       sportCtx('mlb'),
     );
     expect(res.status).toBe(200);
-    expect(mockResearch).toHaveBeenCalledWith('mlb', 'aaron-judge', 'hits', undefined);
+    expect(mockResearch).toHaveBeenCalledWith('mlb', 'aaron-judge', 'hits', undefined, undefined);
+  });
+
+  it('forwards the source query param (the chosen book)', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockResearch.mockResolvedValue({ stat: 'pts' } as any);
+    const res = await hitrateGET(
+      req('http://localhost:3000/api/v1/nba/hitrate?playerSlug=luka-doncic&stat=pts&source=underdog'),
+      sportCtx('nba'),
+    );
+    expect(res.status).toBe(200);
+    expect(mockResearch).toHaveBeenCalledWith('nba', 'luka-doncic', 'pts', undefined, 'underdog');
   });
 
   it('returns 404 for an unknown sport', async () => {
@@ -160,7 +171,7 @@ describe('GET /api/v1/{sport}/players/[slug]', () => {
       ctx('nba', 'luka-doncic'),
     );
     expect(res.status).toBe(200);
-    expect(mockResearch).toHaveBeenCalledWith('nba', 'luka-doncic', 'pts', undefined);
+    expect(mockResearch).toHaveBeenCalledWith('nba', 'luka-doncic', 'pts', undefined, undefined);
   });
 
   it('returns 400 for an invalid stat (no silent coercion)', async () => {

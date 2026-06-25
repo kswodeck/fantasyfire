@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 import { getPropStatParams, getPlayerBySlug, getPlayerResearch } from '@/lib/server/players';
+import { getAvailableSources } from '@/lib/server/providedLines';
+import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import { absoluteUrl } from '@/lib/site';
 import { formatIsoDate, pct } from '@/lib/format';
 import { getTeam } from '@/lib/teams';
@@ -67,7 +69,11 @@ export default async function PlayerStatPage({ params }: PageProps) {
   const cfg = SPORTS[sport];
   if (!isPropStat(sport, rawStat)) notFound();
 
-  const research = await getPlayerResearch(sport, playerSlug, rawStat as StatKey);
+  const availableSources = await getAvailableSources(sport);
+  const initialSource = availableSources.includes(DEFAULT_PROVIDED_SOURCE)
+    ? DEFAULT_PROVIDED_SOURCE
+    : (availableSources[0] ?? DEFAULT_PROVIDED_SOURCE);
+  const research = await getPlayerResearch(sport, playerSlug, rawStat as StatKey, undefined, initialSource);
   if (!research) notFound();
   // getPlayerResearch silently falls back to the default stat for an invalid one
   // (incl. a stat not offered for this player's position); require the requested
@@ -195,6 +201,8 @@ export default async function PlayerStatPage({ params }: PageProps) {
         initialResearch={research}
         initialStat={stat}
         statHrefBase={basePath}
+        availableSources={availableSources}
+        initialSource={initialSource}
       />
 
       <RelatedLinks

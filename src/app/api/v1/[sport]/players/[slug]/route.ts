@@ -38,7 +38,13 @@ export async function GET(
   }
 
   try {
-    const research = await getPlayerResearch(sport, slug, parsed.data.stat, parsed.data.line);
+    const research = await getPlayerResearch(
+      sport,
+      slug,
+      parsed.data.stat,
+      parsed.data.line,
+      parsed.data.source,
+    );
     if (!research) {
       return jsonResponse({ error: 'Player not found' }, { status: 404, request });
     }
