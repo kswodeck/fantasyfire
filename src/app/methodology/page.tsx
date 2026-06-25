@@ -101,11 +101,12 @@ export default function MethodologyPage() {
         <h2>Default line</h2>
         <p>
           When you open a player without entering a line, we pre-fill the{' '}
-          <strong>season median</strong> for that stat, rounded to the nearest half
-          (x.5) so it never pushes. We use the median rather than the average on purpose:
-          counting stats are right-skewed, so the mean sits above a typical game and would
-          quietly bias the default toward the over. You can type any line you like — the
-          point of the tool is to check the exact number on your card.
+          <strong>season median game</strong> for that stat — an integer for counting stats —
+          floored at 0.5. Games that land exactly on the line are pushes, excluded from the hit
+          rate. We use the median game itself: not the average (which sits above a typical game
+          for right-skewed counting stats), and not the median rounded up to the next half-point
+          (which sits above it too — that used to bias every count stat toward the Under). You can
+          type any line you like — the point of the tool is to check the exact number on your card.
         </p>
 
         <h2>Which games count (opportunity filter)</h2>
@@ -181,9 +182,10 @@ export default function MethodologyPage() {
         </p>
         <ul>
           <li>
-            It is <strong>gated by the same Wilson lower bound</strong> as the confidence
-            badge, so thin samples and hot streaks are discounted, not rewarded — leans are
-            ranked by the lower bound, never the raw rate.
+            Its strength is the <strong>recency-weighted hit rate vs the line</strong> (shrunk
+            toward 50% on thin samples), then scaled down by a{' '}
+            <strong>95% Wilson lower-bound trust factor</strong> — so thin samples and hot streaks
+            are discounted, not rewarded.
           </li>
           <li>
             The number is always shown with its <strong>component breakdown</strong> (hit

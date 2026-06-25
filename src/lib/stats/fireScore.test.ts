@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { computeFireScore, type FireScoreInput, type WindowHits } from './fireScore';
+import { wilsonInterval } from './confidence';
 
 function win(overs: number, decided: number, window = '10'): WindowHits {
   return { window, overs, decided };
@@ -89,5 +90,43 @@ describe('computeFireScore', () => {
     expect(value.valueMode).toBe(true);
     expect(value.components.some((c) => c.key === 'value')).toBe(true);
     expect(value.score).toBeGreaterThanOrEqual(lean.score);
+  });
+
+  it('hit sub-score uses the Wilson CENTER vs 0.5 (not the lower bound)', () => {
+    const overs = 70;
+    const decided = 100;
+    const r = computeFireScore({ ...base, windows: [win(overs, decided, 'season')], gamesPlayed: decided });
+    const center = wilsonInterval(overs, decided).center;
+    const hit = r.components.find((c) => c.key === 'hit')!.score;
+    expect(hit).toBeCloseTo(Math.max(0, Math.min(1, (center - 0.5) / 0.2)), 5);
+  });
+
+  it('a ~50/50 history gives a near-zero hit sub-score and no real lean', () => {
+    const r = computeFireScore({
+      line: 20,
+      windows: [win(50, 100, 'season')],
+      projection: 20,
+      stdev: 5,
+      cv: 0.7,
+      matchup: undefined,
+      gamesPlayed: 100,
+    });
+    const hit = r.components.find((c) => c.key === 'hit')!.score;
+    expect(hit).toBeLessThan(0.1);
+    expect(['No lean', 'Pass']).toContain(r.tier);
+  });
+
+  it('a strong, well-sampled over maps to Strong lean under the current cutoffs', () => {
+    const r = computeFireScore({
+      line: 20,
+      windows: [win(72, 100, '5'), win(72, 100, '10'), win(72, 100, '20'), win(72, 100, 'season')],
+      projection: 26,
+      stdev: 4,
+      cv: 0.2,
+      matchup: 'A',
+      gamesPlayed: 100,
+    });
+    expect(r.side).toBe('over');
+    expect(r.tier).toBe('Strong lean');
   });
 });

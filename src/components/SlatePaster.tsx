@@ -6,7 +6,7 @@ import type { SlateResult } from '@/lib/types';
 import type { Sport } from '@/lib/sports';
 import { pct, signed, americanOdds } from '@/lib/format';
 import { LeanArrow } from './LeanArrow';
-import { TIER_TEXT } from '@/lib/tierStyle';
+import { tierTextClass } from '@/lib/tierStyle';
 
 const PLACEHOLDER = 'LeBron James 25.5 points\nLuka Doncic over 8.5 assists -115\nJokic 45.5 PRA';
 
@@ -95,7 +95,7 @@ export function SlatePaster({ sport }: { sport: Sport }) {
                       </div>
                       <div className="shrink-0 text-right">
                         <div
-                          className={`flex items-center justify-end gap-1 text-sm font-semibold ${TIER_TEXT[r.fireScore.tier] ?? 'text-muted'}`}
+                          className={`flex items-center justify-end gap-1 text-sm font-semibold ${tierTextClass(r.fireScore.tier, r.fireScore.side)}`}
                         >
                           <LeanArrow tier={r.fireScore.tier} side={r.fireScore.side} size={13} />
                           {r.fireScore.tier}

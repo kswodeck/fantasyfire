@@ -24,7 +24,7 @@ export const FIRESCORE_WEIGHTS = { hit: 0.34, proj: 0.24, consistency: 0.16, mat
 /** In VALUE mode, how the signal blend and the price-value split the score. */
 export const FIRESCORE_VALUE_SPLIT = { signal: 0.7, value: 0.3 } as const;
 /** 0-100 cutoffs for the tier label. */
-export const FIRESCORE_TIER_CUTOFFS = { strong: 72, lean: 58, slight: 44, none: 30 } as const;
+export const FIRESCORE_TIER_CUTOFFS = { strong: 66, lean: 56, slight: 42, none: 28 } as const;
 /** Below this many games we never grade above "Pass". */
 export const FIRESCORE_MIN_GAMES = 5;
 /** Recency weight per window when blending the Wilson lower bound. */
@@ -131,10 +131,14 @@ export function computeFireScore(input: FireScoreInput): FireScoreResult {
 
   const comps: FireScoreComponent[] = [];
   if (blended !== null) {
+    // Strength = how far the leaned side's rate sits above the fair 50% point
+    // (0.50 -> 0, ~0.70 -> max). We use the recency-weighted CENTER for the
+    // magnitude and let `trustFactor` (derived from the Wilson lower bound) apply
+    // the small-sample discount — so confidence is counted once, not twice.
     comps.push({
       key: 'hit',
       label: 'Hit rate (confidence-adjusted)',
-      score: clamp01((blended.lower - 0.4) / 0.35),
+      score: clamp01((blended.center - 0.5) / 0.2),
       weight: FIRESCORE_WEIGHTS.hit,
     });
   }

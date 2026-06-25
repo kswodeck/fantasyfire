@@ -17,10 +17,10 @@ import {
   blendedRoleThreshold,
   statValue,
   STAT_WINDOWS,
+  defaultLine,
   type StatKey,
   type GameStatLine,
 } from '../lib/stats';
-import { median, roundToHalfLine } from '../lib/format';
 
 const BOARD_STATS: Record<'nba' | 'mlb', StatKey[]> = {
   nba: ['pts', 'reb', 'ast', 'pra', 'fg3m'],
@@ -40,11 +40,6 @@ function opportunity(sport: 'nba' | 'mlb', posBucket: string | null, g: GameStat
   if (sport === 'nba') return g.minutes ?? null;
   if (posBucket === 'P') return null;
   return (g.atBats ?? 0) + (g.walks ?? 0) + (g.hbp ?? 0);
-}
-
-function defaultLine(games: GameStatLine[], stat: StatKey): number {
-  if (games.length === 0) return 0.5;
-  return roundToHalfLine(median(games.map((g) => statValue(stat, g))));
 }
 
 type Wrapped = { g: GameStatLine; date: Date };
@@ -186,6 +181,13 @@ async function backtestSport(sport: 'nba' | 'mlb'): Promise<number> {
 }
 
 async function main() {
+  // The seed collides on @@unique([playerId,stat,snapshotDate]) with skipDuplicates,
+  // so existing rows are never overwritten. After a line/scoring change, set
+  // BACKTEST_RESET=true to purge first and re-seed everything under the new logic.
+  if (process.env.BACKTEST_RESET === 'true') {
+    const del = await db.projectionSnapshot.deleteMany({});
+    console.log(`[backtest] reset: deleted ${del.count} existing snapshot(s)`);
+  }
   await backtestSport('nba');
   await backtestSport('mlb');
 }

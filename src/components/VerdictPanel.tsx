@@ -1,7 +1,7 @@
 import type { PlayerVerdict } from '@/lib/types';
 import { num1 } from '@/lib/format';
 import { LeanArrow } from './LeanArrow';
-import { TIER_TEXT, TIER_BOX } from '@/lib/tierStyle';
+import { tierTextClass, tierBoxClass } from '@/lib/tierStyle';
 
 const GRADE_TEXT: Record<string, string> = {
   A: 'text-emerald-300',
@@ -28,8 +28,8 @@ export function VerdictPanel({
   line: number;
 }) {
   const { fireScore, projection, consistency, matchupGrade } = verdict;
-  const tierText = TIER_TEXT[fireScore.tier] ?? 'text-muted';
-  const tierBox = TIER_BOX[fireScore.tier] ?? TIER_BOX['No lean'];
+  const tierText = tierTextClass(fireScore.tier, fireScore.side);
+  const tierBox = tierBoxClass(fireScore.tier, fireScore.side);
   const headline =
     fireScore.tier === 'Pass'
       ? 'Pass'
@@ -118,8 +118,9 @@ export function VerdictPanel({
       </div>
 
       <p className="mt-3 text-[11px] leading-relaxed text-muted">
-        {fireScore.note} Ranked by the lower bound of a 95% confidence interval, so small
-        samples and hot streaks are discounted. 21+. Problem gambling? Call 1-800-GAMBLER.
+        {fireScore.note} Small samples and hot streaks are discounted by a 95% Wilson lower
+        bound (the trust factor), so a thin streak can&rsquo;t masquerade as an edge. 21+.
+        Problem gambling? Call 1-800-GAMBLER.
       </p>
     </section>
   );

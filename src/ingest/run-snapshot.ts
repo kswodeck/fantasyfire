@@ -14,18 +14,11 @@ import {
   computeConsistency,
   computeFireScore,
   blendedRoleThreshold,
-  statValue,
   STAT_WINDOWS,
-  type StatKey,
+  defaultLine,
   type GameStatLine,
 } from '../lib/stats';
-import { median, roundToHalfLine } from '../lib/format';
 import { BOARD_STATS, MIN_PRIOR, STAT_SELECT, rowToGameStatLine, opportunity, chunk } from './snapshot-lib';
-
-function defaultLine(games: GameStatLine[], stat: StatKey): number {
-  if (games.length === 0) return 0.5;
-  return roundToHalfLine(median(games.map((g) => statValue(stat, g))));
-}
 
 async function snapshotSport(sport: 'nba' | 'mlb'): Promise<number> {
   const players = await db.player.findMany({

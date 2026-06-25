@@ -5,7 +5,6 @@
 import { cache } from 'react';
 import { db } from '@/lib/db';
 import {
-  type GameStatLine,
   type StatKey,
   type DvpCell,
   type PosBucket,
@@ -27,8 +26,8 @@ import {
   wilsonInterval,
   STAT_DEFS,
   FIRESCORE_MIN_GAMES,
+  defaultLine,
 } from '@/lib/stats';
-import { roundToHalfLine, median } from '@/lib/format';
 import { fairPriceReadout } from '@/lib/odds';
 import { parseSlate, normalizeName } from '@/lib/slate';
 import { currentSeason, previousSeason } from '@/lib/season';
@@ -475,17 +474,6 @@ async function getMlbHitterMatchup(
 }
 
 /**
- * Default line: the season MEDIAN for the stat, rounded to the nearest 0.5.
- * The median (not the mean) is used because counting stats are right-skewed —
- * the mean sits above the typical game, which would bias the default toward the
- * Over on every page. The user can still type any line.
- */
-function defaultLine(games: GameStatLine[], stat: StatKey): number {
-  if (games.length === 0) return 0.5;
-  return roundToHalfLine(median(games.map((g) => statValue(stat, g))));
-}
-
-/**
  * The full research payload for a player page / API response, computed for a
  * stat + line. `stat` defaults to the sport/role default; `line` to the season
  * median rounded to 0.5. An out-of-sport stat falls back to the default.
@@ -912,7 +900,7 @@ export async function getTonightSlate(
 export async function getCalibration(sport: Sport): Promise<Calibration> {
   const rows = await db.projectionSnapshot.findMany({
     where: { sport, graded: true, outcome: { in: ['over', 'under'] } },
-    select: { fireScore: true, predictedSide: true, outcome: true, snapshotDate: true },
+    select: { fireTier: true, predictedSide: true, outcome: true, snapshotDate: true },
   });
 
   const decided = rows.length;
@@ -920,18 +908,16 @@ export async function getCalibration(sport: Sport): Promise<Calibration> {
   let since: Date | null = null;
   for (const r of rows) if (!since || r.snapshotDate < since) since = r.snapshotDate;
 
-  const tiers: Array<{ label: string; test: (s: number) => boolean }> = [
-    { label: 'Strong lean', test: (s) => s >= 72 },
-    { label: 'Lean', test: (s) => s >= 58 && s < 72 },
-    { label: 'Slight lean', test: (s) => s >= 44 && s < 58 },
-    { label: 'No lean', test: (s) => s >= 30 && s < 44 },
-  ];
-  const buckets: CalibrationBucket[] = tiers.map((t) => {
-    const inBucket = rows.filter((r) => t.test(r.fireScore));
+  // Bucket by the STORED tier label (written when the lean was recorded), not by
+  // re-deriving from numeric cutoffs — so the table can never drift from the
+  // cutoffs the board/snapshot actually used.
+  const labels = ['Strong lean', 'Lean', 'Slight lean', 'No lean'];
+  const buckets: CalibrationBucket[] = labels.map((label) => {
+    const inBucket = rows.filter((r) => r.fireTier === label);
     const d = inBucket.length;
     const w = inBucket.filter((r) => r.predictedSide === r.outcome).length;
     const iv = wilsonInterval(w, d);
-    return { label: t.label, decided: d, wins: w, winRate: d ? w / d : null, lower: iv.lower, upper: iv.upper };
+    return { label, decided: d, wins: w, winRate: d ? w / d : null, lower: iv.lower, upper: iv.upper };
   });
 
   return {
