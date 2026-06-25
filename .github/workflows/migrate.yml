@@ -10,10 +10,12 @@ name: Apply DB migrations
 #   - manual dispatch (re-run, or apply out of band)
 #
 # REQUIRED secret (stored on the "Production" environment):
-#   DIRECT_URL — Supabase SESSION pooler (:5432) or a direct connection.
-#                NOT the transaction pooler (:6543): `migrate deploy` takes a
-#                session-level advisory lock that PgBouncer's transaction mode
-#                can't hold, so it hangs until the job times out.
+#   DIRECT_URL — the migration connection. Prefer the Supabase SESSION pooler
+#                (:5432) or a direct connection. `migrate deploy` takes a
+#                session-level advisory lock the TRANSACTION pooler (:6543) can't
+#                hold, so :6543 would hang — but the "Resolve migration connection"
+#                step auto-corrects a :6543 url to the :5432 session pooler, so a
+#                transaction-pooler secret still works (with a warning).
 
 on:
   push:
@@ -32,10 +34,8 @@ jobs:
   migrate:
     runs-on: ubuntu-latest
     timeout-minutes: 100
-    # DIRECT_URL lives on the "Production" environment, so the job must declare it.
+    # DIRECT_URL lives on the "Production" environment.
     environment: Production
-    env:
-      DIRECT_URL: ${{ secrets.DIRECT_URL || '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -46,19 +46,29 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Check migration connection
+      - name: Resolve migration connection
+        env:
+          RAW_DIRECT_URL: ${{ secrets.DIRECT_URL }}
         run: |
-          if [ -z "$DIRECT_URL" ]; then
-            echo "::error::DIRECT_URL secret is not set. Add it on the Production environment (Settings → Environments)."
+          if [ -z "$RAW_DIRECT_URL" ]; then
+            echo "::error::DIRECT_URL secret is not set. Add it on the Production environment (Settings → Environments → Production)."
             exit 1
           fi
-          # migrate deploy hangs forever on the Supabase TRANSACTION pooler (:6543)
-          # because it can't hold the advisory lock — use the SESSION pooler (:5432)
-          # or a direct connection. Catch the misconfig in seconds, not after a hang.
-          if printf '%s' "$DIRECT_URL" | grep -q ':6543'; then
-            echo "::error::DIRECT_URL points at the transaction pooler (:6543); migrate deploy will hang. Use the Supabase SESSION pooler (:5432) or a direct connection."
-            exit 1
+          # `migrate deploy` takes a session-level advisory lock that PgBouncer's
+          # TRANSACTION pooler (:6543) cannot hold, so it hangs until timeout.
+          # Supabase's SESSION pooler is the SAME url on :5432, so auto-correct a
+          # :6543 secret instead of failing — the migration then runs regardless.
+          # (Set DIRECT_URL to the :5432 session pooler to silence the warning.)
+          # A password can't contain a literal ":6543" — the colon would be
+          # URL-encoded — so the only ":6543" in the string is the port.
+          MIGRATE_URL="$RAW_DIRECT_URL"
+          if printf '%s' "$RAW_DIRECT_URL" | grep -q ':6543'; then
+            MIGRATE_URL="$(printf '%s' "$RAW_DIRECT_URL" | sed 's/:6543/:5432/')"
+            echo "::warning::DIRECT_URL points at the transaction pooler (:6543); using the :5432 session pooler for this run. Update the secret to the session pooler to silence this."
           fi
+          # Never print the resolved URL; it carries the DB password.
+          echo "::add-mask::$MIGRATE_URL"
+          echo "DIRECT_URL=$MIGRATE_URL" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
