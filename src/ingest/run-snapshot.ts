@@ -18,9 +18,10 @@ import {
   defaultLine,
   type GameStatLine,
 } from '../lib/stats';
-import { BOARD_STATS, MIN_PRIOR, STAT_SELECT, rowToGameStatLine, opportunity, chunk } from './snapshot-lib';
+import { boardStatsForSnapshot, MIN_PRIOR, STAT_SELECT, rowToGameStatLine, opportunity, chunk } from './snapshot-lib';
+import type { Sport } from '../lib/sports';
 
-async function snapshotSport(sport: 'nba' | 'mlb'): Promise<number> {
+async function snapshotSport(sport: Sport): Promise<number> {
   const players = await db.player.findMany({
     where: { sport },
     select: { id: true, posBucket: true },
@@ -57,7 +58,7 @@ async function snapshotSport(sport: 'nba' | 'mlb'): Promise<number> {
     });
     if (games.length < MIN_PRIOR) continue;
 
-    for (const stat of BOARD_STATS[sport]) {
+    for (const stat of boardStatsForSnapshot(sport, p.posBucket)) {
       const line = defaultLine(games, stat);
       if (line <= 0.5) continue;
       const windows = STAT_WINDOWS.map((w) => {
@@ -104,6 +105,7 @@ async function snapshotSport(sport: 'nba' | 'mlb'): Promise<number> {
 async function main() {
   await snapshotSport('nba');
   await snapshotSport('mlb');
+  await snapshotSport('nfl');
 }
 
 main()

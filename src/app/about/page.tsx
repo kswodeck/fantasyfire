@@ -21,7 +21,7 @@ export default function AboutPage() {
 
       <Prose>
         <p>
-          {SITE.name}{' '}is an NBA and MLB player-prop research tool. We turn public game logs
+          {SITE.name}{' '}is an NBA, MLB, and NFL player-prop research tool. We turn public game logs
           into clear, honest answers about player props — hit rates, matchups, and how
           much you can actually trust each number — so you can do your own research
           instead of trusting someone else&rsquo;s &ldquo;locks.&rdquo;
@@ -67,9 +67,9 @@ export default function AboutPage() {
 
         <h2>Where the data comes from</h2>
         <p>
-          Everything is computed from publicly available NBA and MLB game logs, refreshed
+          Everything is computed from publicly available NBA, MLB, and NFL game logs, refreshed
           nightly. {SITE.name} is independent and is not affiliated with or endorsed by
-          the NBA, MLB, or any team; league and team names and logos are the property of
+          the NBA, MLB, NFL, or any team; league and team names and logos are the property of
           their respective owners.
         </p>
 

@@ -18,14 +18,11 @@ import {
   statValue,
   STAT_WINDOWS,
   defaultLine,
-  type StatKey,
   type GameStatLine,
 } from '../lib/stats';
+import type { Sport } from '../lib/sports';
+import { boardStatsForSnapshot, opportunity, STAT_SELECT, rowToGameStatLine } from './snapshot-lib';
 
-const BOARD_STATS: Record<'nba' | 'mlb', StatKey[]> = {
-  nba: ['pts', 'reb', 'ast', 'pra', 'fg3m'],
-  mlb: ['hits', 'tb', 'hr', 'rbi', 'runs'],
-};
 const MIN_PRIOR = 12; // games needed before a prediction
 const MAX_GAMES_PER_PLAYER = 40; // grade only the most recent N transitions
 const TOP_PLAYERS = 80;
@@ -36,15 +33,9 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
-function opportunity(sport: 'nba' | 'mlb', posBucket: string | null, g: GameStatLine): number | null {
-  if (sport === 'nba') return g.minutes ?? null;
-  if (posBucket === 'P') return null;
-  return (g.atBats ?? 0) + (g.walks ?? 0) + (g.hbp ?? 0);
-}
-
 type Wrapped = { g: GameStatLine; date: Date };
 
-async function backtestSport(sport: 'nba' | 'mlb'): Promise<number> {
+async function backtestSport(sport: Sport): Promise<number> {
   const players = await db.player.findMany({
     where: { sport },
     select: { id: true, posBucket: true },
@@ -56,42 +47,12 @@ async function backtestSport(sport: 'nba' | 'mlb'): Promise<number> {
   const rows = await db.playerGameStat.findMany({
     where: { playerId: { in: players.map((p) => p.id) } },
     orderBy: { gameDate: 'asc' }, // chronological
-    select: {
-      playerId: true,
-      gameDate: true,
-      minutes: true,
-      points: true,
-      rebounds: true,
-      assists: true,
-      fg3m: true,
-      atBats: true,
-      walks: true,
-      hbp: true,
-      hits: true,
-      totalBases: true,
-      homeRuns: true,
-      rbi: true,
-      runs: true,
-    },
+    select: STAT_SELECT,
   });
 
   const byPlayer = new Map<number, Wrapped[]>();
   for (const r of rows) {
-    const g: GameStatLine = {
-      minutes: r.minutes,
-      points: r.points,
-      rebounds: r.rebounds,
-      assists: r.assists,
-      fg3m: r.fg3m,
-      atBats: r.atBats,
-      walks: r.walks,
-      hbp: r.hbp,
-      hits: r.hits,
-      totalBases: r.totalBases,
-      homeRuns: r.homeRuns,
-      rbi: r.rbi,
-      runs: r.runs,
-    };
+    const g: GameStatLine = rowToGameStatLine(r);
     const w: Wrapped = { g, date: r.gameDate };
     const list = byPlayer.get(r.playerId);
     if (list) list.push(w);
@@ -127,7 +88,7 @@ async function backtestSport(sport: 'nba' | 'mlb'): Promise<number> {
     if (games.length < MIN_PRIOR + 1) continue;
 
     const startT = Math.max(MIN_PRIOR, games.length - MAX_GAMES_PER_PLAYER);
-    for (const stat of BOARD_STATS[sport]) {
+    for (const stat of boardStatsForSnapshot(sport, p.posBucket)) {
       for (let t = startT; t < games.length; t++) {
         const prior = games.slice(0, t).map((w) => w.g).reverse(); // most-recent-first
         const line = defaultLine(prior, stat);
@@ -190,6 +151,7 @@ async function main() {
   }
   await backtestSport('nba');
   await backtestSport('mlb');
+  await backtestSport('nfl');
 }
 
 main()

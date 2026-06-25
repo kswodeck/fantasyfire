@@ -14,7 +14,7 @@ import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { RelatedLinks } from '@/components/RelatedLinks';
 import { sportMeshLinks } from '@/lib/relatedLinks';
 import { PROP_STATS } from '@/lib/propStats';
-import { STAT_DEFS } from '@/lib/stats';
+import { STAT_DEFS, statKeysForSport } from '@/lib/stats';
 
 // ISR: statically generate the busiest players, revalidate hourly; the rest
 // render on-demand.
@@ -46,7 +46,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const statsBit =
     sport === 'mlb'
       ? 'hits, home runs, RBIs, total bases and strikeout'
-      : 'points, rebounds, assists, 3PM and PRA';
+      : sport === 'nfl'
+        ? 'passing yards, rushing yards, receptions, receiving yards and touchdown'
+        : 'points, rebounds, assists, 3PM and PRA';
   const title = `${player.fullName} — Hit Rates, Props & Matchup Research`;
   const description =
     `${player.fullName}${teamBit} prop research: ${statsBit} hit rates over recent ` +
@@ -86,7 +88,7 @@ export default async function PlayerPage({ params }: PageProps) {
       {
         '@type': 'Person',
         name: player.fullName,
-        jobTitle: sport === 'mlb' ? 'Baseball Player' : 'Basketball Player',
+        jobTitle: sport === 'mlb' ? 'Baseball Player' : sport === 'nfl' ? 'Football Player' : 'Basketball Player',
         ...(player.teamName
           ? { affiliation: { '@type': 'SportsTeam', name: player.teamName } }
           : {}),
@@ -204,8 +206,8 @@ export default async function PlayerPage({ params }: PageProps) {
 
       <RelatedLinks
         links={[
-          ...PROP_STATS[sport]
-            .filter((s) => s !== research.stat)
+          ...statKeysForSport(sport, player.posBucket)
+            .filter((s) => PROP_STATS[sport].includes(s) && s !== research.stat)
             .slice(0, 3)
             .map((s) => ({
               label: `${player.lastName} ${STAT_DEFS[s].label}`,

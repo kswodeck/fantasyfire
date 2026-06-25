@@ -102,7 +102,7 @@ export default async function BoardPage({ params }: PageProps) {
       <p className="mt-4 text-xs leading-relaxed text-muted">
         Descriptive research from public game logs, ranked by a sample-size–adjusted FireScore (recent
         hit rate vs the line, discounted for thin samples via a 95% Wilson interval) — not predictions,
-        picks, or betting advice. 21+. Problem gambling? Call 1-800-GAMBLER.
+        picks, or betting advice.
       </p>
     </div>
   );

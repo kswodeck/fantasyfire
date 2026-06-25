@@ -59,11 +59,19 @@ describe('image URLs', () => {
     );
     expect(playerHeadshotUrl('mlb', 592450, 'lg')).toContain('/spots/240');
   });
+  it('NFL headshot url (ESPN, one size)', () => {
+    expect(playerHeadshotUrl('nfl', 3052587)).toBe(
+      'https://a.espncdn.com/i/headshots/nfl/players/full/3052587.png',
+    );
+  });
   it('logo url by team id', () => {
     expect(teamLogoUrl('nba', 1610612747)).toBe(
       'https://cdn.nba.com/logos/nba/1610612747/primary/L/logo.svg',
     );
     expect(teamLogoUrl('mlb', 147)).toBe('https://www.mlbstatic.com/team-logos/147.svg');
+  });
+  it('NFL logo url is keyed by lowercased abbreviation, not id', () => {
+    expect(teamLogoUrl('nfl', 27, 'TB')).toBe('https://a.espncdn.com/i/teamlogos/nfl/500/tb.png');
   });
 });
 

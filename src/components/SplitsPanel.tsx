@@ -2,8 +2,8 @@ import type { PlayerSplits, SplitResult } from '@/lib/stats';
 import { pct } from '@/lib/format';
 
 const BADGE_TEXT: Record<string, string> = {
-  High: 'text-emerald-300',
-  Medium: 'text-amber-300',
+  High: 'text-conf-high',
+  Medium: 'text-conf-med',
   Low: 'text-muted',
 };
 

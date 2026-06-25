@@ -8,7 +8,8 @@ import type { NextConfig } from 'next';
 //
 // Allowlist notes:
 //   - script/connect cloud.umami.is + the Umami beacon gateway  -> analytics
-//   - img cdn.nba.com / *.mlbstatic.com                         -> player/team art
+//   - img cdn.nba.com / *.mlbstatic.com / a.espncdn.com         -> player/team art
+//     (a.espncdn.com serves the NFL headshots + team logos)
 const isDev = process.env.NODE_ENV !== 'production';
 
 function contentSecurityPolicy(): string {
@@ -23,6 +24,7 @@ function contentSecurityPolicy(): string {
       'https://cdn.nba.com',
       'https://midfield.mlbstatic.com',
       'https://www.mlbstatic.com',
+      'https://a.espncdn.com',
     ],
     'font-src': ["'self'"],
     'connect-src': ["'self'", 'https://cloud.umami.is', 'https://api-gateway.umami.dev'],

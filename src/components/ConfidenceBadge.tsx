@@ -2,12 +2,12 @@ import type { Confidence } from '@/lib/stats';
 import { pct } from '@/lib/format';
 
 const BADGE_STYLES: Record<Confidence['badge'], string> = {
-  High: 'bg-over-soft text-over',
+  High: 'bg-over-soft text-sig-green-strong',
   Medium: 'text-conf-med',
   Low: 'text-conf-low',
 };
 
-const MEDIUM_BG = 'bg-amber-100 dark:bg-amber-950/40';
+const MEDIUM_BG = 'bg-surface-warn';
 const LOW_BG = 'bg-under-soft';
 
 /**

@@ -43,7 +43,7 @@ model Player {
   lastName    String
   slug        String
   position    String?
-  posBucket   String? // NBA: G/F/C ; MLB: H (hitter) / P (pitcher)
+  posBucket   String? // NBA: G/F/C ; MLB: H (hitter) / P (pitcher) ; NFL: QB/RB/WR/TE
   jersey      String?
   height      String?
   weight      Int?
@@ -134,6 +134,21 @@ model PlayerGameStat {
   walksAllowed      Int?
   strikeoutsPitched Int?
   pitcherWin        Boolean?
+
+  // NFL (nullable) — one row per athlete-game, merged across ESPN stat groups
+  passYards       Int?
+  passTds         Int?
+  passCompletions Int?
+  passAttempts    Int?
+  passInts        Int?
+  rushYards       Int?
+  rushAttempts    Int?
+  rushTds         Int?
+  receptions      Int?
+  targets         Int?
+  recYards        Int?
+  recTds          Int?
+  fumblesLost     Int?
 
   player       Player @relation(fields: [playerId], references: [id])
   game         Game   @relation(fields: [gameId], references: [id])

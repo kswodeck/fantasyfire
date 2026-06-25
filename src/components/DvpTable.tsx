@@ -1,17 +1,8 @@
 import type { DvpTableRow } from '@/lib/types';
 import type { Sport } from '@/lib/sports';
 import { num1 } from '@/lib/format';
+import { gradeTextClass } from '@/lib/tierStyle';
 import { TeamLogo } from './TeamLogo';
-
-// Grade colors: A/B soft (green), C neutral amber, D/F tough (orange/red).
-const GRADE_CLS: Record<string, string> = {
-  A: 'text-over',
-  B: 'text-over',
-  C: 'text-amber-300',
-  D: 'text-orange-400',
-  F: 'text-under',
-  NR: 'text-muted',
-};
 
 /** A full team ranking of how much of a stat each team allows (rank 1 = most). */
 export function DvpTable({ sport, rows, unit }: { sport: Sport; rows: DvpTableRow[]; unit: string }) {
@@ -32,7 +23,7 @@ export function DvpTable({ sport, rows, unit }: { sport: Sport; rows: DvpTableRo
           </div>
           <span
             title="Matchup grade — A is the softest, F the toughest"
-            className={`w-7 shrink-0 text-right text-sm font-bold ${GRADE_CLS[r.grade] ?? 'text-muted'}`}
+            className={`w-7 shrink-0 text-right text-sm font-bold ${gradeTextClass(r.grade)}`}
           >
             {r.grade}
           </span>

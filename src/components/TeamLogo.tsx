@@ -20,7 +20,7 @@ export function TeamLogo({
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={teamLogoUrl(sport, externalId)}
+      src={teamLogoUrl(sport, externalId, abbr)}
       alt={`${team.fullName || abbr || 'Team'} logo`}
       width={size}
       height={size}

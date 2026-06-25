@@ -1,28 +1,24 @@
-// Single source of truth for FireScore tier colors (board, slate, verdict panel,
-// and — via currentColor — the lean arrows). Color encodes BOTH:
-//   • direction — green = Over, red = Under
-//   • strength  — deeper at Strong lean, warming toward yellow/orange as the lean
-//     weakens to Slight lean.
-// "No lean"/"Pass" are muted. Every shade is chosen to clear WCAG-AA contrast on
-// the dark surface (the deepest, red-500/orange-500/emerald-400, sit ~5:1+).
+// Single source of truth for FireScore tier + matchup-grade colors. All colors
+// are theme-aware signal tokens (defined in globals.css as light-dark() pairs,
+// WCAG-AA in both modes): green = over/good, red = under/tough, deeper at the
+// strong end and warming to amber/orange. The lean arrow inherits via currentColor.
 type Side = 'over' | 'under';
 
-/** Text/icon color class for a tier + side (the arrow inherits this via currentColor). */
+/** Text/icon color class for a tier + side. */
 export function tierTextClass(tier: string, side: Side): string {
   if (tier === 'No lean' || tier === 'Pass') return 'text-muted';
   if (side === 'over') {
-    if (tier === 'Strong lean') return 'text-emerald-400'; // deep green
-    if (tier === 'Lean') return 'text-green-300'; // lighter green
-    return 'text-amber-400'; // Slight lean — darker yellow
+    if (tier === 'Strong lean') return 'text-sig-green-strong';
+    if (tier === 'Lean') return 'text-sig-green';
+    return 'text-sig-amber'; // Slight lean
   }
-  // red-400 (not red-500) for Strong so the small text clears WCAG-AA even on the
-  // lighter hover row background (#292524); red-500 fails there (4.0:1).
-  if (tier === 'Strong lean') return 'text-red-400'; // dark red
-  if (tier === 'Lean') return 'text-red-300'; // lighter red
-  return 'text-orange-500'; // Slight lean — dark orange
+  if (tier === 'Strong lean') return 'text-sig-red-strong';
+  if (tier === 'Lean') return 'text-sig-red';
+  return 'text-sig-orange'; // Slight lean
 }
 
-/** Border + fill tint for the verdict-panel box, by tier + side. */
+/** Border + fill tint for the verdict-panel box, by tier + side. Decorative
+ * tints (low-opacity palette colors) read correctly on both light and dark. */
 export function tierBoxClass(tier: string, side: Side): string {
   if (tier === 'No lean' || tier === 'Pass') return 'border-line bg-surface-2';
   if (side === 'over') {
@@ -33,4 +29,22 @@ export function tierBoxClass(tier: string, side: Side): string {
   if (tier === 'Strong lean') return 'border-red-500/30 bg-red-500/10';
   if (tier === 'Lean') return 'border-red-500/25 bg-red-500/[0.07]';
   return 'border-orange-500/25 bg-orange-500/[0.07]';
+}
+
+/** Text color for an A–F matchup grade (A = softest/green, F = toughest/red). */
+export function gradeTextClass(grade: string): string {
+  switch (grade) {
+    case 'A':
+      return 'text-sig-green-strong';
+    case 'B':
+      return 'text-sig-green';
+    case 'C':
+      return 'text-sig-amber';
+    case 'D':
+      return 'text-sig-orange';
+    case 'F':
+      return 'text-sig-red-strong';
+    default:
+      return 'text-muted'; // NR
+  }
 }

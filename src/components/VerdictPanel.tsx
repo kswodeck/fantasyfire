@@ -1,16 +1,7 @@
 import type { PlayerVerdict } from '@/lib/types';
 import { num1 } from '@/lib/format';
 import { LeanArrow } from './LeanArrow';
-import { tierTextClass, tierBoxClass } from '@/lib/tierStyle';
-
-const GRADE_TEXT: Record<string, string> = {
-  A: 'text-emerald-300',
-  B: 'text-emerald-300',
-  C: 'text-amber-300',
-  D: 'text-orange-300',
-  F: 'text-red-300',
-  NR: 'text-muted',
-};
+import { tierTextClass, tierBoxClass, gradeTextClass } from '@/lib/tierStyle';
 
 /**
  * The "verdict" read for a player + stat + line. Presentational only (data via
@@ -104,7 +95,7 @@ export function VerdictPanel({
           <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">
             Matchup
           </div>
-          <div className={`text-sm font-semibold ${matchupGrade ? GRADE_TEXT[matchupGrade] : 'text-muted'}`}>
+          <div className={`text-sm font-semibold ${matchupGrade ? gradeTextClass(matchupGrade) : 'text-muted'}`}>
             {matchupGrade ?? '—'}
           </div>
           <div className="text-[11px] text-muted">
@@ -119,8 +110,7 @@ export function VerdictPanel({
 
       <p className="mt-3 text-[11px] leading-relaxed text-muted">
         {fireScore.note} Small samples and hot streaks are discounted by a 95% Wilson lower
-        bound (the trust factor), so a thin streak can&rsquo;t masquerade as an edge. 21+.
-        Problem gambling? Call 1-800-GAMBLER.
+        bound (the trust factor), so a thin streak can&rsquo;t masquerade as an edge.
       </p>
     </section>
   );

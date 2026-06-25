@@ -24,8 +24,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { sport } = await params;
   if (!isSport(sport)) return { title: 'Not found' };
   const cfg = SPORTS[sport];
-  const title = `${cfg.name} Games Today — Players to Research`;
-  const description = `Today's ${cfg.name} schedule with the strongest recent-form player-prop leans on the slate, from public game logs. Research, not picks — confirm who's active yourself.`;
+  const isNfl = sport === 'nfl';
+  const title = `${cfg.name} Games ${isNfl ? 'This Week' : 'Today'} — Players to Research`;
+  const description = `${isNfl ? "This week's" : "Today's"} ${cfg.name} schedule with the strongest recent-form player-prop leans on the slate, from public game logs. Research, not picks — confirm who's active yourself.`;
   return {
     title,
     description,
@@ -39,6 +40,8 @@ export default async function TodayPage({ params }: PageProps) {
   if (!isSport(raw)) notFound();
   const sport: Sport = raw;
   const cfg = SPORTS[sport];
+  // NFL plays weekly (Thu–Mon), so the "today" slate is framed as the week.
+  const slateWord = sport === 'nfl' ? 'This Week' : 'Today';
 
   let slate: { date: string | null; games: TonightGame[] } = { date: null, games: [] };
   let board: BoardRow[] = [];
@@ -65,11 +68,13 @@ export default async function TodayPage({ params }: PageProps) {
         items={[
           { label: 'Home', href: '/' },
           { label: cfg.name, href: `/${sport}` },
-          { label: 'Today' },
+          { label: slateWord },
         ]}
       />
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h1 className="text-3xl font-bold tracking-tight">{cfg.name} Today</h1>
+        <h1 className="text-3xl font-bold tracking-tight">
+          {cfg.name} {slateWord}
+        </h1>
         {slate.date && <span className="text-sm text-muted">{formatIsoDate(slate.date)}</span>}
       </div>
 
@@ -87,7 +92,7 @@ export default async function TodayPage({ params }: PageProps) {
         </p>
       ) : (
         <>
-          <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/[0.07] p-3 text-xs leading-relaxed text-amber-200/90">
+          <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/[0.07] p-3 text-xs leading-relaxed text-sig-amber">
             We don&rsquo;t track who&rsquo;s active — <strong>confirm starting lineups, scratches,
             and injuries yourself</strong> before betting. The schedule updates nightly, not live.
           </div>
@@ -101,15 +106,16 @@ export default async function TodayPage({ params }: PageProps) {
             <>
               <div className="mb-2 mt-8 flex items-center gap-2">
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-                  Top leans on today&rsquo;s slate
+                  Top leans {sport === 'nfl' ? 'this week' : <>on today&rsquo;s slate</>}
                 </h2>
                 <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted">
                   experimental
                 </span>
               </div>
               <p className="mb-3 text-xs text-muted">
-                Strongest recent-form leans for players on today&rsquo;s teams, vs our typical line
-                (not a sportsbook line). Open a player to enter the real number.
+                Strongest recent-form leans for players on{' '}
+                {sport === 'nfl' ? <>this week&rsquo;s</> : <>today&rsquo;s</>} teams, vs our typical
+                line (not a sportsbook line). Open a player to enter the real number.
               </p>
               <FilterableBoard sport={sport} rows={leans} initialVisible={20} />
             </>
@@ -120,8 +126,7 @@ export default async function TodayPage({ params }: PageProps) {
       <RelatedLinks links={sportMeshLinks(sport, 'today')} />
 
       <p className="mt-6 text-xs leading-relaxed text-muted">
-        Descriptive research from public game logs — not predictions, picks, or betting advice. 21+.
-        Problem gambling? Call 1-800-GAMBLER.
+        Descriptive research from public game logs — not predictions, picks, or betting advice.
       </p>
     </div>
   );

@@ -10,46 +10,48 @@ interface Opt {
   label: string;
 }
 
-/** Stat (+ position for NBA) picker over pre-fetched DvP tables — switches in memory. */
+/** Stat (+ position for NBA/NFL) picker over pre-fetched DvP tables — switches in memory. */
 export function DvpExplorer({
   sport,
   tables,
   stats,
   positions,
   unitByStat,
+  statsByPosition,
 }: {
   sport: Sport;
   tables: Record<string, DvpTableRow[]>;
   stats: Opt[];
   positions: Opt[];
   unitByStat: Record<string, string>;
+  /** NFL: which stat keys apply to each position (so a WR never lists pass yards). */
+  statsByPosition?: Record<string, string[]>;
 }) {
-  const [stat, setStat] = useState(stats[0]?.value ?? '');
   const [pos, setPos] = useState(positions[0]?.value ?? '');
+  // For position-specific sports (NFL) the stat list follows the selected
+  // position; otherwise every stat applies to every position (NBA/MLB).
+  const statsForPos = (p: string): Opt[] =>
+    statsByPosition ? stats.filter((s) => statsByPosition[p]?.includes(s.value)) : stats;
+  const availStats = statsForPos(pos);
+  const [stat, setStat] = useState(availStats[0]?.value ?? '');
   const rows = tables[`${stat}:${pos}`] ?? [];
   const selectCls =
     'rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-foreground outline-none focus:border-brand';
 
+  function onPos(next: string) {
+    setPos(next);
+    const valid = statsForPos(next);
+    if (!valid.some((s) => s.value === stat)) setStat(valid[0]?.value ?? '');
+  }
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <select
-          aria-label="Stat"
-          value={stat}
-          onChange={(e) => setStat(e.target.value)}
-          className={selectCls}
-        >
-          {stats.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
         {positions.length > 1 && (
           <select
             aria-label="Position"
             value={pos}
-            onChange={(e) => setPos(e.target.value)}
+            onChange={(e) => onPos(e.target.value)}
             className={selectCls}
           >
             {positions.map((o) => (
@@ -59,6 +61,18 @@ export function DvpExplorer({
             ))}
           </select>
         )}
+        <select
+          aria-label="Stat"
+          value={stat}
+          onChange={(e) => setStat(e.target.value)}
+          className={selectCls}
+        >
+          {availStats.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
         <span className="ml-auto text-xs text-muted">Rank 1 = allows the most (softest)</span>
       </div>
       {rows.length === 0 ? (

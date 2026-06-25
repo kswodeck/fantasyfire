@@ -84,7 +84,7 @@ export default function PrivacyPage() {
             ).
           </li>
           <li>
-            <strong>Supabase</strong> — the database storing public NBA and MLB statistics (
+            <strong>Supabase</strong> — the database storing public NBA, MLB, and NFL statistics (
             <a href="https://supabase.com/privacy" target="_blank" rel="noopener noreferrer">
               privacy
             </a>
@@ -111,7 +111,8 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>League content networks</strong> — player headshots and team logos load
-            directly in your browser from the NBA&rsquo;s and MLB&rsquo;s CDNs (
+            directly in your browser from the NBA&rsquo;s, MLB&rsquo;s, and ESPN&rsquo;s CDNs
+            (NFL data and images come from ESPN) (
             <a href="https://www.nba.com/privacy-policy" target="_blank" rel="noopener noreferrer">
               NBA
             </a>
@@ -122,6 +123,14 @@ export default function PrivacyPage() {
               rel="noopener noreferrer"
             >
               MLB
+            </a>
+            ,{' '}
+            <a
+              href="https://www.espn.com/privacy-policy"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              ESPN
             </a>
             ).
           </li>

@@ -46,6 +46,20 @@ export interface GameStatLine {
   earnedRuns?: number | null;
   walksAllowed?: number | null;
   strikeoutsPitched?: number | null;
+  // NFL
+  passYards?: number | null;
+  passTds?: number | null;
+  passCompletions?: number | null;
+  passAttempts?: number | null;
+  passInts?: number | null;
+  rushYards?: number | null;
+  rushAttempts?: number | null;
+  rushTds?: number | null;
+  receptions?: number | null;
+  targets?: number | null;
+  recYards?: number | null;
+  recTds?: number | null;
+  fumblesLost?: number | null;
   // Optional context for display / charts.
   minutes?: number | null;
   gameDate?: string;
@@ -53,8 +67,8 @@ export interface GameStatLine {
   isHome?: boolean;
 }
 
-/** Position buckets. NBA: G/F/C (DvP). MLB: H (hitter) / P (pitcher). */
-export type PosBucket = 'G' | 'F' | 'C' | 'H' | 'P';
+/** Position buckets. NBA: G/F/C (DvP). MLB: H/P. NFL: QB/RB/WR/TE. */
+export type PosBucket = 'G' | 'F' | 'C' | 'H' | 'P' | 'QB' | 'RB' | 'WR' | 'TE';
 
 /** All researchable stat keys across sports (kept unique so one registry works). */
 export type StatKey =
@@ -90,7 +104,24 @@ export type StatKey =
   | 'er'
   | 'outs'
   | 'ha'
-  | 'bba';
+  | 'bba'
+  // NFL — passing
+  | 'passYds'
+  | 'passTds'
+  | 'passCmp'
+  | 'passAtt'
+  | 'ints'
+  // NFL — rushing
+  | 'rushYds'
+  | 'carries'
+  | 'rushTds'
+  // NFL — receiving
+  | 'rec'
+  | 'targets'
+  | 'recYds'
+  | 'recTds'
+  // NFL — misc
+  | 'fumbles';
 
 export interface StatDef {
   key: StatKey;
@@ -136,6 +167,27 @@ export const STAT_DEFS: Record<StatKey, StatDef> = {
   outs: { key: 'outs', sport: 'mlb', label: 'Outs Recorded', short: 'OUTS', value: (g) => n(g.outs) },
   ha: { key: 'ha', sport: 'mlb', label: 'Hits Allowed', short: 'HA', value: (g) => n(g.hitsAllowed) },
   bba: { key: 'bba', sport: 'mlb', label: 'Walks Allowed', short: 'BBA', value: (g) => n(g.walksAllowed) },
+
+  // ---- NFL passing ----
+  passYds: { key: 'passYds', sport: 'nfl', label: 'Passing Yards', short: 'PASS YDS', value: (g) => n(g.passYards) },
+  passTds: { key: 'passTds', sport: 'nfl', label: 'Passing TDs', short: 'PASS TD', value: (g) => n(g.passTds) },
+  passCmp: { key: 'passCmp', sport: 'nfl', label: 'Completions', short: 'CMP', value: (g) => n(g.passCompletions) },
+  passAtt: { key: 'passAtt', sport: 'nfl', label: 'Pass Attempts', short: 'PASS ATT', value: (g) => n(g.passAttempts) },
+  ints: { key: 'ints', sport: 'nfl', label: 'Interceptions', short: 'INT', value: (g) => n(g.passInts) },
+
+  // ---- NFL rushing ----
+  rushYds: { key: 'rushYds', sport: 'nfl', label: 'Rushing Yards', short: 'RUSH YDS', value: (g) => n(g.rushYards) },
+  carries: { key: 'carries', sport: 'nfl', label: 'Carries', short: 'CAR', value: (g) => n(g.rushAttempts) },
+  rushTds: { key: 'rushTds', sport: 'nfl', label: 'Rushing TDs', short: 'RUSH TD', value: (g) => n(g.rushTds) },
+
+  // ---- NFL receiving ----
+  rec: { key: 'rec', sport: 'nfl', label: 'Receptions', short: 'REC', value: (g) => n(g.receptions) },
+  targets: { key: 'targets', sport: 'nfl', label: 'Targets', short: 'TGT', value: (g) => n(g.targets) },
+  recYds: { key: 'recYds', sport: 'nfl', label: 'Receiving Yards', short: 'REC YDS', value: (g) => n(g.recYards) },
+  recTds: { key: 'recTds', sport: 'nfl', label: 'Receiving TDs', short: 'REC TD', value: (g) => n(g.recTds) },
+
+  // ---- NFL misc ----
+  fumbles: { key: 'fumbles', sport: 'nfl', label: 'Fumbles Lost', short: 'FUM', value: (g) => n(g.fumblesLost) },
 };
 
 export const STAT_KEYS = Object.keys(STAT_DEFS) as StatKey[];
@@ -148,10 +200,32 @@ export const MLB_HITTING_KEYS: StatKey[] = [
 ];
 export const MLB_PITCHING_KEYS: StatKey[] = ['k', 'er', 'outs', 'ha', 'bba'];
 
-/** Ordered stat keys offered for a sport (and role, for MLB hitter vs pitcher). */
+// NFL stat keys are position-specific: a QB's markets (passing, plus rushing for
+// mobile QBs) are disjoint from a pass-catcher's (receiving). RBs span both the
+// ground game and the passing game.
+export const NFL_QB_KEYS: StatKey[] = ['passYds', 'passTds', 'passCmp', 'passAtt', 'ints', 'rushYds'];
+export const NFL_RB_KEYS: StatKey[] = ['rushYds', 'carries', 'rushTds', 'rec', 'targets', 'recYds', 'recTds', 'fumbles'];
+export const NFL_WR_KEYS: StatKey[] = ['rec', 'targets', 'recYds', 'recTds'];
+export const NFL_TE_KEYS: StatKey[] = ['rec', 'targets', 'recYds', 'recTds'];
+
+/** Ordered stat keys offered for a sport (and role: MLB hitter/pitcher, NFL position). */
 export function statKeysForSport(sport: Sport, posBucket?: string | null): StatKey[] {
   if (sport === 'mlb') {
     return posBucket === 'P' ? MLB_PITCHING_KEYS : MLB_HITTING_KEYS;
+  }
+  if (sport === 'nfl') {
+    switch (posBucket) {
+      case 'QB':
+        return NFL_QB_KEYS;
+      case 'RB':
+        return NFL_RB_KEYS;
+      case 'WR':
+        return NFL_WR_KEYS;
+      case 'TE':
+        return NFL_TE_KEYS;
+      default:
+        return NFL_QB_KEYS; // fallback (shouldn't happen — every NFL player has a bucket)
+    }
   }
   return NBA_STAT_KEYS;
 }
@@ -159,6 +233,19 @@ export function statKeysForSport(sport: Sport, posBucket?: string | null): StatK
 /** The default stat to open a player page on. */
 export function defaultStatForSport(sport: Sport, posBucket?: string | null): StatKey {
   if (sport === 'mlb') return posBucket === 'P' ? 'k' : 'hits';
+  if (sport === 'nfl') {
+    switch (posBucket) {
+      case 'QB':
+        return 'passYds';
+      case 'RB':
+        return 'rushYds';
+      case 'WR':
+      case 'TE':
+        return 'recYds';
+      default:
+        return 'passYds';
+    }
+  }
   return 'pts';
 }
 

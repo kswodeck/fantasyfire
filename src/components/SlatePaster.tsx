@@ -8,7 +8,23 @@ import { pct, signed, americanOdds } from '@/lib/format';
 import { LeanArrow } from './LeanArrow';
 import { tierTextClass } from '@/lib/tierStyle';
 
-const PLACEHOLDER = 'LeBron James 25.5 points\nLuka Doncic over 8.5 assists -115\nJokic 45.5 PRA';
+// Per-sport examples so the paste box shows players + stats from the sport you're
+// on (and ones the parser actually recognizes), not a hardcoded NBA slate.
+const SLATE_EXAMPLES: Record<Sport, { placeholder: string; inline: string }> = {
+  nba: {
+    placeholder: 'LeBron James 25.5 points\nLuka Doncic over 8.5 assists -115\nNikola Jokic 45.5 PRA',
+    inline: 'Nikola Jokic 45.5 PRA -110',
+  },
+  mlb: {
+    placeholder: 'Aaron Judge 1.5 total bases\nShohei Ohtani over 0.5 home runs -120\nMookie Betts 1.5 hits',
+    inline: 'Aaron Judge 1.5 total bases -110',
+  },
+  nfl: {
+    placeholder:
+      'Patrick Mahomes 274.5 passing yards\nChristian McCaffrey over 89.5 rushing yards -115\nTyreek Hill 6.5 receptions',
+    inline: 'Patrick Mahomes 274.5 passing yards -110',
+  },
+};
 
 /**
  * Paste your REAL book lines and analyze them against the actual number (not our
@@ -20,6 +36,7 @@ export function SlatePaster({ sport }: { sport: Sport }) {
   const [results, setResults] = useState<SlateResult[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const example = SLATE_EXAMPLES[sport];
 
   async function analyze() {
     if (!text.trim()) return;
@@ -46,7 +63,7 @@ export function SlatePaster({ sport }: { sport: Sport }) {
       <h2 className="text-sm font-semibold">Paste your slate</h2>
       <p className="mt-1 text-xs text-muted">
         Paste your real book / PrizePicks lines — one per line, e.g.{' '}
-        <code className="rounded bg-surface px-1 py-0.5">Jokic 45.5 PRA -110</code>. We read each
+        <code className="rounded bg-surface px-1 py-0.5">{example.inline}</code>. We read each
         against the actual number you enter (not our typical line), and add the edge &amp; EV when
         you include odds.
       </p>
@@ -55,7 +72,7 @@ export function SlatePaster({ sport }: { sport: Sport }) {
         onChange={(e) => setText(e.target.value)}
         rows={4}
         spellCheck={false}
-        placeholder={PLACEHOLDER}
+        placeholder={example.placeholder}
         className="mt-3 w-full rounded-lg border border-line bg-surface p-2 font-mono text-sm"
       />
       <div className="mt-2 flex items-center gap-3">
@@ -67,7 +84,7 @@ export function SlatePaster({ sport }: { sport: Sport }) {
         >
           {loading ? 'Analyzing…' : 'Analyze'}
         </button>
-        {error && <span className="text-xs text-red-300">{error}</span>}
+        {error && <span className="text-xs text-under">{error}</span>}
       </div>
 
       {results && (
@@ -124,7 +141,7 @@ export function SlatePaster({ sport }: { sport: Sport }) {
 
       <p className="mt-3 text-[11px] leading-relaxed text-muted">
         FireScore is computed against the line you entered; edge &amp; EV compare recent history to
-        your price — not a guarantee. 21+. Problem gambling? Call 1-800-GAMBLER.
+        your price — not a guarantee.
       </p>
     </section>
   );

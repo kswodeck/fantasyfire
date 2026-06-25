@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
-import { StreakBoardTable } from '@/components/StreakBoardTable';
+import { FilterableStreaks } from '@/components/FilterableStreaks';
 import { FreshnessNote } from '@/components/FreshnessNote';
 import { RelatedLinks } from '@/components/RelatedLinks';
 import { getStreakBoard, getDataFreshness } from '@/lib/server/players';
@@ -83,7 +83,7 @@ export default async function StreaksPage({ params }: PageProps) {
         </p>
       ) : (
         <div className="mt-5">
-          <StreakBoardTable sport={sport} rows={rows} />
+          <FilterableStreaks sport={sport} rows={rows} />
         </div>
       )}
 
@@ -91,8 +91,7 @@ export default async function StreaksPage({ params }: PageProps) {
 
       <p className="mt-8 text-xs leading-relaxed text-muted">
         Descriptive research from public game logs — a streak describes past games and does not predict
-        the next one. Not predictions, picks, or betting advice. 21+. Problem gambling? Call
-        1-800-GAMBLER.
+        the next one. Not predictions, picks, or betting advice.
       </p>
     </div>
   );

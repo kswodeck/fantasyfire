@@ -1,23 +1,25 @@
 'use client';
 
 import type { Sport } from '@/lib/sports';
-import type { BoardRow } from '@/lib/types';
-import { BoardTable } from './BoardTable';
+import type { LeaderRow } from '@/lib/types';
+import { LeadersTable } from './LeadersTable';
 import { ListFilters } from './ListFilters';
 import { useListFilter } from './useListFilter';
 
 /**
- * Cross-player board with team + position filters and a "show more" reveal — all
- * in memory over the already-fetched rows (keeps the page statically rendered).
+ * Leaders table with team + position filters and a "show more" reveal. Ranks stay
+ * absolute, so a filtered view still shows where each player sits league-wide.
  */
-export function FilterableBoard({
+export function FilterableLeaders({
   sport,
   rows,
-  initialVisible = 25,
-  step = 25,
+  unit,
+  initialVisible = 50,
+  step = 50,
 }: {
   sport: Sport;
-  rows: BoardRow[];
+  rows: LeaderRow[];
+  unit: string;
   initialVisible?: number;
   step?: number;
 }) {
@@ -33,15 +35,15 @@ export function FilterableBoard({
         onPositionChange={f.setPosition}
         resultCount={f.filtered.length}
         totalCount={rows.length}
-        noun="leans"
+        noun="leaders"
       />
       {f.filtered.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
-          No leans match these filters.
+          No leaders match these filters.
         </p>
       ) : (
         <>
-          <BoardTable sport={sport} rows={f.shown} />
+          <LeadersTable sport={sport} rows={f.shown} unit={unit} />
           {f.visible < f.filtered.length && (
             <button
               type="button"

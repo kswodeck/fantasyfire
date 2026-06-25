@@ -4,7 +4,6 @@ import type { Sport } from '@/lib/sports';
 import { PlayerAvatar } from './PlayerAvatar';
 import { LeanArrow } from './LeanArrow';
 import { getTeam } from '@/lib/teams';
-import { num1 } from '@/lib/format';
 import { tierTextClass } from '@/lib/tierStyle';
 
 /**
@@ -21,9 +20,8 @@ export function BoardTable({ sport, rows }: { sport: Sport; rows: BoardRow[] }) 
           <li key={`${r.player.slug}-${r.stat}`}>
             <Link
               href={`/${sport}/${r.player.slug}?stat=${r.stat}&line=${r.line}`}
-              className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-surface-2"
+              className="flex items-center gap-2.5 px-3 py-2.5 transition-colors hover:bg-surface-2"
             >
-              <span className="w-5 shrink-0 text-right text-xs tabular-nums text-muted">{r.rank}</span>
               <PlayerAvatar
                 sport={sport}
                 externalId={r.player.externalId}
@@ -46,7 +44,7 @@ export function BoardTable({ sport, rows }: { sport: Sport; rows: BoardRow[] }) 
                   {r.fireScore.tier}
                 </div>
                 <div className="text-[11px] tabular-nums text-muted">
-                  FireScore {r.fireScore.score} · est {num1(r.projection)}
+                  FireScore {r.fireScore.score}
                 </div>
               </div>
             </Link>

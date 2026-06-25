@@ -5,6 +5,8 @@
 //   NBA logo:     cdn.nba.com/logos/nba/{teamId}/primary/L/logo.svg
 //   MLB headshot: midfield.mlbstatic.com/v1/people/{personId}/spots/{px}
 //   MLB logo:     www.mlbstatic.com/team-logos/{teamId}.svg
+//   NFL headshot: a.espncdn.com/i/headshots/nfl/players/full/{athleteId}.png
+//   NFL logo:     a.espncdn.com/i/teamlogos/nfl/500/{abbr}.png (keyed by abbr)
 //
 // CURATED / static: full names, cities, and brand colors aren't in a free feed,
 // so these are hand-maintained 30-team tables of public brand data. `primary` is
@@ -89,7 +91,45 @@ const MLB_TEAMS: Record<string, Entry> = {
   WSH: { name: 'Nationals', city: 'Washington', primary: '#AB0003', secondary: '#14225A' },
 };
 
-const TABLES: Record<Sport, Record<string, Entry>> = { nba: NBA_TEAMS, mlb: MLB_TEAMS };
+// NFL colors seeded from ESPN's team feed, then tuned so `primary` reads as a
+// tint on both themes (a few brands list white/black/navy as their primary —
+// swapped to the recognizable accent). Keyed by ESPN's standard abbreviations.
+const NFL_TEAMS: Record<string, Entry> = {
+  ARI: { name: 'Cardinals', city: 'Arizona', primary: '#A40227', secondary: '#000000' },
+  ATL: { name: 'Falcons', city: 'Atlanta', primary: '#A71930', secondary: '#000000' },
+  BAL: { name: 'Ravens', city: 'Baltimore', primary: '#29126F', secondary: '#000000' },
+  BUF: { name: 'Bills', city: 'Buffalo', primary: '#00338D', secondary: '#D50A0A' },
+  CAR: { name: 'Panthers', city: 'Carolina', primary: '#0085CA', secondary: '#101820' },
+  CHI: { name: 'Bears', city: 'Chicago', primary: '#E64100', secondary: '#0B162A' },
+  CIN: { name: 'Bengals', city: 'Cincinnati', primary: '#FB4F14', secondary: '#000000' },
+  CLE: { name: 'Browns', city: 'Cleveland', primary: '#FF3C00', secondary: '#311D00' },
+  DAL: { name: 'Cowboys', city: 'Dallas', primary: '#002A5C', secondary: '#B0B7BC' },
+  DEN: { name: 'Broncos', city: 'Denver', primary: '#FC4C02', secondary: '#0A2343' },
+  DET: { name: 'Lions', city: 'Detroit', primary: '#0076B6', secondary: '#B0B7BC' },
+  GB: { name: 'Packers', city: 'Green Bay', primary: '#FFB612', secondary: '#203731' },
+  HOU: { name: 'Texans', city: 'Houston', primary: '#C41230', secondary: '#03202F' },
+  IND: { name: 'Colts', city: 'Indianapolis', primary: '#003B75', secondary: '#A5ACAF' },
+  JAX: { name: 'Jaguars', city: 'Jacksonville', primary: '#007487', secondary: '#D7A22A' },
+  KC: { name: 'Chiefs', city: 'Kansas City', primary: '#E31837', secondary: '#FFB612' },
+  LAC: { name: 'Chargers', city: 'Los Angeles', primary: '#0080C6', secondary: '#FFC20E' },
+  LAR: { name: 'Rams', city: 'Los Angeles', primary: '#003594', secondary: '#FFD100' },
+  LV: { name: 'Raiders', city: 'Las Vegas', primary: '#A5ACAF', secondary: '#000000' },
+  MIA: { name: 'Dolphins', city: 'Miami', primary: '#008E97', secondary: '#FC4C02' },
+  MIN: { name: 'Vikings', city: 'Minnesota', primary: '#4F2683', secondary: '#FFC62F' },
+  NE: { name: 'Patriots', city: 'New England', primary: '#C60C30', secondary: '#002A5C' },
+  NO: { name: 'Saints', city: 'New Orleans', primary: '#D3BC8D', secondary: '#101820' },
+  NYG: { name: 'Giants', city: 'New York', primary: '#003C7F', secondary: '#C9243F' },
+  NYJ: { name: 'Jets', city: 'New York', primary: '#115740', secondary: '#000000' },
+  PHI: { name: 'Eagles', city: 'Philadelphia', primary: '#004C54', secondary: '#000000' },
+  PIT: { name: 'Steelers', city: 'Pittsburgh', primary: '#FFB612', secondary: '#101820' },
+  SEA: { name: 'Seahawks', city: 'Seattle', primary: '#69BE28', secondary: '#002A5C' },
+  SF: { name: '49ers', city: 'San Francisco', primary: '#AA0000', secondary: '#B3995D' },
+  TB: { name: 'Buccaneers', city: 'Tampa Bay', primary: '#D50A0A', secondary: '#3E3A35' },
+  TEN: { name: 'Titans', city: 'Tennessee', primary: '#4495D2', secondary: '#0C2340' },
+  WSH: { name: 'Commanders', city: 'Washington', primary: '#5A1414', secondary: '#FFB612' },
+};
+
+const TABLES: Record<Sport, Record<string, Entry>> = { nba: NBA_TEAMS, mlb: MLB_TEAMS, nfl: NFL_TEAMS };
 
 const FALLBACK: TeamBrand = {
   abbr: '',
@@ -116,14 +156,21 @@ export function playerHeadshotUrl(sport: Sport, externalId: number, size: Headsh
     const px = size === 'lg' ? '240' : '120';
     return `https://midfield.mlbstatic.com/v1/people/${externalId}/spots/${px}`;
   }
+  if (sport === 'nfl') {
+    // ESPN serves one full headshot per athlete id (used for both sizes).
+    return `https://a.espncdn.com/i/headshots/nfl/players/full/${externalId}.png`;
+  }
   const px = size === 'lg' ? '1040x760' : '260x190';
   return `https://cdn.nba.com/headshots/nba/latest/${px}/${externalId}.png`;
 }
 
-/** Official team logo (SVG) for a team's external id. */
-export function teamLogoUrl(sport: Sport, externalId: number): string {
+/** Official team logo for a team. NFL logos are keyed by abbreviation, not id. */
+export function teamLogoUrl(sport: Sport, externalId: number, abbr?: string | null): string {
   if (sport === 'mlb') {
     return `https://www.mlbstatic.com/team-logos/${externalId}.svg`;
+  }
+  if (sport === 'nfl') {
+    return `https://a.espncdn.com/i/teamlogos/nfl/500/${(abbr ?? '').toLowerCase()}.png`;
   }
   return `https://cdn.nba.com/logos/nba/${externalId}/primary/L/logo.svg`;
 }

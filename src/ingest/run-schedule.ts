@@ -8,10 +8,10 @@
 //   pnpm schedule
 import 'dotenv/config';
 import { db } from '../lib/db';
-import { fetchMlbSchedule, fetchNbaSchedule, type ScheduleGameRow } from './schedule';
+import { fetchMlbSchedule, fetchNbaSchedule, fetchNflSchedule, type ScheduleGameRow } from './schedule';
 
-/** Today + tomorrow as YYYY-MM-DD in US Eastern (the betting day). */
-function slateDates(): string[] {
+/** The next `days` calendar days as YYYY-MM-DD in US Eastern (the betting day). */
+function slateDates(days = 2): string[] {
   const fmt = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/New_York',
     year: 'numeric',
@@ -19,16 +19,17 @@ function slateDates(): string[] {
     day: '2-digit',
   });
   const now = Date.now();
-  return [fmt.format(new Date(now)), fmt.format(new Date(now + 86_400_000))];
+  return Array.from({ length: days }, (_, i) => fmt.format(new Date(now + i * 86_400_000)));
 }
 
 async function ingestSport(
-  sport: 'mlb' | 'nba',
+  sport: 'mlb' | 'nba' | 'nfl',
   fetcher: (date: string) => Promise<ScheduleGameRow[]>,
   resolveTeam: (key: string) => number | undefined,
+  dates: string[],
 ): Promise<void> {
   const rows: ScheduleGameRow[] = [];
-  for (const date of slateDates()) {
+  for (const date of dates) {
     try {
       rows.push(...(await fetcher(date)));
     } catch (err) {
@@ -69,15 +70,20 @@ async function ingestSport(
 }
 
 async function main() {
-  const [mlbTeams, nbaTeams] = await Promise.all([
+  const [mlbTeams, nbaTeams, nflTeams] = await Promise.all([
     db.team.findMany({ where: { sport: 'mlb' }, select: { id: true, externalId: true } }),
     db.team.findMany({ where: { sport: 'nba' }, select: { id: true, abbreviation: true } }),
+    db.team.findMany({ where: { sport: 'nfl' }, select: { id: true, abbreviation: true } }),
   ]);
   const mlbByExternalId = new Map(mlbTeams.map((t) => [String(t.externalId), t.id]));
   const nbaByAbbr = new Map(nbaTeams.map((t) => [t.abbreviation, t.id]));
+  const nflByAbbr = new Map(nflTeams.map((t) => [t.abbreviation, t.id]));
 
-  await ingestSport('mlb', fetchMlbSchedule, (k) => mlbByExternalId.get(k));
-  await ingestSport('nba', fetchNbaSchedule, (k) => nbaByAbbr.get(k));
+  const daily = slateDates(2);
+  await ingestSport('mlb', fetchMlbSchedule, (k) => mlbByExternalId.get(k), daily);
+  await ingestSport('nba', fetchNbaSchedule, (k) => nbaByAbbr.get(k), daily);
+  // NFL plays weekly (Thu–Mon) — pull the next 8 days so the full week is present.
+  await ingestSport('nfl', fetchNflSchedule, (k) => nflByAbbr.get(k), slateDates(8));
 
   // Prune games older than 3 days so the table stays small.
   const cutoff = new Date(Date.now() - 3 * 86_400_000);

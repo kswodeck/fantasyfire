@@ -26,11 +26,20 @@ const MLB_POSITION_GROUPS: { value: string; label: string; abbrs: string[] }[] =
   { value: 'DH', label: 'DH', abbrs: ['DH'] },
 ];
 
+// NFL buckets the posBucket directly (QB/RB/WR/TE). The `position` abbreviation
+// can be more granular (HB, FB, SLOT, …) so a few aliases map onto the buckets.
+const NFL_POSITION_GROUPS: { value: string; label: string; abbrs: string[] }[] = [
+  { value: 'QB', label: 'Quarterbacks', abbrs: ['QB'] },
+  { value: 'RB', label: 'Running Backs', abbrs: ['RB', 'HB', 'FB'] },
+  { value: 'WR', label: 'Wide Receivers', abbrs: ['WR'] },
+  { value: 'TE', label: 'Tight Ends', abbrs: ['TE'] },
+];
+
 /** Position filter options for a sport (the "All positions" default is added by the UI). */
 export function positionFilterOptions(sport: Sport): FilterOption[] {
-  return sport === 'nba'
-    ? NBA_POSITIONS
-    : MLB_POSITION_GROUPS.map(({ value, label }) => ({ value, label }));
+  if (sport === 'nba') return NBA_POSITIONS;
+  const groups = sport === 'nfl' ? NFL_POSITION_GROUPS : MLB_POSITION_GROUPS;
+  return groups.map(({ value, label }) => ({ value, label }));
 }
 
 /**
@@ -48,6 +57,12 @@ export function playerMatchesPosition(
   if (sport === 'nba') {
     const p = (position ?? posBucket ?? '').toUpperCase();
     return p.includes(category); // category ∈ G | F | C
+  }
+  if (sport === 'nfl') {
+    // posBucket is authoritative (QB/RB/WR/TE); fall back to the position abbr.
+    if (posBucket) return posBucket === category;
+    const g = NFL_POSITION_GROUPS.find((x) => x.value === category);
+    return g ? g.abbrs.includes((position ?? '').toUpperCase()) : false;
   }
   const group = MLB_POSITION_GROUPS.find((g) => g.value === category);
   if (!group) return false;

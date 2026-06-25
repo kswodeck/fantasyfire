@@ -56,14 +56,37 @@ export function previousMlbSeason(season: string): string {
   return String(Number.parseInt(season, 10) - 1);
 }
 
+// ---- NFL (single calendar year; season runs ~September–February) ----
+
+/**
+ * Current NFL season as a year string ("2025"). NFL_SEASON can override it.
+ * The season is labelled by its START year, so Jan/Feb playoff games belong to
+ * the prior year (cutoff: August). Today (mid-2026) resolves to "2025".
+ */
+export function currentNflSeason(now: Date = new Date()): string {
+  const override = process.env.NFL_SEASON?.trim();
+  if (override && /^\d{4}$/.test(override)) return override;
+  // Aug–Dec belong to this year's season; Jan–Jul belong to last year's.
+  return String(now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1);
+}
+
+/** The NFL season before the given one: "2025" -> "2024". */
+export function previousNflSeason(season: string): string {
+  return String(Number.parseInt(season, 10) - 1);
+}
+
 // ---- Sport-generic helpers ----
 
 import type { Sport } from './sports';
 
 export function currentSeason(sport: Sport, now: Date = new Date()): string {
-  return sport === 'mlb' ? currentMlbSeason(now) : configuredSeason(now);
+  if (sport === 'mlb') return currentMlbSeason(now);
+  if (sport === 'nfl') return currentNflSeason(now);
+  return configuredSeason(now);
 }
 
 export function previousSeason(sport: Sport, season: string): string {
-  return sport === 'mlb' ? previousMlbSeason(season) : previousNbaSeason(season);
+  if (sport === 'mlb') return previousMlbSeason(season);
+  if (sport === 'nfl') return previousNflSeason(season);
+  return previousNbaSeason(season);
 }

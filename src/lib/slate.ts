@@ -49,6 +49,22 @@ const STAT_ALIASES: Array<[StatKey, string[]]> = [
   ['outs', ['outs recorded', 'outs']],
   ['ha', ['hits allowed', 'ha']],
   ['bba', ['walks allowed', 'bba']],
+  // NFL passing
+  ['passYds', ['passing yards', 'pass yards', 'passing yds', 'pass yds']],
+  ['passTds', ['passing touchdowns', 'passing tds', 'pass touchdowns', 'pass tds', 'passing td', 'pass td']],
+  ['passCmp', ['completions', 'pass completions', 'cmp']],
+  ['passAtt', ['passing attempts', 'pass attempts', 'pass att']],
+  ['ints', ['interceptions', 'interception', 'ints', 'int']],
+  // NFL rushing
+  ['rushYds', ['rushing yards', 'rush yards', 'rushing yds', 'rush yds']],
+  ['rushTds', ['rushing touchdowns', 'rushing tds', 'rush touchdowns', 'rush tds', 'rushing td', 'rush td']],
+  ['carries', ['rushing attempts', 'rush attempts', 'carries', 'carry', 'rush att']],
+  // NFL receiving — combos (rec yds / rec tds) BEFORE bare receptions
+  ['recYds', ['receiving yards', 'rec yards', 'receiving yds', 'rec yds']],
+  ['recTds', ['receiving touchdowns', 'receiving tds', 'rec touchdowns', 'rec tds', 'receiving td', 'rec td']],
+  ['rec', ['receptions', 'reception', 'recs', 'catches', 'rec']],
+  ['targets', ['targets', 'target', 'tgts', 'tgt']],
+  ['fumbles', ['fumbles lost', 'fumbles', 'fumble']],
 ];
 
 function escapeRe(s: string): string {

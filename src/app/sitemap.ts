@@ -12,6 +12,7 @@ const newer = (a: Date | null, b: Date | null): Date | null =>
 const LEADER_STATS: Record<Sport, string[]> = {
   nba: ['pts', 'reb', 'ast', 'fg3m', 'stl', 'blk', 'pra'],
   mlb: ['hits', 'tb', 'hr', 'rbi', 'runs', 'sb', 'bb', 'so'],
+  nfl: ['passYds', 'passTds', 'rushYds', 'rushTds', 'rec', 'recYds', 'recTds'],
 };
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

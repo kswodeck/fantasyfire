@@ -46,7 +46,7 @@ export default function MethodologyPage() {
 
         <h2>The data</h2>
         <p>
-          Everything is computed from publicly available NBA and MLB box-score game logs,
+          Everything is computed from publicly available NBA, MLB, and NFL box-score game logs,
           ingested nightly into our database. The web app only reads that data — it never
           invents it. Each player page shows a <strong>&ldquo;Stats updated through&rdquo;
           date</strong>: these are completed-game box scores refreshed once a day, not a
@@ -128,6 +128,13 @@ export default function MethodologyPage() {
           matchup). Positions are coarse on purpose — three buckets give denser samples —
           and any cell built on fewer than {DVP_LOW_SAMPLE}{' '}player-games is flagged as low
           sample. Don&rsquo;t read precision into a noisy cell.
+        </p>
+        <p>
+          <strong>NFL — Defense vs. Position.</strong> For each opponent and position
+          bucket (QB / RB / WR / TE) we average the stat that opponent allows, then rank
+          all 32 teams: <strong>rank 1 = allows the most</strong> (the softest matchup).
+          As with the NBA, the buckets are coarse on purpose, and any cell built on fewer
+          than {DVP_LOW_SAMPLE}{' '}player-games is flagged as low sample.
         </p>
         <p>
           <strong>MLB — opposing pitching.</strong> For a hitter we show how much of the

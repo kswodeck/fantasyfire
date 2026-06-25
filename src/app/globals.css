@@ -1,58 +1,62 @@
 @import 'tailwindcss';
 
 /*
- * FantasyFire design tokens. Light/dark values live on :root and switch via
- * prefers-color-scheme; @theme maps them to Tailwind utilities (bg-surface,
- * text-muted, text-over, border-line, etc.). Mobile-first, clean, uncluttered.
+ * FantasyFire design tokens. Every color is a light-dark() pair so a single
+ * `color-scheme` switch flips the whole theme — no duplicated blocks, no FOUC.
+ *   - default (:root): color-scheme: light dark → follows the OS automatically.
+ *   - [data-theme='light'|'dark']: a saved user choice overrides the OS.
+ * The inline script in the root layout sets data-theme from localStorage before
+ * paint; the ThemeToggle writes it. @theme maps the tokens to Tailwind utilities
+ * (bg-surface, text-muted, text-sig-green, border-line, …).
+ *
+ * Every text/background pairing below is chosen to clear WCAG-AA (4.5:1 for
+ * normal text) in BOTH modes — light values run dark on white, dark values run
+ * light on near-black.
  */
 :root {
-  --background: #fafaf9; /* warm off-white */
-  --foreground: #1c1917; /* stone-900 */
-  --surface: #ffffff; /* cards */
-  --surface-2: #f5f5f4; /* subtle fills */
-  --line: #e7e5e4; /* borders */
-  --muted: #78716c; /* secondary text */
+  color-scheme: light dark;
 
-  --brand: #ea580c; /* orange-600 — the "fire" */
-  --brand-strong: #c2410c; /* orange-700 */
-  --brand-foreground: #ffffff;
+  --background: light-dark(#fafaf9, #0c0a09);
+  --foreground: light-dark(#1c1917, #f5f5f4);
+  --surface: light-dark(#ffffff, #1c1917);
+  --surface-2: light-dark(#f5f5f4, #292524);
+  --line: light-dark(#e7e5e4, #2f2b29);
+  --muted: light-dark(#57534e, #a8a29e); /* stone-600 / stone-400 — AA on both */
 
-  /* Outcome semantics for hit-rate visuals */
-  --over: #16a34a; /* green-600 */
-  --over-soft: #dcfce7; /* green-100 */
-  --under: #dc2626; /* red-600 */
-  --under-soft: #fee2e2; /* red-100 */
-  --push: #a8a29e; /* stone-400 */
+  --brand: light-dark(#c2410c, #fb923c); /* orange-700 / orange-400 */
+  --brand-strong: light-dark(#9a3412, #fdba74);
+  --brand-foreground: light-dark(#ffffff, #1c1917);
+
+  /* Outcome semantics (text + chart bars + soft fills) */
+  --over: light-dark(#15803d, #4ade80); /* green-700 / green-400 */
+  --over-soft: light-dark(#dcfce7, #14532d);
+  --under: light-dark(#b91c1c, #f87171); /* red-700 / red-400 */
+  --under-soft: light-dark(#fee2e2, #7f1d1d);
+  --push: light-dark(#57534e, #a8a29e);
 
   /* Confidence badges */
-  --conf-high: #16a34a;
-  --conf-med: #d97706; /* amber-600 */
-  --conf-low: #dc2626;
+  --conf-high: light-dark(#15803d, #4ade80);
+  --conf-med: light-dark(#b45309, #fbbf24); /* amber-700 / amber-400 */
+  --conf-low: light-dark(#b91c1c, #fca5a5); /* red-300 in dark clears AA on under-soft */
+
+  /* Soft warning fill (low-sample / "confirm active" badges) */
+  --surface-warn: light-dark(#fef3c7, #3a2a06);
+
+  /* Signal scale for FireScore tiers + A–F matchup grades. green = over/good,
+     red = under/tough; deeper at the strong end, warming to amber/orange. */
+  --sig-green-strong: light-dark(#065f46, #34d399); /* emerald-800 / emerald-400 */
+  --sig-green: light-dark(#15803d, #86efac); /* green-700 / green-300 */
+  --sig-amber: light-dark(#b45309, #fbbf24); /* amber-700 / amber-400 */
+  --sig-orange: light-dark(#9a3412, #f97316); /* orange-800 / orange-500 */
+  --sig-red: light-dark(#b91c1c, #fca5a5); /* red-700 / red-300 */
+  --sig-red-strong: light-dark(#991b1b, #f87171); /* red-800 / red-400 */
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0c0a09; /* stone-950 */
-    --foreground: #f5f5f4;
-    --surface: #1c1917; /* stone-900 */
-    --surface-2: #292524; /* stone-800 */
-    --line: #292524;
-    --muted: #a8a29e;
-
-    --brand: #fb923c; /* orange-400 reads better on dark */
-    --brand-strong: #f97316;
-    --brand-foreground: #1c1917;
-
-    --over: #4ade80;
-    --over-soft: #14532d;
-    --under: #f87171;
-    --under-soft: #7f1d1d;
-    --push: #78716c;
-
-    --conf-high: #4ade80;
-    --conf-med: #fbbf24;
-    --conf-low: #f87171;
-  }
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -76,6 +80,15 @@
   --color-conf-high: var(--conf-high);
   --color-conf-med: var(--conf-med);
   --color-conf-low: var(--conf-low);
+
+  --color-surface-warn: var(--surface-warn);
+
+  --color-sig-green-strong: var(--sig-green-strong);
+  --color-sig-green: var(--sig-green);
+  --color-sig-amber: var(--sig-amber);
+  --color-sig-orange: var(--sig-orange);
+  --color-sig-red: var(--sig-red);
+  --color-sig-red-strong: var(--sig-red-strong);
 
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;

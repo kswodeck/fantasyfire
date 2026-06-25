@@ -23,6 +23,8 @@
     "ingest:prod": "dotenv -e .env.prod.local -- tsx src/ingest/run-ingest.ts",
     "ingest:mlb": "tsx src/ingest/run-ingest-mlb.ts",
     "ingest:mlb:prod": "dotenv -e .env.prod.local -- tsx src/ingest/run-ingest-mlb.ts",
+    "ingest:nfl": "tsx src/ingest/run-ingest-nfl.ts",
+    "ingest:nfl:prod": "dotenv -e .env.prod.local -- tsx src/ingest/run-ingest-nfl.ts",
     "schedule": "tsx src/ingest/run-schedule.ts",
     "schedule:prod": "dotenv -e .env.prod.local -- tsx src/ingest/run-schedule.ts",
     "backtest": "tsx src/ingest/run-backtest.ts",

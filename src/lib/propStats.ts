@@ -9,6 +9,9 @@ import type { StatKey } from './stats';
 export const PROP_STATS: Record<Sport, StatKey[]> = {
   nba: ['pts', 'reb', 'ast', 'fg3m', 'pra', 'stl', 'blk', 'tov'],
   mlb: ['hits', 'tb', 'hr', 'rbi', 'runs', 'sb', 'so', 'bb'],
+  // The union of prop-page-worthy NFL markets. getPropStatParams intersects this
+  // with a player's position keys, so a WR never gets a passing-yards page.
+  nfl: ['passYds', 'passTds', 'passCmp', 'rushYds', 'carries', 'rushTds', 'rec', 'targets', 'recYds', 'recTds'],
 };
 
 export function isPropStat(sport: Sport, stat: string): stat is StatKey {

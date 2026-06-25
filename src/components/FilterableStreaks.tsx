@@ -1,23 +1,20 @@
 'use client';
 
 import type { Sport } from '@/lib/sports';
-import type { BoardRow } from '@/lib/types';
-import { BoardTable } from './BoardTable';
+import type { StreakRow } from '@/lib/types';
+import { StreakBoardTable } from './StreakBoardTable';
 import { ListFilters } from './ListFilters';
 import { useListFilter } from './useListFilter';
 
-/**
- * Cross-player board with team + position filters and a "show more" reveal — all
- * in memory over the already-fetched rows (keeps the page statically rendered).
- */
-export function FilterableBoard({
+/** Streaks board with team + position filters and a "show more" reveal. */
+export function FilterableStreaks({
   sport,
   rows,
-  initialVisible = 25,
-  step = 25,
+  initialVisible = 50,
+  step = 50,
 }: {
   sport: Sport;
-  rows: BoardRow[];
+  rows: StreakRow[];
   initialVisible?: number;
   step?: number;
 }) {
@@ -33,15 +30,15 @@ export function FilterableBoard({
         onPositionChange={f.setPosition}
         resultCount={f.filtered.length}
         totalCount={rows.length}
-        noun="leans"
+        noun="streaks"
       />
       {f.filtered.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
-          No leans match these filters.
+          No streaks match these filters.
         </p>
       ) : (
         <>
-          <BoardTable sport={sport} rows={f.shown} />
+          <StreakBoardTable sport={sport} rows={f.shown} />
           {f.visible < f.filtered.length && (
             <button
               type="button"

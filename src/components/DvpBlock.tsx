@@ -5,12 +5,20 @@ import { getTeam } from '@/lib/teams';
 import type { Sport } from '@/lib/sports';
 import { TeamLogo } from './TeamLogo';
 
-const POS_LABEL: Record<string, string> = { G: 'guards', F: 'forwards', C: 'centers' };
+const POS_LABEL: Record<string, string> = {
+  G: 'guards',
+  F: 'forwards',
+  C: 'centers',
+  QB: 'quarterbacks',
+  RB: 'running backs',
+  WR: 'wide receivers',
+  TE: 'tight ends',
+};
 
 /**
  * Matchup block for the player's most-recent opponent: rank, raw average
  * allowed, and a low-sample flag — tinted in the opponent's team color, with
- * their logo and the game date. NBA = defense-vs-position; MLB = the opposing
+ * their logo and the game date. NBA/NFL = defense-vs-position; MLB = the opposing
  * pitching staff's allowed rate. Coarse on purpose — sample size is surfaced.
  */
 export function DvpBlock({
@@ -92,7 +100,7 @@ export function DvpBlock({
       <p className="mt-2 text-xs text-muted">
         Sample: {dvp.sampleSize} {sport === 'mlb' ? 'games' : 'player-games'}
         {dvp.lowSample && (
-          <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 font-medium text-conf-med dark:bg-amber-950/40">
+          <span className="ml-1 rounded bg-surface-warn px-1.5 py-0.5 font-medium text-conf-med">
             low sample — interpret with caution
           </span>
         )}

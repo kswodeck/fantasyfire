@@ -6,7 +6,7 @@ import { formatIsoDate, pct } from '@/lib/format';
 import { getTeam } from '@/lib/teams';
 import { currentSeason } from '@/lib/season';
 import { breadcrumbList, datasetNode, graph } from '@/lib/jsonLd';
-import { STAT_DEFS, type StatKey } from '@/lib/stats';
+import { STAT_DEFS, statKeysForSport, defaultStatForSport, type StatKey } from '@/lib/stats';
 import { PROP_STATS, isPropStat } from '@/lib/propStats';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
 import { PlayerResearchClient } from '@/components/PlayerResearchClient';
@@ -62,16 +62,18 @@ export default async function PlayerStatPage({ params }: PageProps) {
   if (!isSport(raw)) notFound();
   const sport: Sport = raw;
   const cfg = SPORTS[sport];
-  const defaultStat = sport === 'nba' ? 'pts' : 'hits';
   if (!isPropStat(sport, rawStat)) notFound();
-  // The default stat lives on the base player page — send /[slug]/[default] there.
-  if (rawStat === defaultStat) redirect(`/${sport}/${playerSlug}`);
 
   const research = await getPlayerResearch(sport, playerSlug, rawStat as StatKey);
   if (!research) notFound();
-  // getPlayerResearch silently falls back to the default stat for an invalid one;
-  // require the requested stat to be the one returned (else 404, no thin dupes).
+  // getPlayerResearch silently falls back to the default stat for an invalid one
+  // (incl. a stat not offered for this player's position); require the requested
+  // stat to be the one returned (else 404, no thin dupes).
   if (research.stat !== rawStat) notFound();
+
+  // The role-specific default stat lives on the base player page — redirect there.
+  const defaultStat = defaultStatForSport(sport, research.player.posBucket);
+  if (rawStat === defaultStat) redirect(`/${sport}/${playerSlug}`);
 
   const stat = research.stat;
   const label = STAT_DEFS[stat].label;
@@ -91,7 +93,9 @@ export default async function PlayerStatPage({ params }: PageProps) {
       ? `${player.fullName} has gone over ${research.line} ${short} in ${l10.overs} of his last ${l10.decided} decided games (${pct(l10.hitRateOver ?? 0)}), measured against our typical-game line.`
       : `${player.fullName} ${label.toLowerCase()} hit rates and matchup research from public game logs.`;
 
-  const siblingStats = PROP_STATS[sport].filter((s) => s !== stat && s !== defaultStat);
+  const siblingStats = statKeysForSport(sport, research.player.posBucket).filter(
+    (s) => PROP_STATS[sport].includes(s) && s !== stat && s !== defaultStat,
+  );
 
   const jsonLd = graph([
     {
@@ -200,7 +204,7 @@ export default async function PlayerStatPage({ params }: PageProps) {
 
       <p className="mt-8 text-xs leading-relaxed text-muted">
         Descriptive research from public game logs — hit rates describe past games and are not
-        predictions, picks, or betting advice. 21+. Problem gambling? Call 1-800-GAMBLER.
+        predictions, picks, or betting advice.
       </p>
     </div>
   );

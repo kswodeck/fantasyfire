@@ -5,7 +5,7 @@ import { FlameMark } from '@/components/FlameMark';
 import { SearchForm } from '@/components/SearchForm';
 import { BoardTable } from '@/components/BoardTable';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
-import { getBoard, getSportSummary } from '@/lib/server/players';
+import { getBoard } from '@/lib/server/players';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
 import type { BoardRow } from '@/lib/types';
 
@@ -39,12 +39,8 @@ export default async function SportHome({ params }: PageProps) {
   const cfg = SPORTS[sport];
 
   let leans: BoardRow[] = [];
-  let summary: { players: number; games: number; season: string } | null = null;
   try {
-    [leans, summary] = await Promise.all([
-      getBoard(sport, { limit: 9 }),
-      getSportSummary(sport),
-    ]);
+    leans = await getBoard(sport, { limit: 9 });
   } catch {
     // DB unavailable — render the hero without the leans.
   }
@@ -64,15 +60,10 @@ export default async function SportHome({ params }: PageProps) {
         <div className="w-full max-w-xl">
           <SearchForm sport={sport} />
         </div>
-        {summary && (
-          <p className="text-sm text-muted">
-            {summary.players} players · {summary.games} games · season {summary.season}
-          </p>
-        )}
         <div className="flex flex-wrap items-center justify-center gap-3">
           <Link
             href={`/${sport}/today`}
-            className="rounded-full px-5 py-2 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90"
+            className="rounded-full px-5 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
             style={{ backgroundColor: cfg.accent }}
           >
             {cfg.name} Today →

@@ -21,7 +21,7 @@ export default function HowItWorksPage() {
 
       <Prose>
         <p>
-          Every number on {SITE.name} is computed from public NBA and MLB game logs — no black
+          Every number on {SITE.name} is computed from public NBA, MLB, and NFL game logs — no black
           box, no proprietary &ldquo;model&rdquo; you have to take on faith. Here&rsquo;s
           exactly what we do.
         </p>
@@ -52,9 +52,12 @@ export default function HowItWorksPage() {
           average how much of a stat they allow to a player&rsquo;s position bucket (Guard /
           Forward / Center) and rank all 30 teams, where rank 1 allows the most (the
           softest matchup). In MLB we show the opposing pitching staff&rsquo;s allowed rate
-          for a hitting stat, ranked across the league. Either way we keep buckets coarse
-          for denser samples and always show the sample size rather than over-claiming
-          precision.
+          for a hitting stat, ranked across the league. In the NFL we compute{' '}
+          <strong>Defense vs. Position</strong> too: for each opponent we average how much
+          of a stat they allow to a player&rsquo;s position bucket (QB / RB / WR / TE) and
+          rank all 32 teams, where rank 1 is the softest matchup. Either way we keep buckets
+          coarse for denser samples and always show the sample size rather than
+          over-claiming precision.
         </p>
 
         <h2>Qualifying games</h2>
@@ -84,8 +87,8 @@ export default function HowItWorksPage() {
 
         <h2>Data &amp; freshness</h2>
         <p>
-          Player profiles, box scores, and matchups come from publicly available NBA and
-          MLB game logs and are refreshed nightly. The current season is determined
+          Player profiles, box scores, and matchups come from publicly available NBA, MLB,
+          and NFL game logs and are refreshed nightly. The current season is determined
           automatically by the calendar. Lines are entered by you — {SITE.name} does not pull live
           sportsbook odds.
         </p>

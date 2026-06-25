@@ -1,5 +1,8 @@
 import Link from 'next/link';
 import { FlameMark } from './FlameMark';
+import { SportMenu } from './SportMenu';
+import { ThemeToggle } from './ThemeToggle';
+import { SPORT_LIST } from '@/lib/sports';
 
 // Site chrome. Data-agnostic; safe to reuse in any build.
 export function SiteHeader() {
@@ -12,16 +15,14 @@ export function SiteHeader() {
             Fantasy<span className="text-brand">Fire</span>
           </span>
         </Link>
-        <nav className="flex items-center gap-5 text-sm text-muted">
+        <nav className="flex items-center gap-4 text-sm text-muted sm:gap-5">
           <Link href="/" className="transition-colors hover:text-foreground">
             Home
           </Link>
-          <Link href="/nba" className="transition-colors hover:text-foreground">
-            NBA
-          </Link>
-          <Link href="/mlb" className="transition-colors hover:text-foreground">
-            MLB
-          </Link>
+          {SPORT_LIST.map((s) => (
+            <SportMenu key={s} sport={s} />
+          ))}
+          <ThemeToggle className="-mr-1.5" />
         </nav>
       </div>
     </header>

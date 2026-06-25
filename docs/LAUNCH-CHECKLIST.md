@@ -154,9 +154,10 @@ Insights (Core Web Vitals) + PageSpeed/Lighthouse (lab).**
   `Permissions-Policy`, `X-Frame-Options: DENY`, and a **static CSP**. Use `'unsafe-inline'`
   (NOT a nonce CSP — in Next 16 a nonce CSP forces every page dynamic and kills your static
   SEO/ISR). The CSP must allowlist: `script/connect-src https://cloud.umami.is` and
-  `img-src https://cdn.nba.com https://midfield.mlbstatic.com https://www.mlbstatic.com`.
-  Test on a Vercel **Preview** with DevTools open across NBA + MLB pages and `/faq`, clearing
-  every violation first. <https://nextjs.org/docs/app/guides/content-security-policy>
+  `img-src https://cdn.nba.com https://midfield.mlbstatic.com https://www.mlbstatic.com https://a.espncdn.com`
+  (a.espncdn.com serves the NFL headshots + team logos). Test on a Vercel **Preview** with DevTools
+  open across NBA + MLB + NFL pages and `/faq`, clearing every violation first.
+  <https://nextjs.org/docs/app/guides/content-security-policy>
 - **[Owner] Test headers:** <https://securityheaders.com> (web UI; the API was retired) and
   Mozilla **HTTP Observatory** (the authoritative CSP check — it'll flag `unsafe-inline`, which
   is an accepted v1 tradeoff since there's no user content/auth/cookies).

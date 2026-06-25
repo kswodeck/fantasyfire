@@ -8,6 +8,7 @@ const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
     links: [
       { label: 'NBA', href: '/nba' },
       { label: 'MLB', href: '/mlb' },
+      { label: 'NFL', href: '/nfl' },
     ],
   },
   {
@@ -45,7 +46,7 @@ export function SiteFooter() {
               </span>
             </Link>
             <p className="mt-3 text-xs leading-relaxed text-muted">
-              Honest player-prop research, built on public NBA and MLB game logs.
+              Honest player-prop research, built on public NBA, MLB, and NFL game logs.
             </p>
             <a
               href={`mailto:${SITE.email}`}
@@ -79,7 +80,7 @@ export function SiteFooter() {
         <div className="mt-8 space-y-2 border-t border-line pt-6 text-xs leading-relaxed text-muted">
           <p>
             <strong className="text-foreground">{SITE.name}</strong> is a research tool
-            built on public NBA and MLB game logs. Hit rates and matchup numbers are
+            built on public NBA, MLB, and NFL game logs. Hit rates and matchup numbers are
             descriptive statistics about past performance — they are{' '}
             <strong className="text-foreground">
               not predictions, advice, or a guarantee
@@ -88,7 +89,7 @@ export function SiteFooter() {
             1-800-GAMBLER.
           </p>
           <p>
-            Not affiliated with or endorsed by the NBA, MLB, or any team. © {year}{' '}
+            Not affiliated with or endorsed by the NBA, MLB, NFL, or any team. © {year}{' '}
             {SITE.name}.
           </p>
         </div>

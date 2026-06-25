@@ -126,8 +126,7 @@ export default async function AccuracyPage({ params }: PageProps) {
       <RelatedLinks links={sportMeshLinks(sport, 'accuracy')} />
 
       <p className="mt-6 text-xs leading-relaxed text-muted">
-        Descriptive research from public game logs — not predictions, picks, or betting advice. 21+.
-        Problem gambling? Call 1-800-GAMBLER.
+        Descriptive research from public game logs — not predictions, picks, or betting advice.
       </p>
     </div>
   );

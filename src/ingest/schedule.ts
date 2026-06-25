@@ -107,3 +107,29 @@ export async function fetchNbaSchedule(date: string): Promise<ScheduleGameRow[]>
     })
     .filter((r) => r.homeKey && r.awayKey);
 }
+
+/** ESPN's NFL abbreviations already match our team table; normalize for safety. */
+export function normalizeNflAbbr(a: string): string {
+  return a.toUpperCase();
+}
+
+export async function fetchNflSchedule(date: string): Promise<ScheduleGameRow[]> {
+  const data = (await getJson(
+    `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=${date.replace(/-/g, '')}`,
+  )) as EspnScoreboard;
+  const events = data.events ?? [];
+  return events
+    .map((e): ScheduleGameRow => {
+      const comp = e.competitions?.[0];
+      const home = comp?.competitors?.find((c) => c.homeAway === 'home');
+      const away = comp?.competitors?.find((c) => c.homeAway === 'away');
+      return {
+        externalId: String(e.id),
+        dateIso: (e.date ?? `${date}T00:00Z`).slice(0, 10),
+        status: comp?.status?.type?.description ?? 'Scheduled',
+        homeKey: home?.team?.abbreviation ? normalizeNflAbbr(home.team.abbreviation) : '',
+        awayKey: away?.team?.abbreviation ? normalizeNflAbbr(away.team.abbreviation) : '',
+      };
+    })
+    .filter((r) => r.homeKey && r.awayKey);
+}

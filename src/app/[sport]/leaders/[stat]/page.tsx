@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
-import { LeadersTable } from '@/components/LeadersTable';
+import { FilterableLeaders } from '@/components/FilterableLeaders';
 import { FreshnessNote } from '@/components/FreshnessNote';
 import { RelatedLinks } from '@/components/RelatedLinks';
 import { JsonLd } from '@/components/JsonLd';
@@ -22,6 +22,7 @@ export const dynamicParams = false;
 const LEADER_STATS: Record<Sport, StatKey[]> = {
   nba: ['pts', 'reb', 'ast', 'fg3m', 'stl', 'blk', 'pra'],
   mlb: ['hits', 'tb', 'hr', 'rbi', 'runs', 'sb', 'bb', 'so'],
+  nfl: ['passYds', 'passTds', 'rushYds', 'rushTds', 'rec', 'recYds', 'recTds'],
 };
 
 export function generateStaticParams() {
@@ -60,12 +61,12 @@ export default async function LeadersPage({ params }: PageProps) {
   const label = STAT_DEFS[stat].label;
   const short = STAT_DEFS[stat].short;
   const season = currentSeason(sport);
-  const defaultStat = sport === 'mlb' ? 'hits' : 'pts';
+  const defaultStat = sport === 'mlb' ? 'hits' : sport === 'nfl' ? 'passYds' : 'pts';
 
   let rows: LeaderRow[] = [];
   let freshness: string | null = null;
   try {
-    [rows, freshness] = await Promise.all([getLeaders(sport, stat, 50), getDataFreshness(sport)]);
+    [rows, freshness] = await Promise.all([getLeaders(sport, stat, 100), getDataFreshness(sport)]);
   } catch {
     // DB unavailable — render the empty state.
   }
@@ -140,7 +141,7 @@ export default async function LeadersPage({ params }: PageProps) {
         </p>
       ) : (
         <div className="mt-5">
-          <LeadersTable sport={sport} rows={rows} unit={short} />
+          <FilterableLeaders sport={sport} rows={rows} unit={short} />
         </div>
       )}
 
@@ -148,7 +149,7 @@ export default async function LeadersPage({ params }: PageProps) {
 
       <p className="mt-8 text-xs leading-relaxed text-muted">
         Descriptive research from public game logs — season averages, not predictions, picks, or betting
-        advice. 21+. Problem gambling? Call 1-800-GAMBLER.
+        advice.
       </p>
     </div>
   );

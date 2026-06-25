@@ -9,7 +9,7 @@ export function sportMeshLinks(
   excludeSeg?: string,
 ): { label: string; href: string; hint?: string }[] {
   const name = SPORTS[sport].name;
-  const leadersStat = sport === 'mlb' ? 'hits' : 'pts';
+  const leadersStat = sport === 'mlb' ? 'hits' : sport === 'nfl' ? 'passYds' : 'pts';
   const items: { seg: string; label: string; href: string; hint: string }[] = [
     { seg: 'today', label: `${name} Today`, href: `/${sport}/today`, hint: "Today's slate and leans on the teams playing." },
     { seg: 'board', label: `${name} Top Leans`, href: `/${sport}/board`, hint: 'Strongest FireScore leans, ranked.' },

@@ -13,9 +13,10 @@ export function PlayerBioBar({
 }) {
   const items: { label: string; value: string }[] = [];
 
-  // Only assert draft status for NBA (we ingest draft data there); for MLB we
-  // simply omit it rather than mislabel everyone "Undrafted".
-  if (sport === 'nba' || bio.draftYear) {
+  // Assert draft status for NBA + NFL (we ingest draft data there, and an
+  // "Undrafted" NFL player is meaningful); for MLB we omit it rather than
+  // mislabel everyone "Undrafted".
+  if (sport === 'nba' || sport === 'nfl' || bio.draftYear) {
     items.push({
       label: 'Draft',
       value: bio.draftYear

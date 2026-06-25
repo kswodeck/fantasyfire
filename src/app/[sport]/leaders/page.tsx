@@ -5,5 +5,5 @@ import { isSport } from '@/lib/sports';
 export default async function LeadersIndex({ params }: { params: Promise<{ sport: string }> }) {
   const { sport } = await params;
   if (!isSport(sport)) notFound();
-  redirect(`/${sport}/leaders/${sport === 'mlb' ? 'hits' : 'pts'}`);
+  redirect(`/${sport}/leaders/${sport === 'mlb' ? 'hits' : sport === 'nfl' ? 'passYds' : 'pts'}`);
 }

@@ -81,17 +81,33 @@ const getActiveSeason = cache(async (sport: Sport): Promise<string> => {
 //                     shelled gets pulled early — so filtering by it would bias
 //                     ER/hits-allowed rates downward. The correct pitcher filter
 //                     is starts-only, which needs an ingested gamesStarted flag.
+//   NFL            -> role involvement: QB pass attempts, RB carries+receptions
+//                     (touches), WR/TE targets — drops cameo/benched games from
+//                     an already-short (~17 game) season.
 function opportunityFor(
   sport: Sport,
   posBucket: string | null | undefined,
   g: PlayerGame,
 ): number | null {
   if (sport === 'nba') return g.minutes ?? null;
+  if (sport === 'nfl') {
+    if (posBucket === 'QB') return g.passAttempts ?? 0;
+    if (posBucket === 'RB') return (g.rushAttempts ?? 0) + (g.receptions ?? 0);
+    return g.targets ?? 0; // WR / TE
+  }
   if (posBucket === 'P') return null;
   return (g.atBats ?? 0) + (g.walks ?? 0) + (g.hbp ?? 0);
 }
 
-const POS_LABEL: Record<string, string> = { G: 'guards', F: 'forwards', C: 'centers' };
+const POS_LABEL: Record<string, string> = {
+  G: 'guards',
+  F: 'forwards',
+  C: 'centers',
+  QB: 'quarterbacks',
+  RB: 'running backs',
+  WR: 'wide receivers',
+  TE: 'tight ends',
+};
 
 // SQL expression per NBA stat for DvP aggregation. Whitelisted (NOT user input).
 const NBA_STAT_SQL: Partial<Record<StatKey, string>> = {
@@ -124,6 +140,33 @@ const MLB_HIT_SQL: Partial<Record<StatKey, string>> = {
   so: 's.strikeouts',
   doubles: 's.doubles',
   hrr: '(s.hits + s.runs + s.rbi)',
+};
+
+// SQL expression per NFL stat (for defense-vs-position). Whitelisted, not input.
+const NFL_STAT_SQL: Partial<Record<StatKey, string>> = {
+  passYds: 's."passYards"',
+  passTds: 's."passTds"',
+  passCmp: 's."passCompletions"',
+  passAtt: 's."passAttempts"',
+  ints: 's."passInts"',
+  rushYds: 's."rushYards"',
+  carries: 's."rushAttempts"',
+  rushTds: 's."rushTds"',
+  rec: 's.receptions',
+  targets: 's.targets',
+  recYds: 's."recYards"',
+  recTds: 's."recTds"',
+  fumbles: 's."fumblesLost"',
+};
+
+// Per-position involvement gate for DvP: only count games where a player of this
+// bucket actually featured (a real start), so a 3rd-stringer's 0-target cameo
+// doesn't dilute the average a defense allows to the position.
+const NFL_INVOLVEMENT: Record<string, { expr: string; floor: number }> = {
+  QB: { expr: 's."passAttempts"', floor: 10 },
+  RB: { expr: '(COALESCE(s."rushAttempts",0) + COALESCE(s.receptions,0))', floor: 4 },
+  WR: { expr: 's.targets', floor: 2 },
+  TE: { expr: 's.targets', floor: 1 },
 };
 
 type PlayerRecord = {
@@ -232,6 +275,10 @@ type StatGameRow = {
   strikeouts: number | null; stolenBases: number | null; totalBases: number | null; hbp: number | null;
   outs: number | null; hitsAllowed: number | null; runsAllowed: number | null; earnedRuns: number | null;
   walksAllowed: number | null; strikeoutsPitched: number | null;
+  passYards: number | null; passTds: number | null; passCompletions: number | null;
+  passAttempts: number | null; passInts: number | null; rushYards: number | null;
+  rushAttempts: number | null; rushTds: number | null; receptions: number | null;
+  targets: number | null; recYards: number | null; recTds: number | null; fumblesLost: number | null;
   gameDate: Date; opponentTeamId: number; opponentTeam: { abbreviation: string; externalId: number };
   isHome: boolean; wl: string | null; plusMinus: number | null;
 };
@@ -276,6 +323,20 @@ function toPlayerGame(r: StatGameRow): PlayerGame {
     earnedRuns: r.earnedRuns,
     walksAllowed: r.walksAllowed,
     strikeoutsPitched: r.strikeoutsPitched,
+    // NFL
+    passYards: r.passYards,
+    passTds: r.passTds,
+    passCompletions: r.passCompletions,
+    passAttempts: r.passAttempts,
+    passInts: r.passInts,
+    rushYards: r.rushYards,
+    rushAttempts: r.rushAttempts,
+    rushTds: r.rushTds,
+    receptions: r.receptions,
+    targets: r.targets,
+    recYards: r.recYards,
+    recTds: r.recTds,
+    fumblesLost: r.fumblesLost,
     // context
     gameDate: r.gameDate.toISOString().slice(0, 10),
     opponentTeamId: r.opponentTeamId,
@@ -424,8 +485,11 @@ export async function getPropStatParams(
     // The default stat's content lives on the base player page — skip it here so
     // /[slug]/[defaultStat] is never built or sitemapped (no near-duplicate).
     const def = defaultStatForSport(sport, p.posBucket);
+    // Only the stats valid for this player's role — so an NFL WR never gets a
+    // passing-yards page (a no-op intersection for NBA / MLB hitters).
+    const valid = new Set<StatKey>(statKeysForSport(sport, p.posBucket));
     for (const stat of PROP_STATS[sport]) {
-      if (stat === def) continue;
+      if (stat === def || !valid.has(stat)) continue;
       out.push({ slug: p.slug, stat });
     }
   }
@@ -526,6 +590,50 @@ async function getMlbHitterMatchup(
   return cells.find((c) => c.opponentTeamId === opponentTeamId) ?? null;
 }
 
+/** NFL defense-vs-position: a stat each team allows to a position, ranked. */
+async function getNflDvpTable(
+  posBucket: PosBucket,
+  stat: StatKey,
+  season: string,
+): Promise<DvpCell[]> {
+  const expr = NFL_STAT_SQL[stat];
+  const invol = NFL_INVOLVEMENT[posBucket];
+  if (!expr || !invol) return [];
+  // Average the stat allowed to featured players of this bucket, per opponent.
+  // No per-player blended threshold (NBA-style) — with ~17 games a fixed
+  // involvement floor is simpler and keeps cells from going empty.
+  const rows = await db.$queryRawUnsafe<{ opponentTeamId: number; avg: number; n: number }[]>(
+    `SELECT s."opponentTeamId" AS "opponentTeamId", AVG(${expr})::float8 AS avg, COUNT(*)::int AS n
+     FROM "PlayerGameStat" s
+     JOIN "Player" p ON p.id = s."playerId"
+     WHERE p.sport = 'nfl' AND p."posBucket" = $1 AND s.season = $2
+       AND ${invol.expr} >= ${invol.floor}
+     GROUP BY s."opponentTeamId"`,
+    posBucket,
+    season,
+  );
+  if (rows.length === 0) return [];
+  return rankDvp(
+    rows.map((r) => ({
+      opponentTeamId: Number(r.opponentTeamId),
+      avgAllowed: Number(r.avg),
+      sampleSize: Number(r.n),
+    })),
+    posBucket,
+    stat,
+  );
+}
+
+async function getNflDvp(
+  posBucket: PosBucket,
+  stat: StatKey,
+  opponentTeamId: number,
+  season: string,
+): Promise<DvpCell | null> {
+  const cells = await getNflDvpTable(posBucket, stat, season);
+  return cells.find((c) => c.opponentTeamId === opponentTeamId) ?? null;
+}
+
 /**
  * The full research payload for a player page / API response, computed for a
  * stat + line. `stat` defaults to the sport/role default; `line` to the season
@@ -596,6 +704,9 @@ export async function getPlayerResearch(
     } else if (sport === 'mlb' && player.posBucket === 'H') {
       dvp = await getMlbHitterMatchup(stat, recentOpponent.teamId, season);
       unitLabel = 'hitters';
+    } else if (sport === 'nfl' && player.posBucket) {
+      dvp = await getNflDvp(player.posBucket, stat, recentOpponent.teamId, season);
+      unitLabel = POS_LABEL[player.posBucket] ?? 'this position';
     }
   }
 
@@ -671,10 +782,18 @@ export async function getPlayerResearch(
 // The popular, well-lined stats we scan for the board (keeps it focused + fast).
 const BOARD_NBA_STATS: StatKey[] = ['pts', 'reb', 'ast', 'pra', 'fg3m'];
 const BOARD_MLB_HITTER_STATS: StatKey[] = ['hits', 'tb', 'hr', 'rbi', 'runs'];
+// NFL board stats by position — 1–2 well-bet markets each, given small samples.
+const BOARD_NFL_STATS: Record<string, StatKey[]> = {
+  QB: ['passYds', 'passTds'],
+  RB: ['rushYds', 'rec'],
+  WR: ['recYds', 'rec'],
+  TE: ['recYds', 'rec'],
+};
 
 function boardStatsFor(sport: Sport, posBucket: string | null): StatKey[] {
   // MLB pitchers are excluded for now (no matchup, and starts aren't filtered).
   if (sport === 'mlb') return posBucket === 'P' ? [] : BOARD_MLB_HITTER_STATS;
+  if (sport === 'nfl') return BOARD_NFL_STATS[posBucket ?? ''] ?? [];
   return BOARD_NBA_STATS;
 }
 
@@ -1018,7 +1137,9 @@ export async function getDvpTable(
   const cells =
     sport === 'nba'
       ? await getNbaDvpTable(posBucket, stat, season)
-      : await getMlbHitterMatchupTable(stat, season);
+      : sport === 'nfl'
+        ? await getNflDvpTable(posBucket, stat, season)
+        : await getMlbHitterMatchupTable(stat, season);
   if (cells.length === 0) return [];
   const teams = await db.team.findMany({
     where: { sport },
@@ -1045,20 +1166,33 @@ export async function getDvpTable(
 
 /** Season per-game leaders for a stat, qualified by a minimum games-played. */
 export async function getLeaders(sport: Sport, stat: StatKey, limit = 50): Promise<LeaderRow[]> {
-  const expr = sport === 'nba' ? NBA_STAT_SQL[stat] : MLB_HIT_SQL[stat];
+  const expr =
+    sport === 'nba' ? NBA_STAT_SQL[stat] : sport === 'nfl' ? NFL_STAT_SQL[stat] : MLB_HIT_SQL[stat];
   if (!expr) return [];
   const season = await getActiveSeason(sport);
-  const minGames = sport === 'nba' ? 12 : 20;
+  const minGames = sport === 'nba' ? 12 : sport === 'nfl' ? 6 : 20;
   // `expr` is from the internal whitelist (never user input); params are bound.
+  // NFL rows exist only for games a player featured in, so no appearance filter.
   const appearanceFilter =
-    sport === 'nba' ? `AND s.minutes IS NOT NULL AND s.minutes > 0` : `AND p."posBucket" = 'H'`;
+    sport === 'nba'
+      ? `AND s.minutes IS NOT NULL AND s.minutes > 0`
+      : sport === 'nfl'
+        ? ``
+        : `AND p."posBucket" = 'H'`;
+  // NFL passing stats belong to QBs — a WR's trick-play pass shouldn't crowd the
+  // leaderboard. Rushing/receiving stay open (a mobile QB belongs on the rushing
+  // board) — handled by avg>0 + the on-page position filter.
+  const positionFilter =
+    sport === 'nfl' && (['passYds', 'passTds', 'passCmp', 'passAtt', 'ints'] as StatKey[]).includes(stat)
+      ? `AND p."posBucket" = 'QB'`
+      : '';
   const rows = await db.$queryRawUnsafe<{ playerId: number; avg: number; n: number }[]>(
     `SELECT s."playerId" AS "playerId", AVG(${expr})::float8 AS avg, COUNT(*)::int AS n
      FROM "PlayerGameStat" s
      JOIN "Player" p ON p.id = s."playerId"
-     WHERE p.sport = $1 AND s.season = $2 ${appearanceFilter}
+     WHERE p.sport = $1 AND s.season = $2 ${appearanceFilter} ${positionFilter}
      GROUP BY s."playerId"
-     HAVING COUNT(*) >= $3
+     HAVING COUNT(*) >= $3 AND AVG(${expr}) > 0
      ORDER BY avg DESC
      LIMIT $4`,
     sport,
@@ -1176,6 +1310,19 @@ export async function analyzeSlate(sport: Sport, text: string): Promise<SlateRes
 }
 
 /**
+ * Whether a sport currently has games scheduled today or later — i.e. it's in
+ * season with an actionable slate. Drives the home page, which hides off-season
+ * sports (whose board "leans" are past games, not upcoming props). Read from the
+ * nightly schedule feed; cheap COUNT, no joins.
+ */
+export async function hasUpcomingGames(sport: Sport): Promise<boolean> {
+  const todayUtc = new Date();
+  todayUtc.setUTCHours(0, 0, 0, 0);
+  const count = await db.scheduledGame.count({ where: { sport, date: { gte: todayUtc } } });
+  return count > 0;
+}
+
+/**
  * The next slate of scheduled games for a sport (the soonest date on/after today
  * that has games). Read-only from ScheduledGame, populated by the nightly
  * schedule feed. Returns an empty slate in the off-season.
@@ -1194,7 +1341,9 @@ export async function getTonightSlate(
   if (!next) return { date: null, games: [] };
 
   const dayStart = next.date;
-  const dayEnd = new Date(dayStart.getTime() + 86_400_000);
+  // NFL clusters games Thu–Mon, so surface the whole upcoming week, not one day.
+  const windowDays = sport === 'nfl' ? 7 : 1;
+  const dayEnd = new Date(dayStart.getTime() + windowDays * 86_400_000);
   const rows = await db.scheduledGame.findMany({
     where: { sport, date: { gte: dayStart, lt: dayEnd } },
     include: {

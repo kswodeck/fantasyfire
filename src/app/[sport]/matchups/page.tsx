@@ -29,6 +29,22 @@ const NBA_POS: { value: PosBucket; label: string }[] = [
   { value: 'C', label: 'Centers' },
 ];
 const MLB_POS: { value: PosBucket; label: string }[] = [{ value: 'H', label: 'Hitters' }];
+const NFL_POS: { value: PosBucket; label: string }[] = [
+  { value: 'QB', label: 'Quarterbacks' },
+  { value: 'RB', label: 'Running Backs' },
+  { value: 'WR', label: 'Wide Receivers' },
+  { value: 'TE', label: 'Tight Ends' },
+];
+// NFL stats are position-specific, so each position offers only its real markets.
+const NFL_STATS_BY_POS: Record<string, StatKey[]> = {
+  QB: ['passYds', 'passTds', 'passCmp', 'rushYds'],
+  RB: ['rushYds', 'carries', 'rushTds', 'rec', 'recYds'],
+  WR: ['recYds', 'rec', 'recTds', 'targets'],
+  TE: ['recYds', 'rec', 'recTds', 'targets'],
+};
+const NFL_STATS: StatKey[] = [
+  'passYds', 'passTds', 'passCmp', 'rushYds', 'carries', 'rushTds', 'rec', 'recYds', 'recTds', 'targets',
+];
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { sport } = await params;
@@ -36,11 +52,15 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const title =
     sport === 'mlb'
       ? 'MLB Pitching Allowed — Stats Given Up by Team'
-      : 'NBA Defense vs Position — Stats Allowed by Team';
+      : sport === 'nfl'
+        ? 'NFL Defense vs Position — Stats Allowed by Team'
+        : 'NBA Defense vs Position — Stats Allowed by Team';
   const description =
     sport === 'mlb'
       ? "Which MLB teams' pitching gives up the most hits, total bases, home runs, RBIs and runs per game — ranked softest to toughest, from public box scores."
-      : 'NBA defense vs position: which teams allow the most points, rebounds, assists and threes to guards, forwards and centers — ranked softest to toughest, from public box scores.';
+      : sport === 'nfl'
+        ? 'NFL defense vs position: which teams allow the most passing yards, rushing yards and receiving yards to QBs, RBs, WRs and TEs — ranked softest to toughest, from public game logs.'
+        : 'NBA defense vs position: which teams allow the most points, rebounds, assists and threes to guards, forwards and centers — ranked softest to toughest, from public box scores.';
   return {
     title,
     description,
@@ -54,17 +74,28 @@ export default async function MatchupsPage({ params }: PageProps) {
   if (!isSport(raw)) notFound();
   const sport: Sport = raw;
   const cfg = SPORTS[sport];
-  const stats = sport === 'nba' ? NBA_STATS : MLB_STATS;
-  const positions = sport === 'nba' ? NBA_POS : MLB_POS;
-  const heading = sport === 'mlb' ? 'MLB Pitching Allowed' : 'NBA Defense vs Position';
+  const stats = sport === 'nba' ? NBA_STATS : sport === 'nfl' ? NFL_STATS : MLB_STATS;
+  const positions = sport === 'nba' ? NBA_POS : sport === 'nfl' ? NFL_POS : MLB_POS;
+  const statsByPosition = sport === 'nfl' ? NFL_STATS_BY_POS : undefined;
+  const heading =
+    sport === 'mlb'
+      ? 'MLB Pitching Allowed'
+      : sport === 'nfl'
+        ? 'NFL Defense vs Position'
+        : 'NBA Defense vs Position';
 
   const tables: Record<string, DvpTableRow[]> = {};
   let freshness: string | null = null;
   try {
+    // Only load the meaningful (stat, position) combos — for NFL that's each
+    // position's own markets; for NBA/MLB it's the full cartesian.
+    const combos = statsByPosition
+      ? positions.flatMap((p) =>
+          (statsByPosition[p.value] ?? []).map((stat) => ({ stat, pos: p.value })),
+        )
+      : stats.flatMap((stat) => positions.map((p) => ({ stat, pos: p.value })));
     const entries = await Promise.all(
-      stats.flatMap((stat) =>
-        positions.map(async (p) => [`${stat}:${p.value}`, await getDvpTable(sport, stat, p.value)] as const),
-      ),
+      combos.map(async ({ stat, pos }) => [`${stat}:${pos}`, await getDvpTable(sport, stat, pos)] as const),
     );
     for (const [k, v] of entries) tables[k] = v;
     freshness = await getDataFreshness(sport);
@@ -113,6 +144,7 @@ export default async function MatchupsPage({ params }: PageProps) {
             stats={statOpts}
             positions={positions}
             unitByStat={unitByStat}
+            statsByPosition={statsByPosition}
           />
         ) : (
           <p className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
@@ -125,7 +157,7 @@ export default async function MatchupsPage({ params }: PageProps) {
 
       <p className="mt-8 text-xs leading-relaxed text-muted">
         Descriptive research from public game logs — team-allowed averages describe past games and are not
-        predictions, picks, or betting advice. 21+. Problem gambling? Call 1-800-GAMBLER.
+        predictions, picks, or betting advice.
       </p>
     </div>
   );
