@@ -10,6 +10,8 @@ import { PlayerResearchClient } from '@/components/PlayerResearchClient';
 import { PlayerAvatar } from '@/components/PlayerAvatar';
 import { TeamLogo } from '@/components/TeamLogo';
 import { PlayerBioBar } from '@/components/PlayerBioBar';
+import { FavoriteToggle } from '@/components/FavoriteToggle';
+import { ShareButton } from '@/components/ShareButton';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { RelatedLinks } from '@/components/RelatedLinks';
 import { sportMeshLinks } from '@/lib/relatedLinks';
@@ -164,7 +166,7 @@ export default async function PlayerPage({ params }: PageProps) {
             size={84}
             ring={team.primary}
           />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 text-sm text-muted">
               <TeamLogo
                 sport={sport}
@@ -192,6 +194,15 @@ export default async function PlayerPage({ params }: PageProps) {
                 scores, not live.
               </p>
             )}
+          </div>
+          <div className="flex shrink-0 flex-col gap-2 self-start">
+            <FavoriteToggle
+              sport={sport}
+              slug={player.slug}
+              name={player.fullName}
+              team={player.teamAbbreviation}
+            />
+            <ShareButton />
           </div>
         </div>
       </header>

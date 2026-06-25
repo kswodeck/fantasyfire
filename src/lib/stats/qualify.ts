@@ -1,12 +1,13 @@
 // Role-relative "did the player get a normal opportunity?" threshold, shared by
-// both sports. A fixed floor zeroes out part-time players, so the bar is each
+// all sports. A fixed floor zeroes out part-time players, so the bar is each
 // player's OWN workload: the average of their season per-game opportunity and
 // their last-N-games per-game opportunity.
 //
 // The opportunity metric is sport-specific (see opportunityFor in the server
-// layer): NBA = minutes; MLB hitters = plate appearances. (MLB pitchers are not
-// opportunity-filtered — see the note there.) Pure (no React/Next/db) so it's
-// unit-testable and the NBA matchup query mirrors the same formula in SQL.
+// layer): NBA = minutes; MLB hitters = plate appearances (MLB pitchers are not
+// opportunity-filtered — see the note there); NFL = role involvement (QB pass
+// attempts, RB carries+receptions). Pure (no React/Next/db) so it's unit-testable
+// and the NBA matchup query mirrors the same formula in SQL.
 
 const mean = (xs: number[]): number => xs.reduce((a, b) => a + b, 0) / xs.length;
 

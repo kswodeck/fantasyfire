@@ -4,9 +4,11 @@ import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { FilterableBoard } from '@/components/FilterableBoard';
 import { SlatePaster } from '@/components/SlatePaster';
-import { getBoard } from '@/lib/server/players';
+import { getBoard, getCalibration } from '@/lib/server/players';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
-import type { BoardRow } from '@/lib/types';
+import type { BoardRow, Calibration } from '@/lib/types';
+import { calibrationVerdict } from '@/lib/calibrationVerdict';
+import { CalibrationStatusBadge } from '@/components/CalibrationStatusBadge';
 import { RelatedLinks } from '@/components/RelatedLinks';
 import { sportMeshLinks } from '@/lib/relatedLinks';
 
@@ -47,6 +49,14 @@ export default async function BoardPage({ params }: PageProps) {
     rows = [];
   }
 
+  let cal: Calibration = { totalGraded: 0, overallWinRate: null, trackingSince: null, buckets: [] };
+  try {
+    cal = await getCalibration(sport);
+  } catch {
+    // Non-fatal: the board still renders; the badge falls back to "experimental".
+  }
+  const verdict = calibrationVerdict(cal);
+
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8">
       <Breadcrumbs
@@ -59,9 +69,9 @@ export default async function BoardPage({ params }: PageProps) {
       />
       <div className="flex items-center gap-2">
         <h1 className="text-3xl font-bold tracking-tight">{cfg.name} Top Leans</h1>
-        <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted">
-          experimental
-        </span>
+        <Link href={`/${sport}/accuracy`} title={verdict.headline}>
+          <CalibrationStatusBadge status={verdict.status} />
+        </Link>
       </div>
       <p className="mt-2 max-w-2xl text-sm text-muted">
         The strongest recent-form leans across the most active {cfg.name} players, ranked by our

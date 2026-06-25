@@ -7,6 +7,7 @@
 // and per-game stat lines (hitting for position players, pitching for pitchers).
 import 'dotenv/config';
 import { db } from '../lib/db';
+import { recordIngestRun } from './ingestRun';
 import { slugify } from './nba';
 import {
   getMlbTeams,
@@ -260,7 +261,7 @@ async function main() {
   });
 }
 
-main()
+recordIngestRun('mlb', main)
   .catch((e) => {
     console.error(e);
     process.exitCode = 1;

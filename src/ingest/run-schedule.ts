@@ -8,6 +8,7 @@
 //   pnpm schedule
 import 'dotenv/config';
 import { db } from '../lib/db';
+import { recordIngestRun } from './ingestRun';
 import { fetchMlbSchedule, fetchNbaSchedule, fetchNflSchedule, type ScheduleGameRow } from './schedule';
 
 /** The next `days` calendar days as YYYY-MM-DD in US Eastern (the betting day). */
@@ -91,7 +92,7 @@ async function main() {
   if (pruned.count) console.log(`[schedule] pruned ${pruned.count} stale games`);
 }
 
-main()
+recordIngestRun('schedule', main)
   .catch((e) => {
     console.error(e);
     process.exitCode = 1;

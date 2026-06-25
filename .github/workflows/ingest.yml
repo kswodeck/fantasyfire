@@ -103,3 +103,13 @@ jobs:
       - name: Snapshot projections
         if: ${{ success() || failure() }}
         run: pnpm snapshot
+
+      # Ping IndexNow (Bing/Yandex/DDG) with tonight's changed URLs — changed
+      # player pages + in-season boards — for near-instant recrawl. Best-effort
+      # and non-fatal; Google ignores IndexNow (the sitemap covers it). Needs
+      # NEXT_PUBLIC_SITE_URL to be the public apex (skips on localhost).
+      - name: Ping IndexNow
+        if: ${{ success() || failure() }}
+        env:
+          NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL || 'https://fantasyfire.app' }}
+        run: pnpm indexnow

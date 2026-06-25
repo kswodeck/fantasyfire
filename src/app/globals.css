@@ -112,3 +112,48 @@ a {
 button:disabled {
   cursor: not-allowed;
 }
+
+/* Accessibility ------------------------------------------------------------ */
+
+/* Visible keyboard focus on every interactive element. :focus-visible fires for
+   keyboard / assistive-tech focus but NOT plain mouse clicks, so pointer users
+   don't see a ring while keyboard users always do. Uses the brand color, which
+   clears 3:1 non-text contrast against both surfaces. */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Skip-to-content link: visually hidden until focused, then it slides into the
+   top-left so keyboard users can jump past the nav. First focusable in the body. */
+.skip-link {
+  position: fixed;
+  left: 0.5rem;
+  top: -4rem;
+  z-index: 50;
+  padding: 0.5rem 0.875rem;
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--foreground);
+  border: 1px solid var(--line);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: top 0.15s ease;
+}
+.skip-link:focus {
+  top: 0.5rem;
+}
+
+/* Honor reduced-motion: kill transitions/animations for users who ask for it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

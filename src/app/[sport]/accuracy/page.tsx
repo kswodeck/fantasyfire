@@ -6,6 +6,8 @@ import { getCalibration } from '@/lib/server/players';
 import { pct, formatIsoDate } from '@/lib/format';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
 import type { Calibration } from '@/lib/types';
+import { calibrationVerdict } from '@/lib/calibrationVerdict';
+import { CalibrationStatusBadge } from '@/components/CalibrationStatusBadge';
 import { RelatedLinks } from '@/components/RelatedLinks';
 import { sportMeshLinks } from '@/lib/relatedLinks';
 
@@ -44,6 +46,7 @@ export default async function AccuracyPage({ params }: PageProps) {
   } catch {
     // DB unavailable — render the empty state.
   }
+  const verdict = calibrationVerdict(cal);
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8">
@@ -57,9 +60,7 @@ export default async function AccuracyPage({ params }: PageProps) {
       />
       <div className="flex items-center gap-2">
         <h1 className="text-3xl font-bold tracking-tight">{cfg.name} Accuracy</h1>
-        <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted">
-          experimental
-        </span>
+        <CalibrationStatusBadge status={verdict.status} />
       </div>
       <p className="mt-2 max-w-2xl text-sm text-muted">
         When our <strong className="text-foreground">FireScore</strong>{' '}leaned a side on a prop,
@@ -68,6 +69,12 @@ export default async function AccuracyPage({ params }: PageProps) {
         performance</strong> — not a pick record, not a guarantee. If the signal has value, the
         stronger tiers should win more often than the weaker ones.
       </p>
+      {cal.totalGraded > 0 && (
+        <p className="mt-3 rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm">
+          <strong className="text-foreground">Verdict:</strong>{' '}
+          <span className="text-muted">{verdict.headline}</span>
+        </p>
+      )}
 
       {cal.totalGraded === 0 ? (
         <p className="mt-8 rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">

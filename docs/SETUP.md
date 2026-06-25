@@ -41,9 +41,16 @@ cp .env.example .env
 # paste the DEV project's session-pooler strings into DATABASE_URL + DIRECT_URL
 pnpm install
 pnpm db:deploy          # create the schema in the dev DB
-pnpm ingest             # pull real NBA data (runs from your machine — works)
+pnpm ingest             # NBA  (runs from your machine — works; cloud IPs get blocked)
+pnpm ingest:mlb         # MLB  (statsapi.mlb.com — not IP-blocked)
+pnpm ingest:nfl         # NFL  (ESPN football/nfl — not IP-blocked)
+pnpm schedule           # upcoming slate for the "Today" hub
 pnpm dev                # http://localhost:3000
 ```
+
+> There is **no synthetic seed script** — the app runs on real ingested game
+> logs. Run whichever sports are in season; off-season sports just have no
+> upcoming slate (their historical pages still render).
 
 `.env` for local should look like:
 
@@ -76,7 +83,10 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
    PROD password into `.env.prod.local` (gitignored), then:
    ```bash
    pnpm db:deploy:prod   # apply migrations to the prod Supabase project
-   pnpm ingest:prod      # pull real NBA data into prod
+   pnpm ingest:prod      # NBA  → prod
+   pnpm ingest:mlb:prod  # MLB  → prod
+   pnpm ingest:nfl:prod  # NFL  → prod
+   pnpm schedule:prod    # upcoming slate → prod
    ```
    These use `.env.prod.local` via dotenv-cli, so you never have to edit your local
    `.env`. (The production **build** runs `generateStaticParams`, which queries the DB,
@@ -87,13 +97,19 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
 
 ## 4. Nightly ingest (GitHub Actions)
 
-In the GitHub repo → **Settings → Secrets and variables → Actions**:
-- **Secrets**: `DATABASE_URL`, `DIRECT_URL` (prod session-pooler URLs).
-- **Variable** (optional): `NBA_SEASON` (defaults to `2025-26`).
+In the GitHub repo → **Settings → Secrets and variables → Actions** (the
+`DATABASE_URL` secret lives on the **Production** environment):
+- **Secret**: `DATABASE_URL` (prod **pooled** transaction-pooler URL, `:6543`).
+  Migrations are **not** run here (they're in `migrate.yml`), so `DIRECT_URL` isn't
+  needed by this job.
+- **Variables** (optional): `NBA_SEASON` / `MLB_SEASON` / `NFL_SEASON` — only to
+  force a specific season; otherwise seasons are computed from the date in code.
 
-The [`ingest.yml`](../.github/workflows/ingest.yml) workflow then runs daily and on
-manual dispatch, writing to the prod DB. If it ever fails with `NbaLikelyBlockedError`,
-that's stats.nba.com blocking the runner IP — re-run, or move ingest to a small VPS /
+The [`ingest.yml`](../.github/workflows/ingest.yml) workflow runs daily and on manual
+dispatch, in order: **NBA → MLB → NFL → schedule → grade → snapshot**, all writing to
+the prod DB. Each step is best-effort: if the **NBA** step fails with
+`NbaLikelyBlockedError` (stats.nba.com blocking the runner IP), the MLB/NFL/schedule/
+grade/snapshot steps still run. Re-run the job, or move the NBA pull to a small VPS /
 your machine on a cron.
 
 ---
@@ -108,7 +124,11 @@ nothing extra to do; just don't expect any http:// fallback.
 
 ## Season note
 
-`NBA_SEASON` controls both what the ingest pulls **and** which season DvP is computed
-over. Keep it at the season your DB actually holds. As of mid-2026 that's `2025-26`
-(complete). Switch to `2026-27` only once that season has games (preseason ~early Oct
-2026) and you've re-ingested — otherwise DvP will be empty.
+Seasons are **computed from the current date in code** (per sport), so a fresh clone
+pulls the right season without configuration. The optional `NBA_SEASON` /
+`MLB_SEASON` / `NFL_SEASON` env vars / repo variables **override** that — set one only
+to force a specific season (e.g. to backfill a completed season or pin a value during
+the changeover). Whatever the season resolves to also controls which season DvP /
+pitching-allowed is computed over, so a forced season with no ingested games yields
+empty matchup tables. The three sports don't overlap much (NBA Oct–Jun, MLB Mar–Oct,
+NFL Sep–Jan), which is why the home page only surfaces sports with an upcoming slate.

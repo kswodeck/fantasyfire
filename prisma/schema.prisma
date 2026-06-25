@@ -1,9 +1,10 @@
-// FantasyFire Prisma schema — multi-sport (NBA + MLB).
+// FantasyFire Prisma schema — multi-sport (NBA + MLB + NFL).
 //
-// One set of tables serves both sports, discriminated by `sport` ("nba" | "mlb").
-// PlayerGameStat holds a nullable superset of both sports' per-game stats; each
-// row populates only its sport's columns. The pure compute layer reads them via
-// a stat registry, so hit rates / confidence / charts are shared across sports.
+// One set of tables serves all sports, discriminated by `sport`
+// ("nba" | "mlb" | "nfl"). PlayerGameStat holds a nullable superset of every
+// sport's per-game stats; each row populates only its sport's columns. The pure
+// compute layer reads them via a stat registry, so hit rates / confidence /
+// charts are shared across sports.
 
 generator client {
   provider = "prisma-client"
@@ -208,4 +209,37 @@ model ProjectionSnapshot {
 
   @@unique([playerId, stat, snapshotDate])
   @@index([sport, graded])
+}
+
+// A browser Web Push subscription. The subscription endpoint IS the identity —
+// no account, honoring the no-auth design. Captured after a high-intent moment
+// (saving players) and used by run-push.ts to send a capped, value-first digest.
+model PushSubscription {
+  id         Int       @id @default(autoincrement())
+  endpoint   String    @unique
+  p256dh     String // client public key (for encryption)
+  auth       String // client auth secret
+  createdAt  DateTime  @default(now())
+  lastSentAt DateTime? // frequency cap: don't exceed N sends/week per sub
+  // Comma-separated sports the user follows (from their favorites at opt-in), so
+  // the digest can be relevant; null = all sports.
+  sports     String?
+
+  @@index([lastSentAt])
+}
+
+// Audit row written by each nightly data job (one per run) — the data behind the
+// public /status freshness page. Separate from the data tables so "did the job
+// run and succeed?" is answerable even when a job wrote zero rows.
+model IngestRun {
+  id          Int      @id @default(autoincrement())
+  job         String // "nba" | "mlb" | "nfl" | "schedule" | "snapshot" | "grade" | "indexnow"
+  status      String // "success" | "failure"
+  startedAt   DateTime
+  finishedAt  DateTime
+  durationMs  Int
+  rowsWritten Int?
+  error       String?
+
+  @@index([job, startedAt])
 }

@@ -141,6 +141,15 @@ export default function MethodologyPage() {
           stat the opponent&rsquo;s pitching staff has allowed per game. Pitcher props do
           not yet get a matchup number.
         </p>
+        <p>
+          <strong>MLB — park factors.</strong> Each MLB player page shows their{' '}
+          <strong>home park&rsquo;s</strong> run and home-run factor (1.00 = league-neutral)
+          as context for their home games — Coors Field plays hitter-friendly, Oracle Park
+          pitcher-friendly. These are a small static yearly table and are shown{' '}
+          <strong>as context only</strong>: we do <em>not</em> fold them into the hit rates,
+          because a player&rsquo;s game log already reflects the parks they&rsquo;ve played
+          in, and silently re-weighting it would shift the numbers under you.
+        </p>
 
         <h2>Fair-price math</h2>
         <p>
@@ -183,8 +192,13 @@ export default function MethodologyPage() {
           <strong>FireScore</strong> blends these descriptive signals into one transparent
           read of how a line leans — <em>Strong lean</em>, <em>Lean</em>,{' '}
           <em>Slight lean</em>, <em>No lean</em>, or <em>Pass</em>. It is a{' '}
-          <strong>research signal, not a pick, prediction, or guarantee</strong>, and it is{' '}
-          <strong>experimental</strong> until our planned accuracy page validates it. Two
+          <strong>research signal, not a pick, prediction, or guarantee</strong>. Its status is
+          decided by each sport&rsquo;s public accuracy page (
+          <Link href="/nba/accuracy">NBA</Link>, <Link href="/mlb/accuracy">MLB</Link>,{' '}
+          <Link href="/nfl/accuracy">NFL</Link>), whose badge moves from{' '}
+          <strong>experimental</strong> → <strong>developing</strong> →{' '}
+          <strong>validated</strong> based on whether the stronger tiers actually win more often
+          (with the 95% Wilson lower bound above a coin flip) as graded results accumulate. Two
           things keep it honest:
         </p>
         <ul>

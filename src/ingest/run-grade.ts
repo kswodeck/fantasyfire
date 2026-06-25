@@ -8,6 +8,7 @@
 //   pnpm grade
 import 'dotenv/config';
 import { db } from '../lib/db';
+import { recordIngestRun } from './ingestRun';
 import { statValue, type StatKey } from '../lib/stats';
 import { STAT_SELECT, rowToGameStatLine, chunk } from './snapshot-lib';
 
@@ -69,7 +70,7 @@ async function main() {
   console.log(`[grade] ${ungraded.length} pending, ${graded} graded`);
 }
 
-main()
+recordIngestRun('grade', main)
   .catch((e) => {
     console.error(e);
     process.exitCode = 1;

@@ -3,6 +3,17 @@
 _Last updated: 2026-06-24. This is a strategy/sequencing doc, not a spec. Each item lists the
 concrete files it touches so it can be picked up directly._
 
+> **Update 2026-06-25 — NFL added + FireScore.** A third sport, **NFL** (ESPN
+> `football/nfl` ingest), now rides the same shared schema and section routes
+> (board / streaks / trends / leaders / matchups / accuracy / players / today), so
+> the "two sports" framing below is now **three** (NBA + MLB + NFL). The "projection /
+> lean" idea from X1/X5 shipped concretely as **FireScore** (`src/lib/stats/fireScore.ts`)
+> — a descriptive, Wilson-lower-bound-gated tier + 0–100 signal powering the per-sport
+> **Top Leans** board and the `ProjectionSnapshot` → `/accuracy` calibration. NFL is
+> **weekly**, not nightly, so the snapshot/grade/slate cadence needs an NFL-specific
+> pass (tracked separately). Everything below predates these two changes; read it with
+> that in mind.
+
 ## ✅ Shipped status (2026-06-24)
 
 - **NOW (N0–N4):** all shipped — Umami analytics, median→raw-median default line (rebalanced Over/Under),

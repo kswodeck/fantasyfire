@@ -21,6 +21,7 @@
 // createMany for the settled historical rows.
 import 'dotenv/config';
 import { db } from '../lib/db';
+import { recordIngestRun } from './ingestRun';
 import { NbaStatsClient, NbaLikelyBlockedError, slugify } from './nba';
 import type { PlayerGameLogRow, PlayerIndexRow } from './nba';
 import { configuredSeason, previousNbaSeason } from '../lib/season';
@@ -334,7 +335,7 @@ async function main() {
   await cleanupEspnDuplicates();
 }
 
-main()
+recordIngestRun('nba', main)
   .catch((e) => {
     console.error(e);
     process.exitCode = 1;

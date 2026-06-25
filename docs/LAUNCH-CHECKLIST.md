@@ -106,8 +106,8 @@ lawyer-review-first (§7).
   and use the **HTML-tag** method — that's a one-line **[Dev]** change
   (`verification: { google: … }` in `layout.tsx` metadata).
 - **Submit the sitemap:** Sitemaps → enter `sitemap.xml`.
-- **URL Inspection** → "Request indexing" for `/`, `/nba`, `/mlb`, `/methodology`, and 1–2 flagship
-  player pages (don't mass-request; the sitemap handles bulk).
+- **URL Inspection** → "Request indexing" for `/`, `/nba`, `/mlb`, `/nfl`, `/methodology`, and 1–2
+  flagship player pages (don't mass-request; the sitemap handles bulk).
 - Add a backup email as Owner so you never lose access.
 
 **[Owner] Bing Webmaster Tools** — one-click **Import from GSC** (auto-verifies, pulls the

@@ -58,6 +58,41 @@ self.addEventListener('fetch', (event) => {
   }
 });
 
+// --- Web Push -------------------------------------------------------------
+// Value-first digest notifications (e.g. "your players have a strong lean"). The
+// payload is a small JSON {title, body, url, tag} sent by run-push.ts.
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = {};
+  }
+  const title = data.title || 'FantasyFire';
+  const options = {
+    body: data.body || '',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    tag: data.tag || 'ff-digest',
+    data: { url: data.url || '/' },
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil(
+    (async () => {
+      const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      for (const client of all) {
+        if (client.url.includes(target) && 'focus' in client) return client.focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(target);
+    })(),
+  );
+});
+
 async function putIfOk(cache, request, response) {
   if (response && response.ok && response.type === 'basic') {
     cache.put(request, response.clone());

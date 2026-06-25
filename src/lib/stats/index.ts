@@ -10,3 +10,5 @@ export * from './fireScore';
 export * from './splits';
 export * from './line';
 export * from './streak';
+export * from './altLines';
+export * from './parkFactors';

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { FlameMark } from './FlameMark';
-import { SITE } from '@/lib/site';
+import { SITE, activeSocials } from '@/lib/site';
 
 const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
   {
@@ -14,10 +14,12 @@ const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
   {
     title: 'Company',
     links: [
+      { label: 'My Players', href: '/my-players' },
       { label: 'About', href: '/about' },
       { label: 'How it works', href: '/how-it-works' },
       { label: 'Methodology', href: '/methodology' },
       { label: 'Glossary', href: '/glossary' },
+      { label: 'Status', href: '/status' },
       { label: 'Contact', href: '/contact' },
     ],
   },
@@ -54,6 +56,22 @@ export function SiteFooter() {
             >
               {SITE.email}
             </a>
+            {activeSocials().length > 0 && (
+              <ul className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                {activeSocials().map((s) => (
+                  <li key={s.key}>
+                    <a
+                      href={s.url}
+                      target="_blank"
+                      rel="me noopener noreferrer"
+                      className="text-muted transition-colors hover:text-foreground"
+                    >
+                      {s.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           {COLUMNS.map((col) => (

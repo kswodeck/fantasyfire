@@ -5,8 +5,15 @@ import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
 import { Providers } from './providers';
 import { Analytics } from '@/components/Analytics';
+import { SpeedInsights } from '@/components/SpeedInsights';
 import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister';
-import { SITE, absoluteUrl } from '@/lib/site';
+import { SITE, absoluteUrl, activeSocials, twitterHandle } from '@/lib/site';
+
+// Google Search Console "URL-prefix property → HTML tag" verification. Set the
+// GOOGLE_SITE_VERIFICATION env var (the token from the meta tag GSC shows) to
+// emit <meta name="google-site-verification">. Omitted when unset.
+const googleVerification = process.env.GOOGLE_SITE_VERIFICATION?.trim() || undefined;
+const xHandle = twitterHandle();
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -38,7 +45,9 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: `${SITE.name} — ${SITE.tagline}`,
     description: SITE.description,
+    ...(xHandle ? { site: xHandle, creator: xHandle } : {}),
   },
+  ...(googleVerification ? { verification: { google: googleVerification } } : {}),
   robots: { index: true, follow: true },
   manifest: '/manifest.webmanifest',
   icons: {
@@ -68,6 +77,8 @@ const orgJsonLd = {
       email: SITE.email,
       description: SITE.description,
       logo: absoluteUrl('/icons/icon-192.png'),
+      // Only real, configured profiles — empty until handles are reserved.
+      ...(activeSocials().length ? { sameAs: activeSocials().map((s) => s.url) } : {}),
     },
     {
       '@type': 'WebSite',
@@ -104,13 +115,19 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
         />
+        <a href="#main-content" className="skip-link">
+          Skip to content
+        </a>
         <Providers>
           <SiteHeader />
-          <main className="flex-1">{children}</main>
+          <main id="main-content" tabIndex={-1} className="flex-1 focus:outline-none">
+            {children}
+          </main>
           <SiteFooter />
         </Providers>
         <ServiceWorkerRegister />
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

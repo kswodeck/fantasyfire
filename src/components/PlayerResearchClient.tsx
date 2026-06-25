@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import type { PlayerResearch } from '@/lib/types';
-import { STAT_DEFS, statKeysForSport, type StatKey } from '@/lib/stats';
+import { STAT_DEFS, statKeysForSport, altLineTable, type StatKey } from '@/lib/stats';
 import { statKeySchema, lineSchema } from '@/lib/schemas';
 import { fairPriceReadout } from '@/lib/odds';
 import { num1, pct } from '@/lib/format';
@@ -14,9 +14,11 @@ import { LineInput } from './LineInput';
 import { OddsInputs } from './OddsInputs';
 import { FairPriceReadout } from './FairPriceReadout';
 import { HitRateCard } from './HitRateCard';
+import { AltLineExplorer } from './AltLineExplorer';
 import { GameBarChart } from './GameBarChart';
 import { DvpBlock } from './DvpBlock';
 import { WhyReadout } from './WhyReadout';
+import { ParkFactorNote } from './ParkFactorNote';
 import { VerdictPanel } from './VerdictPanel';
 import { SplitsPanel } from './SplitsPanel';
 
@@ -120,7 +122,11 @@ export function PlayerResearchClient({
 
   const statDef = STAT_DEFS[data.stat];
   const effectiveLine = line ?? data.line;
-  const seasonOver = data.windows.find((w) => w.window === 'season')?.hitRate.hitRateOver ?? null;
+  const seasonWindow = data.windows.find((w) => w.window === 'season');
+  const seasonOver = seasonWindow?.hitRate.hitRateOver ?? null;
+  // Alt-line table is line-independent (values don't move), so it recomputes on
+  // the client as the user nudges the line — no refetch needed.
+  const altRows = altLineTable(seasonWindow?.hitRate.values ?? [], effectiveLine);
   const edgeOver =
     data.windows.find((w) => w.window === edgeWindow)?.hitRate.hitRateOver ?? null;
 
@@ -170,6 +176,9 @@ export function PlayerResearchClient({
         ))}
       </section>
 
+      {/* Alternate lines — how the over rate moves around the selected line */}
+      <AltLineExplorer rows={altRows} statShort={statDef.short} />
+
       {/* Chart */}
       <section aria-label="Game-by-game" className="mb-6">
         <GameBarChart points={data.chart} line={data.line} statShort={statDef.short} />
@@ -189,6 +198,12 @@ export function PlayerResearchClient({
           sport={sport}
         />
         <WhyReadout text={data.why} />
+        {sport === 'mlb' && (
+          <ParkFactorNote
+            teamExternalId={data.player.teamExternalId}
+            teamName={data.player.teamName}
+          />
+        )}
       </section>
 
       {/* Odds -> fair price */}

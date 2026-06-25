@@ -8,6 +8,7 @@
 //   pnpm snapshot
 import 'dotenv/config';
 import { db } from '../lib/db';
+import { recordIngestRun } from './ingestRun';
 import {
   computeHitRate,
   recentFormEstimate,
@@ -46,6 +47,22 @@ async function snapshotSport(sport: Sport): Promise<number> {
   const snapshotDate = new Date();
   snapshotDate.setUTCHours(0, 0, 0, 0);
 
+  // NFL plays WEEKLY, so a nightly snapshot would freeze a fresh, near-identical
+  // lean every night for the same upcoming game (all later graded against that one
+  // game) — inflating and correlating the /accuracy sample ~6-7x. For NFL we keep
+  // only one live prediction per (player, stat): skip if one is already pending.
+  // Nightly sports (NBA/MLB) are left exactly as before — their prior snapshot is
+  // graded earlier in the same pipeline run, so daily re-snapshotting is correct.
+  const dedupePending = sport === 'nfl';
+  const pendingKey = new Set<string>();
+  if (dedupePending) {
+    const pending = await db.projectionSnapshot.findMany({
+      where: { sport, graded: false },
+      select: { playerId: true, stat: true },
+    });
+    for (const s of pending) pendingKey.add(`${s.playerId}:${s.stat}`);
+  }
+
   const snapshots = [];
   for (const p of players) {
     const all = byPlayer.get(p.id) ?? [];
@@ -59,6 +76,8 @@ async function snapshotSport(sport: Sport): Promise<number> {
     if (games.length < MIN_PRIOR) continue;
 
     for (const stat of boardStatsForSnapshot(sport, p.posBucket)) {
+      // NFL only: skip if this player+stat already has a lean awaiting its game.
+      if (dedupePending && pendingKey.has(`${p.id}:${stat}`)) continue;
       const line = defaultLine(games, stat);
       if (line <= 0.5) continue;
       const windows = STAT_WINDOWS.map((w) => {
@@ -108,7 +127,7 @@ async function main() {
   await snapshotSport('nfl');
 }
 
-main()
+recordIngestRun('snapshot', main)
   .catch((e) => {
     console.error(e);
     process.exitCode = 1;

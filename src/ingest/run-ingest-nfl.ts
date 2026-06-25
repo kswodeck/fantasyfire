@@ -9,6 +9,7 @@
 // Teams (ids + names) and positions/bios come from /teams and /teams/{id}/roster.
 import 'dotenv/config';
 import { db } from '../lib/db';
+import { recordIngestRun } from './ingestRun';
 import { slugify } from './nba';
 import { pMap } from './mlb';
 import {
@@ -276,7 +277,7 @@ async function main() {
   });
 }
 
-main()
+recordIngestRun('nfl', main)
   .catch((e) => {
     console.error(e);
     process.exitCode = 1;
