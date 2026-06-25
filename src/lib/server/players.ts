@@ -886,10 +886,14 @@ export interface BoardOptions {
   perStatCap?: number;
   /** Which book's real line to rank against (when PROVIDED_LINES_ENABLED). */
   source?: string;
+  /** Pure-slate mode: include ONLY props the chosen book actually offers (its
+   * real line), across every market it lists — no computed-median fallback. */
+  requireProvidedLine?: boolean;
 }
 
 export async function getBoard(sport: Sport, opts: BoardOptions = {}): Promise<BoardRow[]> {
   const { limit = 40, scan = 120, perPlayerCap = 2, perStatCap = 10 } = opts;
+  const requireProvided = opts.requireProvidedLine === true;
   const players = await db.player.findMany({
     where: { sport },
     include: { team: { select: { abbreviation: true, name: true, externalId: true } } },
@@ -953,13 +957,26 @@ export async function getBoard(sport: Sport, opts: BoardOptions = {}): Promise<B
       gamesPlayed: games.length,
     };
 
-    for (const stat of boardStatsFor(sport, p.posBucket)) {
-      // Prefer a real provided line when present (feature-flagged); else our
-      // balanced typical-game (median) line.
-      const line = providedLines.get(`${p.id}:${stat}`) ?? defaultLine(games, stat);
-      // Skip degenerate low-volume props: a 0.5 line means the player's typical
-      // game is 0 of this stat, so any "lean" is a trivial under, not a real read.
-      if (line <= 0.5) continue;
+    // The (stat, line) pairs to rank for this player. Pure-slate mode walks every
+    // market the chosen book actually offers this player (its real line); else the
+    // curated board stats vs the book line (when present) or our median line.
+    const statEntries: Array<{ stat: StatKey; line: number; provided: boolean }> = requireProvided
+      ? statKeysForSport(sport, p.posBucket).flatMap((stat) => {
+          const provided = providedLines.get(`${p.id}:${stat}`);
+          return provided != null ? [{ stat, line: provided, provided: true }] : [];
+        })
+      : boardStatsFor(sport, p.posBucket).map((stat) => {
+          const book = providedLines.get(`${p.id}:${stat}`);
+          return book != null
+            ? { stat, line: book, provided: true }
+            : { stat, line: defaultLine(games, stat), provided: false };
+        });
+
+    for (const { stat, line, provided } of statEntries) {
+      // Skip degenerate low-volume props ONLY for our computed median line — a 0.5
+      // median means the player typically records 0, so any "lean" is a trivial
+      // under. A real book line of 0.5 (e.g. "over 0.5 HR") is a legitimate prop.
+      if (!provided && line <= 0.5) continue;
       const windows = STAT_WINDOWS.map((w) => {
         const hr = computeHitRate(games, stat, line, w);
         return { window: String(w), overs: hr.overs, decided: hr.decided };
@@ -977,6 +994,9 @@ export async function getBoard(sport: Sport, opts: BoardOptions = {}): Promise<B
         cv: consistency.cv,
         gamesPlayed: games.length,
       });
+      // A 0.5 book line's only meaningful lean is the OVER ("will it happen"). The
+      // under ("it won't") is trivial/obvious — never feature it as a top lean.
+      if (line <= 0.5 && fireScore.side === 'under') continue;
       out.push({
         player: listItem,
         stat,

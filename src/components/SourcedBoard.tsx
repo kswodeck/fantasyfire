@@ -29,7 +29,7 @@ export function SourcedBoard({
     <div>
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
-          Ranked vs the {sources.length > 1 ? 'selected book' : 'book'}&rsquo;s real line
+          Every prop on the board, ranked vs its real line
         </h2>
         <SourceSelector sources={sources} value={source} onChange={setSource} />
       </div>

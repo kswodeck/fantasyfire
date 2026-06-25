@@ -66,7 +66,18 @@ export default async function BoardPage({ params }: PageProps) {
         const entries = await Promise.all(
           sources.map(
             async (s) =>
-              [s, await getBoard(sport, { limit: 150, perStatCap: 30, source: s })] as const,
+              [
+                s,
+                // Pure slate: only props this book actually lists, ranked vs its real
+                // line. Wider scan so more of the book's board is eligible.
+                await getBoard(sport, {
+                  limit: 150,
+                  perStatCap: 30,
+                  scan: 200,
+                  source: s,
+                  requireProvidedLine: true,
+                }),
+              ] as const,
           ),
         );
         boardsBySource = Object.fromEntries(entries);
