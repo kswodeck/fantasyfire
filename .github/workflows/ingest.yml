@@ -1,7 +1,7 @@
-name: Ingest NBA + MLB data
+name: Ingest NBA + MLB + NFL data
 
-# Pulls stats.nba.com (playerindex + leaguegamelog) and statsapi.mlb.com and
-# upserts into Postgres.
+# Pulls stats.nba.com (playerindex + leaguegamelog), statsapi.mlb.com, and ESPN's
+# hidden football/nfl API, and upserts into Postgres.
 #
 # WHY GITHUB ACTIONS (not Vercel): stats.nba.com frequently blocks AWS/Vercel/
 # cloud IP ranges, so the NBA ingest must NOT run from a Vercel function. GitHub
@@ -45,6 +45,7 @@ jobs:
       # repo variables only to force a specific season (e.g. backfill).
       NBA_SEASON: ${{ vars.NBA_SEASON || '' }}
       MLB_SEASON: ${{ vars.MLB_SEASON || '' }}
+      NFL_SEASON: ${{ vars.NFL_SEASON || '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -78,6 +79,14 @@ jobs:
       - name: Run MLB ingest
         if: ${{ success() || steps.nba_ingest.outcome == 'failure' }}
         run: pnpm ingest:mlb
+
+      # NFL via ESPN's hidden football/nfl API. ESPN is generally NOT IP-blocked
+      # (it's the documented NBA fallback host), so run it regardless of whether
+      # the NBA step hit a cloud-IP block. In the off-season it pulls 0 completed
+      # games (a harmless no-op) until the season starts.
+      - name: Run NFL ingest
+        if: ${{ success() || failure() }}
+        run: pnpm ingest:nfl
 
       # Free schedule feed (statsapi.mlb.com + ESPN scoreboard) for the "tonight"
       # slate. Best-effort and non-fatal — runs even if an ingest step failed.
