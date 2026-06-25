@@ -8,6 +8,8 @@ import { getTonightSlate, getBoard } from '@/lib/server/players';
 import { formatIsoDate } from '@/lib/format';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
 import type { TonightGame, BoardRow } from '@/lib/types';
+import { RelatedLinks } from '@/components/RelatedLinks';
+import { sportMeshLinks } from '@/lib/relatedLinks';
 
 export const revalidate = 3600;
 export const dynamicParams = false;
@@ -114,6 +116,8 @@ export default async function TodayPage({ params }: PageProps) {
           )}
         </>
       )}
+
+      <RelatedLinks links={sportMeshLinks(sport, 'today')} />
 
       <p className="mt-6 text-xs leading-relaxed text-muted">
         Descriptive research from public game logs — not predictions, picks, or betting advice. 21+.

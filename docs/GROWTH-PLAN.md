@@ -3,6 +3,25 @@
 _Last updated: 2026-06-24. This is a strategy/sequencing doc, not a spec. Each item lists the
 concrete files it touches so it can be picked up directly._
 
+## ✅ Shipped status (2026-06-24)
+
+- **NOW (N0–N4):** all shipped — Umami analytics, median→raw-median default line (rebalanced Over/Under),
+  per-page freshness, recent-window upsert, methodology + named author + responsible-gaming.
+- **NEXT (the retention + SEO engine):**
+  - **X1** ✅ player-page splits / projection / consistency / matchup-grade depth (VerdictPanel, SplitsPanel).
+  - **X2** ✅ confidence-gated **Streaks** (`/[sport]/streaks`) + **Trends** (`/[sport]/trends`) boards
+    (`computeStreak`, `getStreakBoard`/`getTrendBoard`, Wilson-ranked).
+  - **X3** ✅ programmatic SEO family + internal-link mesh: per-stat `/[sport]/[playerSlug]/[stat]`,
+    `/[sport]/leaders/[stat]`, `/[sport]/matchups` (Defense-vs-Position / Pitching-Allowed), the
+    `RelatedLinks` mesh, a `SportNav` sub-nav, JSON-LD (BreadcrumbList + Dataset) + sitemap coverage.
+  - **X4** ⏸️ deferred — nightly precompute tables. ISR already amortizes the DvP query to once/revalidation;
+    revisit only if traffic makes per-revalidation compute a real cost.
+  - **X5** ✅ projection snapshots + grading + public `/[sport]/accuracy` (recalibrated; tiers now discriminate).
+- **LATER:** **L1** ✅ schedule → `/[sport]/today`; **L5** ✅ ESPN ingest fallback. L2 (push), L3 (favorites),
+  L4 (OG cards), L6 (park factors) remain.
+
+The remaining high-leverage work is acquisition (§6) + the LATER re-engagement items once traffic exists.
+
 ## The thesis
 
 FantasyFire wins on **honesty as a moat**, not on data volume. Two assets nobody can easily copy:

@@ -129,6 +129,64 @@ export interface BoardRow {
   fireScore: FireScoreResult;
 }
 
+/** One row on the streaks board: a current consecutive over/under run. */
+export interface StreakRow {
+  rank: number;
+  player: PlayerListItem;
+  stat: StatKey;
+  statShort: string;
+  line: number;
+  side: 'over' | 'under';
+  /** Consecutive most-recent games on `side` (pushes transparent). */
+  length: number;
+  /** The streak's per-game values, most-recent-first. */
+  values: number[];
+}
+
+/** One row on the trends board: how recent form has swung from the season baseline. */
+export interface TrendRow {
+  rank: number;
+  player: PlayerListItem;
+  stat: StatKey;
+  statShort: string;
+  line: number;
+  /** The recent-form side (the side the L10 leans). */
+  side: 'over' | 'under';
+  /** L10 hit rate on `side` (0..1). */
+  recentRate: number;
+  /** Wilson lower bound of the recent rate (the honest ranking key). */
+  recentLower: number;
+  /** Decided games in the recent window. */
+  recentGames: number;
+  /** Season hit rate on `side` (0..1). */
+  seasonRate: number;
+  /** recentRate − seasonRate, signed (the swing magnitude/direction). */
+  delta: number;
+}
+
+/** One row on a defense-vs-position / pitching-allowed reference table. */
+export interface DvpTableRow {
+  rank: number;
+  totalRanked: number;
+  teamAbbreviation: string;
+  teamName: string;
+  teamExternalId: number;
+  avgAllowed: number;
+  sampleSize: number;
+  lowSample: boolean;
+  /** A–F matchup grade for a player facing this team (A = softest). */
+  grade: MatchupGrade;
+}
+
+/** One row on a leaders-by-stat table. */
+export interface LeaderRow {
+  rank: number;
+  player: PlayerListItem;
+  /** Season per-game average of the stat. */
+  perGame: number;
+  gamesPlayed: number;
+}
+
 /** One analyzed line from a pasted slate (matched, or skipped with a reason). */
 export interface SlateResult {
   raw: string;

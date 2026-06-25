@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import type { PlayerResearch } from '@/lib/types';
 import { STAT_DEFS, statKeysForSport, type StatKey } from '@/lib/stats';
 import { statKeySchema, lineSchema } from '@/lib/schemas';
@@ -37,12 +37,18 @@ export function PlayerResearchClient({
   slug,
   initialResearch,
   initialStat,
+  statHrefBase,
 }: {
   slug: string;
   initialResearch: PlayerResearch;
   initialStat: StatKey;
+  /** When set (the per-stat SEO page), switching stats navigates to the player
+   * hub at this path with ?stat= instead of swapping in place — keeping the URL,
+   * header, and content in sync. */
+  statHrefBase?: string;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const sport = initialResearch.player.sport;
   const statKeys = statKeysForSport(sport, initialResearch.player.posBucket);
   const [stat, setStat] = useState<StatKey>(initialStat);
@@ -89,10 +95,15 @@ export function PlayerResearchClient({
   }
 
   function handleStat(next: StatKey) {
+    track('stat_switched', { sport, stat: next });
+    if (statHrefBase) {
+      // On the per-stat page, switching stats is a real navigation to the hub.
+      router.push(`${statHrefBase}?stat=${next}`);
+      return;
+    }
     setStat(next);
     setLine(undefined); // reset to the new stat's default line
     syncUrl(next, undefined);
-    track('stat_switched', { sport, stat: next });
   }
 
   function handleLine(next: number) {

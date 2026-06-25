@@ -1,12 +1,18 @@
 import type { MetadataRoute } from 'next';
-import { getPlayerSlugsWithFreshness } from '@/lib/server/players';
+import { getPlayerSlugsWithFreshness, getPropStatParams } from '@/lib/server/players';
 import { absoluteUrl } from '@/lib/site';
-import { SPORT_LIST } from '@/lib/sports';
+import { SPORT_LIST, type Sport } from '@/lib/sports';
 
 export const revalidate = 3600;
 
 const newer = (a: Date | null, b: Date | null): Date | null =>
   a && b ? (a > b ? a : b) : (a ?? b);
+
+// Stats with a leaders page.
+const LEADER_STATS: Record<Sport, string[]> = {
+  nba: ['pts', 'reb', 'ast', 'fg3m', 'stl', 'blk', 'pra'],
+  mlb: ['hits', 'tb', 'hr', 'rbi', 'runs', 'sb', 'bb', 'so'],
+};
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
@@ -14,6 +20,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const playerEntries: MetadataRoute.Sitemap = [];
   const sportEntries: MetadataRoute.Sitemap = [];
   let freshestOverall: Date | null = null;
+
   for (const sport of SPORT_LIST) {
     let freshestForSport: Date | null = null;
     try {
@@ -23,43 +30,41 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
           url: absoluteUrl(`/${sport}/${slug}`),
           changeFrequency: 'daily',
           priority: 0.7,
-          // Per-player lastmod = their last game; a genuine recrawl signal.
           ...(lastGameDate ? { lastModified: lastGameDate } : {}),
         });
         freshestForSport = newer(freshestForSport, lastGameDate);
+      }
+      // Per-stat prop pages for the most-active players (capped, valid combos
+      // only — so the sitemap never lists a 404 or balloons into 20k+ URLs).
+      const propParams = await getPropStatParams(sport, 120);
+      for (const { slug, stat } of propParams) {
+        playerEntries.push({
+          url: absoluteUrl(`/${sport}/${slug}/${stat}`),
+          changeFrequency: 'daily',
+          priority: 0.6,
+          lastModified: freshestForSport ?? now,
+        });
       }
     } catch {
       // DB unavailable during a revalidation — still return the static routes.
     }
     freshestOverall = newer(freshestOverall, freshestForSport);
-    // Sport hub + index move whenever that sport gets new box scores.
     const sportMod = freshestForSport ?? now;
     sportEntries.push(
       { url: absoluteUrl(`/${sport}`), changeFrequency: 'daily', priority: 0.9, lastModified: sportMod },
-      {
-        url: absoluteUrl(`/${sport}/players`),
-        changeFrequency: 'daily',
-        priority: 0.8,
-        lastModified: sportMod,
-      },
-      {
-        url: absoluteUrl(`/${sport}/board`),
-        changeFrequency: 'daily',
-        priority: 0.8,
-        lastModified: sportMod,
-      },
-      {
-        url: absoluteUrl(`/${sport}/today`),
-        changeFrequency: 'daily',
-        priority: 0.8,
-        lastModified: sportMod,
-      },
-      {
-        url: absoluteUrl(`/${sport}/accuracy`),
-        changeFrequency: 'daily',
+      { url: absoluteUrl(`/${sport}/players`), changeFrequency: 'daily', priority: 0.8, lastModified: sportMod },
+      { url: absoluteUrl(`/${sport}/board`), changeFrequency: 'daily', priority: 0.8, lastModified: sportMod },
+      { url: absoluteUrl(`/${sport}/today`), changeFrequency: 'daily', priority: 0.8, lastModified: sportMod },
+      { url: absoluteUrl(`/${sport}/streaks`), changeFrequency: 'daily', priority: 0.7, lastModified: sportMod },
+      { url: absoluteUrl(`/${sport}/trends`), changeFrequency: 'daily', priority: 0.7, lastModified: sportMod },
+      { url: absoluteUrl(`/${sport}/matchups`), changeFrequency: 'daily', priority: 0.7, lastModified: sportMod },
+      { url: absoluteUrl(`/${sport}/accuracy`), changeFrequency: 'daily', priority: 0.6, lastModified: sportMod },
+      ...LEADER_STATS[sport].map((stat) => ({
+        url: absoluteUrl(`/${sport}/leaders/${stat}`),
+        changeFrequency: 'daily' as const,
         priority: 0.6,
         lastModified: sportMod,
-      },
+      })),
     );
   }
 

@@ -5,6 +5,8 @@ import { PlayerBrowser } from '@/components/PlayerBrowser';
 import { searchPlayers } from '@/lib/server/players';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
 import type { PlayerListItem } from '@/lib/types';
+import { RelatedLinks } from '@/components/RelatedLinks';
+import { sportMeshLinks } from '@/lib/relatedLinks';
 
 export const dynamicParams = false;
 
@@ -73,6 +75,8 @@ export default async function PlayersPage({ params, searchParams }: PageProps) {
       ) : (
         <PlayerBrowser sport={sport} players={players} initialQuery={initialQuery} />
       )}
+
+      <RelatedLinks links={sportMeshLinks(sport, 'players')} />
     </div>
   );
 }

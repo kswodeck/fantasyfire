@@ -7,6 +7,8 @@ import { SlatePaster } from '@/components/SlatePaster';
 import { getBoard } from '@/lib/server/players';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
 import type { BoardRow } from '@/lib/types';
+import { RelatedLinks } from '@/components/RelatedLinks';
+import { sportMeshLinks } from '@/lib/relatedLinks';
 
 export const revalidate = 3600;
 export const dynamicParams = false;
@@ -94,6 +96,8 @@ export default async function BoardPage({ params }: PageProps) {
           <FilterableBoard sport={sport} rows={rows} />
         </div>
       )}
+
+      <RelatedLinks links={sportMeshLinks(sport, 'board')} />
 
       <p className="mt-4 text-xs leading-relaxed text-muted">
         Descriptive research from public game logs, ranked by a sample-size–adjusted FireScore (recent

@@ -6,6 +6,8 @@ import { getCalibration } from '@/lib/server/players';
 import { pct, formatIsoDate } from '@/lib/format';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
 import type { Calibration } from '@/lib/types';
+import { RelatedLinks } from '@/components/RelatedLinks';
+import { sportMeshLinks } from '@/lib/relatedLinks';
 
 export const revalidate = 3600;
 export const dynamicParams = false;
@@ -120,6 +122,8 @@ export default async function AccuracyPage({ params }: PageProps) {
           </p>
         </>
       )}
+
+      <RelatedLinks links={sportMeshLinks(sport, 'accuracy')} />
 
       <p className="mt-6 text-xs leading-relaxed text-muted">
         Descriptive research from public game logs — not predictions, picks, or betting advice. 21+.

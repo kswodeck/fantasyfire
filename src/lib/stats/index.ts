@@ -9,3 +9,4 @@ export * from './consistency';
 export * from './fireScore';
 export * from './splits';
 export * from './line';
+export * from './streak';

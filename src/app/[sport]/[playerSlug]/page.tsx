@@ -11,6 +11,10 @@ import { PlayerAvatar } from '@/components/PlayerAvatar';
 import { TeamLogo } from '@/components/TeamLogo';
 import { PlayerBioBar } from '@/components/PlayerBioBar';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
+import { RelatedLinks } from '@/components/RelatedLinks';
+import { sportMeshLinks } from '@/lib/relatedLinks';
+import { PROP_STATS } from '@/lib/propStats';
+import { STAT_DEFS } from '@/lib/stats';
 
 // ISR: statically generate the busiest players, revalidate hourly; the rest
 // render on-demand.
@@ -196,6 +200,20 @@ export default async function PlayerPage({ params }: PageProps) {
         slug={player.slug}
         initialResearch={research}
         initialStat={research.stat}
+      />
+
+      <RelatedLinks
+        links={[
+          ...PROP_STATS[sport]
+            .filter((s) => s !== research.stat)
+            .slice(0, 3)
+            .map((s) => ({
+              label: `${player.lastName} ${STAT_DEFS[s].label}`,
+              href: `/${sport}/${player.slug}/${s}`,
+              hint: `${STAT_DEFS[s].label} hit rates and trends.`,
+            })),
+          ...sportMeshLinks(sport).slice(0, 5),
+        ]}
       />
     </div>
   );
