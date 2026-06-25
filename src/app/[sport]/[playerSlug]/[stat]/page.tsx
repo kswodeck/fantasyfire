@@ -15,6 +15,7 @@ import { TeamLogo } from '@/components/TeamLogo';
 import { PlayerBioBar } from '@/components/PlayerBioBar';
 import { FavoriteToggle } from '@/components/FavoriteToggle';
 import { ShareButton } from '@/components/ShareButton';
+import { EmbedButton } from '@/components/EmbedButton';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { RelatedLinks } from '@/components/RelatedLinks';
 import { JsonLd } from '@/components/JsonLd';
@@ -177,6 +178,7 @@ export default async function PlayerStatPage({ params }: PageProps) {
               team={player.teamAbbreviation}
             />
             <ShareButton />
+            <EmbedButton sport={sport} slug={player.slug} />
           </div>
         </div>
       </header>

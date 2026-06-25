@@ -46,14 +46,15 @@ function contentSecurityPolicy(): string {
   return parts.join('; ');
 }
 
+const HSTS = { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' };
+const NOSNIFF = { key: 'X-Content-Type-Options', value: 'nosniff' };
+const REFERRER = { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' };
+
 const securityHeaders = [
   { key: 'Content-Security-Policy', value: contentSecurityPolicy() },
-  {
-    key: 'Strict-Transport-Security',
-    value: 'max-age=63072000; includeSubDomains; preload',
-  },
-  { key: 'X-Content-Type-Options', value: 'nosniff' },
-  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  HSTS,
+  NOSNIFF,
+  REFERRER,
   {
     key: 'Permissions-Policy',
     value: 'camera=(), microphone=(), geolocation=(), browsing-topics=()',
@@ -61,9 +62,28 @@ const securityHeaders = [
   { key: 'X-Frame-Options', value: 'DENY' },
 ];
 
+// The /embed widget is MEANT to be iframed by third parties, so it opts out of the
+// site-wide frame ban: no X-Frame-Options, and a minimal CSP with `frame-ancestors *`.
+// It loads no scripts and no external resources (inline styles + inline SVG only),
+// so the surface stays tiny.
+const embedHeaders = [
+  {
+    key: 'Content-Security-Policy',
+    value: "default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors *",
+  },
+  HSTS,
+  NOSNIFF,
+  REFERRER,
+];
+
 const nextConfig: NextConfig = {
   async headers() {
-    return [{ source: '/(.*)', headers: securityHeaders }];
+    return [
+      // /embed gets framing-friendly headers…
+      { source: '/embed/:path*', headers: embedHeaders },
+      // …everything else keeps the strict, frame-banning set.
+      { source: '/((?!embed/).*)', headers: securityHeaders },
+    ];
   },
 };
 
