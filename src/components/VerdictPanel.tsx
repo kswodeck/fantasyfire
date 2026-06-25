@@ -1,13 +1,7 @@
 import type { PlayerVerdict } from '@/lib/types';
 import { num1 } from '@/lib/format';
-
-const TIER_STYLE: Record<string, { text: string; box: string }> = {
-  'Strong lean': { text: 'text-emerald-300', box: 'border-emerald-500/30 bg-emerald-500/10' },
-  Lean: { text: 'text-emerald-300', box: 'border-emerald-500/25 bg-emerald-500/[0.07]' },
-  'Slight lean': { text: 'text-amber-300', box: 'border-amber-500/25 bg-amber-500/[0.07]' },
-  'No lean': { text: 'text-muted', box: 'border-line bg-surface-2' },
-  Pass: { text: 'text-muted', box: 'border-line bg-surface-2' },
-};
+import { LeanArrow } from './LeanArrow';
+import { TIER_TEXT, TIER_BOX } from '@/lib/tierStyle';
 
 const GRADE_TEXT: Record<string, string> = {
   A: 'text-emerald-300',
@@ -34,14 +28,15 @@ export function VerdictPanel({
   line: number;
 }) {
   const { fireScore, projection, consistency, matchupGrade } = verdict;
-  const tier = TIER_STYLE[fireScore.tier] ?? TIER_STYLE['No lean'];
+  const tierText = TIER_TEXT[fireScore.tier] ?? 'text-muted';
+  const tierBox = TIER_BOX[fireScore.tier] ?? TIER_BOX['No lean'];
   const headline =
     fireScore.tier === 'Pass'
       ? 'Pass'
       : `${fireScore.side === 'over' ? 'Over' : 'Under'} — ${fireScore.tier}`;
 
   return (
-    <section aria-label="Verdict" className={`mb-6 rounded-xl border p-4 ${tier.box}`}>
+    <section aria-label="Verdict" className={`mb-6 rounded-xl border p-4 ${tierBox}`}>
       <div className="flex items-center justify-between gap-2">
         <h3 className="flex items-center gap-2 text-sm font-semibold">
           Verdict
@@ -55,7 +50,12 @@ export function VerdictPanel({
       </div>
 
       <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className={`text-2xl font-bold tracking-tight ${tier.text}`}>{headline}</span>
+        <span
+          className={`inline-flex items-center gap-1.5 text-2xl font-bold tracking-tight ${tierText}`}
+        >
+          <LeanArrow tier={fireScore.tier} side={fireScore.side} size={22} />
+          {headline}
+        </span>
         <span className="text-sm tabular-nums text-muted">FireScore {fireScore.score}/100</span>
       </div>
 

@@ -2,16 +2,10 @@ import Link from 'next/link';
 import type { BoardRow } from '@/lib/types';
 import type { Sport } from '@/lib/sports';
 import { PlayerAvatar } from './PlayerAvatar';
+import { LeanArrow } from './LeanArrow';
 import { getTeam } from '@/lib/teams';
 import { num1 } from '@/lib/format';
-
-const TIER_TEXT: Record<string, string> = {
-  'Strong lean': 'text-emerald-300',
-  Lean: 'text-emerald-300',
-  'Slight lean': 'text-amber-300',
-  'No lean': 'text-muted',
-  Pass: 'text-muted',
-};
+import { TIER_TEXT } from '@/lib/tierStyle';
 
 /**
  * Ranked cross-player board (presentational). Each row links to the player page
@@ -45,7 +39,10 @@ export function BoardTable({ sport, rows }: { sport: Sport; rows: BoardRow[] }) 
                 </div>
               </div>
               <div className="shrink-0 text-right">
-                <div className={`text-sm font-semibold ${TIER_TEXT[r.fireScore.tier] ?? 'text-muted'}`}>
+                <div
+                  className={`flex items-center justify-end gap-1 text-sm font-semibold ${TIER_TEXT[r.fireScore.tier] ?? 'text-muted'}`}
+                >
+                  <LeanArrow tier={r.fireScore.tier} side={r.fireScore.side} size={13} />
                   {r.fireScore.tier}
                 </div>
                 <div className="text-[11px] tabular-nums text-muted">

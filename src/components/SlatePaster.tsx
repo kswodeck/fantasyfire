@@ -5,14 +5,8 @@ import Link from 'next/link';
 import type { SlateResult } from '@/lib/types';
 import type { Sport } from '@/lib/sports';
 import { pct, signed, americanOdds } from '@/lib/format';
-
-const TIER_TEXT: Record<string, string> = {
-  'Strong lean': 'text-emerald-300',
-  Lean: 'text-emerald-300',
-  'Slight lean': 'text-amber-300',
-  'No lean': 'text-muted',
-  Pass: 'text-muted',
-};
+import { LeanArrow } from './LeanArrow';
+import { TIER_TEXT } from '@/lib/tierStyle';
 
 const PLACEHOLDER = 'LeBron James 25.5 points\nLuka Doncic over 8.5 assists -115\nJokic 45.5 PRA';
 
@@ -100,7 +94,10 @@ export function SlatePaster({ sport }: { sport: Sport }) {
                         </div>
                       </div>
                       <div className="shrink-0 text-right">
-                        <div className={`text-sm font-semibold ${TIER_TEXT[r.fireScore.tier] ?? 'text-muted'}`}>
+                        <div
+                          className={`flex items-center justify-end gap-1 text-sm font-semibold ${TIER_TEXT[r.fireScore.tier] ?? 'text-muted'}`}
+                        >
+                          <LeanArrow tier={r.fireScore.tier} side={r.fireScore.side} size={13} />
                           {r.fireScore.tier}
                         </div>
                         <div className="text-[11px] tabular-nums text-muted">
