@@ -93,6 +93,9 @@ const nextConfig: NextConfig = {
       // /[sport]/today merged into the Top Leans board (which now has a "today's
       // slate" toggle). Keep the old URL as a permanent redirect to preserve SEO.
       { source: '/:sport/today', destination: '/:sport/board', permanent: true },
+      // /[sport]/streaks merged into Trends (each row now shows the current streak
+      // alongside the L10 swing). Permanent redirect to preserve SEO.
+      { source: '/:sport/streaks', destination: '/:sport/trends', permanent: true },
     ];
   },
 };

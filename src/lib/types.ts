@@ -141,21 +141,8 @@ export interface BoardRow {
   fireScore: FireScoreResult;
 }
 
-/** One row on the streaks board: a current consecutive over/under run. */
-export interface StreakRow {
-  rank: number;
-  player: PlayerListItem;
-  stat: StatKey;
-  statShort: string;
-  line: number;
-  side: 'over' | 'under';
-  /** Consecutive most-recent games on `side` (pushes transparent). */
-  length: number;
-  /** The streak's per-game values, most-recent-first. */
-  values: number[];
-}
-
-/** One row on the trends board: how recent form has swung from the season baseline. */
+/** One row on the trends board: how recent form has swung from the season baseline,
+ *  with the player's current consecutive run (the merged "Streaks" metric) alongside. */
 export interface TrendRow {
   rank: number;
   player: PlayerListItem;
@@ -174,6 +161,9 @@ export interface TrendRow {
   seasonRate: number;
   /** recentRate − seasonRate, signed (the swing magnitude/direction). */
   delta: number;
+  /** Current consecutive run for this stat+line (length ≥3), or null when there
+   *  isn't one. Its side may differ from the L10 lean (a recent blip vs the trend). */
+  streak: { side: 'over' | 'under'; length: number } | null;
 }
 
 /** One row on a defense-vs-position / pitching-allowed reference table. */

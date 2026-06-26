@@ -44,7 +44,6 @@ import type {
   WindowResult,
   PlayerResearch,
   BoardRow,
-  StreakRow,
   TrendRow,
   DvpTableRow,
   LeaderRow,
@@ -1160,75 +1159,6 @@ const TREND_MIN_SWING = 0.18;
 
 type ScanComputeOpts = { limit: number; perPlayerCap: number; perStatCap: number };
 
-/** Streaks from a loaded pool vs a line map (pure compute). Each player's CURRENT
- *  consecutive over/under run, longest first. */
-function computeStreakRows(
-  sport: Sport,
-  players: BoardPlayer[],
-  gamesByPlayer: Map<number, PlayerGame[]>,
-  providedLines: Map<string, number>,
-  requireProvided: boolean,
-  opts: ScanComputeOpts,
-): StreakRow[] {
-  const out: Omit<StreakRow, 'rank'>[] = [];
-  for (const p of players) {
-    const allGames = gamesByPlayer.get(p.id);
-    if (!allGames || allGames.length < FIRESCORE_MIN_GAMES) continue;
-    const games = qualifyGames(sport, p.posBucket, allGames);
-    if (games.length < FIRESCORE_MIN_GAMES) continue;
-    const listItem = boardListItem(sport, p, games.length);
-    for (const { stat, line, provided } of statLinesFor(sport, p.posBucket, games, providedLines, p.id, requireProvided)) {
-      if (!provided && line <= 0.5) continue; // degenerate median line only
-      const streak = computeStreak(games.map((g) => statValue(stat, g)), line);
-      if (streak.side === null || streak.length < STREAK_MIN_LENGTH) continue;
-      if (line <= 0.5 && streak.side === 'under') continue; // trivial "won't do it" run
-      out.push({
-        player: listItem,
-        stat,
-        statShort: STAT_DEFS[stat].short,
-        line,
-        side: streak.side,
-        length: streak.length,
-        values: streak.values,
-      });
-    }
-  }
-  // Longest run first; tiebreak toward the larger game sample (more reliable).
-  out.sort((a, b) => b.length - a.length || b.player.gamesPlayed - a.player.gamesPlayed);
-  return capBoardRows(out, opts.limit, opts.perPlayerCap, opts.perStatCap);
-}
-
-export async function getStreakBoard(
-  sport: Sport,
-  opts: BoardScanOptions = {},
-): Promise<StreakRow[]> {
-  const { limit = 80, scan = 140, perPlayerCap = 1, perStatCap = 25 } = opts;
-  const { players, gamesByPlayer } = await loadBoardPool(sport, scan);
-  const providedLines = await getProvidedLineMap(sport, players.map((p) => p.id), opts.source);
-  return computeStreakRows(sport, players, gamesByPlayer, providedLines, opts.requireProvidedLine === true, {
-    limit,
-    perPlayerCap,
-    perStatCap,
-  });
-}
-
-/** One streaks board per book from a single pool load (vs the book's real lines). */
-export async function getSourcedStreaks(
-  sport: Sport,
-  sources: string[],
-  opts: BoardScanOptions = {},
-): Promise<Record<string, StreakRow[]>> {
-  const { limit = 80, scan = 140, perPlayerCap = 1, perStatCap = 25 } = opts;
-  const result: Record<string, StreakRow[]> = {};
-  const { players, gamesByPlayer } = await loadBoardPool(sport, scan);
-  const ids = players.map((p) => p.id);
-  for (const s of sources) {
-    const providedLines = await getProvidedLineMap(sport, ids, s);
-    result[s] = computeStreakRows(sport, players, gamesByPlayer, providedLines, true, { limit, perPlayerCap, perStatCap });
-  }
-  return result;
-}
-
 /** Trends from a loaded pool vs a line map (pure compute). Players whose RECENT
  *  (L10) form has swung hardest from their season baseline, ranked by Wilson lower. */
 function computeTrendRows(
@@ -1260,6 +1190,9 @@ function computeTrendRows(
       const delta = recentRate - seasonRate;
       if (delta < TREND_MIN_SWING) continue;
       const successes = side === 'over' ? recent.overs : recent.unders;
+      // The player's current consecutive run for this stat+line — the merged "Streaks"
+      // metric, shown alongside the L10 swing (its side may differ from the lean).
+      const run = computeStreak(games.map((g) => statValue(stat, g)), line);
       out.push({
         player: listItem,
         stat,
@@ -1271,6 +1204,10 @@ function computeTrendRows(
         recentGames: recent.decided,
         seasonRate,
         delta,
+        streak:
+          run.side !== null && run.length >= STREAK_MIN_LENGTH
+            ? { side: run.side, length: run.length }
+            : null,
       });
     }
   }

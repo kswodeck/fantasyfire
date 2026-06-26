@@ -43,6 +43,16 @@ export function TrendBoardTable({ sport, rows }: { sport: Sport; rows: TrendRow[
                 <div className="text-[11px] tabular-nums text-muted">
                   {pct(r.recentRate)} · +{Math.round(r.delta * 100)} vs {pct(r.seasonRate)} season
                 </div>
+                {r.streak && (
+                  <div
+                    className={`mt-0.5 flex items-center justify-end gap-1 text-[11px] font-medium ${
+                      r.streak.side === 'over' ? 'text-over' : 'text-under'
+                    }`}
+                  >
+                    <LeanArrow tier="Lean" side={r.streak.side} size={11} />
+                    {r.streak.length} straight {r.streak.side}
+                  </div>
+                )}
               </div>
             </Link>
           </li>
