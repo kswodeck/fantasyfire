@@ -69,16 +69,23 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
 
 ---
 
-## 3. Production (Vercel, uses the PROD Supabase project)
+## 3. Production (Vercel, uses the PROD Supabase project — a separate PRO org)
+
+> **Two isolated orgs.** The PROD project lives in a **paid Pro** Supabase org; the
+> DEV project in a **free** org. Billing + the egress quota are per-org, so dev work
+> and the develop preview can't eat into production's allowance (and vice-versa).
+> Vercel **Preview** points at the free DEV project; **Production** at the Pro PROD
+> project. Verify any env with `pnpm db:target` / `pnpm db:target:prod`.
 
 1. Push to GitHub (commands below), then **import the repo** at [vercel.com/new](https://vercel.com/new).
    Framework auto-detects Next.js; `vercel.json` pins the build (`prisma generate && next build`).
-2. In **Vercel → Settings → Environment Variables**, add:
-   | Key | Value |
-   |---|---|
-   | `DATABASE_URL` | prod project session-pooler URL (`?sslmode=require`) |
-   | `DIRECT_URL` | same |
-   | `NEXT_PUBLIC_SITE_URL` | `https://fantasyfire.app` |
+2. In **Vercel → Settings → Environment Variables**, set values **per environment scope**:
+   | Key | Production scope | Preview scope |
+   |---|---|---|
+   | `DATABASE_URL` | PROD project, transaction pooler `:6543` (`?sslmode=require`) | DEV project, transaction pooler `:6543` |
+   | `DIRECT_URL` | PROD project, session pooler `:5432` | DEV project, session pooler `:5432` |
+   | `NEXT_PUBLIC_SITE_URL` | `https://fantasyfire.app` | develop alias, e.g. `https://fantasyfire-git-develop-<scope>.vercel.app` |
+   | `PROVIDED_LINES_ENABLED` | `true` (once real lines ship to prod) | `true` |
 3. **Before the first deploy**, migrate + seed the prod DB from your machine. Put the
    PROD password into `.env.prod.local` (gitignored), then:
    ```bash
