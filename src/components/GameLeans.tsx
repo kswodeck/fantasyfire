@@ -46,7 +46,7 @@ export function GameLeans({
       )}
       {rows.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
-          No leans for this matchup on this book right now.
+          No reads for this matchup on this book right now.
         </p>
       ) : (
         <div className="space-y-6">
@@ -74,12 +74,12 @@ function TeamSection({
         <TeamLogo sport={sport} externalId={team.externalId} abbr={team.abbr} size={20} />
         <span>{team.name ?? team.abbr}</span>
         <span className="font-normal text-muted">
-          · {teamRows.length} {teamRows.length === 1 ? 'lean' : 'leans'}
+          · {teamRows.length} {teamRows.length === 1 ? 'read' : 'reads'}
         </span>
       </h2>
       {teamRows.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface px-4 py-3 text-sm text-muted">
-          No qualifying leans for {team.abbr} on this book right now.
+          No qualifying reads for {team.abbr} on this book right now.
         </p>
       ) : (
         <BoardTable sport={sport} rows={teamRows} />

@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { DvpCell } from '@/lib/stats';
 import { STAT_DEFS } from '@/lib/stats';
 import { num1, ordinal, formatIsoDate } from '@/lib/format';
@@ -31,6 +32,7 @@ export function DvpBlock({
   matchupStartTime,
   isHome,
   isUpcoming,
+  gameHref,
   sport,
 }: {
   dvp: DvpCell | null;
@@ -40,6 +42,8 @@ export function DvpBlock({
   matchupStartTime: string | null;
   isHome: boolean | null;
   isUpcoming: boolean | null;
+  /** Link to this game's page (/[sport]/game/[id]) — null when there's no upcoming game. */
+  gameHref?: string | null;
   sport: Sport;
 }) {
   if (!dvp || !opponentAbbreviation) {
@@ -66,14 +70,16 @@ export function DvpBlock({
   // "Next" for the upcoming/current game; "Last" off-season (last completed game).
   const matchupLabel = isUpcoming == null ? 'Matchup' : isUpcoming ? 'Next matchup' : 'Last matchup';
 
-  return (
-    <div
-      className="flex h-full flex-col overflow-hidden rounded-xl border border-line p-4"
-      style={{
-        background: `linear-gradient(120deg, color-mix(in srgb, ${team.primary} 16%, var(--surface)) 0%, var(--surface) 62%)`,
-        borderTop: `2px solid ${team.primary}`,
-      }}
-    >
+  const cardStyle = {
+    background: `linear-gradient(120deg, color-mix(in srgb, ${team.primary} 16%, var(--surface)) 0%, var(--surface) 62%)`,
+    borderTop: `2px solid ${team.primary}`,
+  };
+  const cardClass = `flex h-full flex-col overflow-hidden rounded-xl border border-line p-4${
+    gameHref ? ' transition-colors hover:border-brand/60' : ''
+  }`;
+
+  const content = (
+    <>
       <div className="flex items-start justify-between gap-2">
         <h3 className="flex min-w-0 items-center gap-1.5 text-sm font-medium text-muted">
           <TeamLogo
@@ -83,6 +89,11 @@ export function DvpBlock({
             size={18}
           />
           {matchupLabel} — {isHome ? 'vs' : '@'} {opponentAbbreviation}
+          {gameHref && (
+            <span aria-hidden="true" className="ml-0.5 text-brand">
+              →
+            </span>
+          )}
         </h3>
         <div className="flex shrink-0 flex-col items-end gap-0.5 text-xs leading-tight text-muted">
           {matchupDate && <span>{formatIsoDate(matchupDate)}</span>}
@@ -116,6 +127,21 @@ export function DvpBlock({
         </p>
         <span className={`shrink-0 text-xs font-semibold ${tone.cls}`}>{tone.label}</span>
       </div>
+    </>
+  );
+
+  return gameHref ? (
+    <Link
+      href={gameHref}
+      className={cardClass}
+      style={cardStyle}
+      aria-label={`Open the ${opponentAbbreviation} matchup page`}
+    >
+      {content}
+    </Link>
+  ) : (
+    <div className={cardClass} style={cardStyle}>
+      {content}
     </div>
   );
 }

@@ -42,7 +42,7 @@ export function MatchupStrip({
                 type="button"
                 onClick={() => onToggle(g.externalId)}
                 aria-pressed={isSel}
-                title={`Filter the leans to ${label}`}
+                title={`Filter the reads to ${label}`}
                 className="inline-flex items-center gap-1 px-2 py-1 text-foreground"
               >
                 <TeamLogo sport={sport} externalId={g.away.externalId} abbr={g.away.abbr} size={15} />

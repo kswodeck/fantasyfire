@@ -252,6 +252,11 @@ export function PlayerResearchClient({
           matchupStartTime={data.matchupOpponent?.startTime ?? null}
           isHome={data.matchupOpponent?.isHome ?? null}
           isUpcoming={data.matchupOpponent?.isUpcoming ?? null}
+          gameHref={
+            data.matchupOpponent?.isUpcoming && data.matchupOpponent.gameExternalId
+              ? `/${sport}/game/${data.matchupOpponent.gameExternalId}`
+              : null
+          }
           sport={sport}
         />
         <WhyReadout text={data.why} />

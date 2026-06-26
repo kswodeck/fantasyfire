@@ -20,9 +20,12 @@ function factorLabel(f: number): string {
 export function ParkFactorNote({
   teamExternalId,
   teamName,
+  context = 'player',
 }: {
   teamExternalId: number | null;
   teamName: string | null;
+  /** 'player' = the player's own home park; 'game' = the venue this matchup is played at. */
+  context?: 'player' | 'game';
 }) {
   const park = parkFor(teamExternalId);
   if (!park) return null;
@@ -30,7 +33,7 @@ export function ParkFactorNote({
 
   return (
     <div className="rounded-xl border border-line bg-surface p-4">
-      <h3 className="text-sm font-semibold">Home park</h3>
+      <h3 className="text-sm font-semibold">{context === 'game' ? 'Ballpark' : 'Home park'}</h3>
       <p className="mt-1 text-sm">
         <span className="font-medium">{park.name}</span>
         {teamName ? <span className="text-muted"> · {teamName}</span> : null}
@@ -42,8 +45,9 @@ export function ParkFactorNote({
         </span>
       </p>
       <p className="mt-2 text-xs text-muted">
-        Park context for this player&rsquo;s home games. Not folded into the hit rates
-        above — those already reflect the parks they&rsquo;ve played in.
+        {context === 'game'
+          ? 'Where this game is played. Park factors describe run/HR scoring vs an average park — not folded into the reads above.'
+          : "Park context for this player's home games. Not folded into the hit rates above — those already reflect the parks they've played in."}
       </p>
     </div>
   );

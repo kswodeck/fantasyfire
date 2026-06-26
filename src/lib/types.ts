@@ -143,6 +143,9 @@ export interface PlayerResearch {
     date: string;
     /** Full ISO start datetime (UTC) for local-time display; null when unknown. */
     startTime: string | null;
+    /** The scheduled game's external id (links to /[sport]/game/[id]); null for the
+     *  off-season last-completed-game fallback. */
+    gameExternalId: string | null;
     /** true = next/current scheduled game; false = last completed (off-season fallback). */
     isUpcoming: boolean;
   } | null;

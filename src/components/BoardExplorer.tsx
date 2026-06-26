@@ -128,7 +128,7 @@ export function BoardExplorer({
           </div>
           <MatchupStrip sport={sport} games={games} selected={selectedGames} onToggle={toggleGame} />
           <p className="mt-1.5 text-[11px] text-muted">
-            Tap a game to filter the leans to that matchup.
+            Tap a game to filter the reads to that matchup.
           </p>
         </div>
       )}
@@ -136,7 +136,7 @@ export function BoardExplorer({
       {filteredRows.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
           {effectiveMode === 'today'
-            ? 'No leans for this selection right now.'
+            ? 'No reads for this selection right now.'
             : 'No props for this book right now.'}
         </p>
       ) : (

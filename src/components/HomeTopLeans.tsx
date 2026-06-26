@@ -124,7 +124,7 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
                 {rows.length === 0 ? (
                   <p className="px-1 py-4 text-sm text-muted">
                     {mode === 'today' && c.todayTeams.length > 0
-                      ? 'No leans on the slate for this book right now.'
+                      ? 'No reads on the slate for this book right now.'
                       : hasSources
                         ? 'No props on this book right now.'
                         : 'No data available yet.'}

@@ -379,6 +379,9 @@ export type MatchupOpponent = {
   date: string;
   /** Full ISO start datetime (UTC), for client-side local-time display; null if unknown. */
   startTime: string | null;
+  /** The scheduled game's external id (for the /[sport]/game/[id] link); null for the
+   *  off-season last-completed-game fallback, which has no upcoming game page. */
+  gameExternalId: string | null;
 };
 
 /**
@@ -413,6 +416,7 @@ async function getNextOpponent(sport: Sport, teamId: number): Promise<MatchupOpp
     externalId: opp.externalId,
     date: game.date.toISOString().slice(0, 10),
     startTime: game.startTime ? game.startTime.toISOString() : null,
+    gameExternalId: game.externalId,
   };
 }
 
@@ -790,6 +794,7 @@ export async function getPlayerResearch(
         externalId: recentGame.opponentExternalId,
         date: recentGame.gameDate,
         startTime: null,
+        gameExternalId: null,
       }
     : null;
   const upcoming = record.team ? await getNextOpponent(sport, record.team.id) : null;
@@ -1685,4 +1690,41 @@ export async function getTonightSlate(
   }));
 
   return { date: dayStart.toISOString().slice(0, 10), games };
+}
+
+/** One scheduled game by its external id — for the per-game page reached from a player's
+ *  "next matchup" card. Upcoming only (date >= today); past/unknown ids return null so
+ *  the game page shows its "not on the slate" fallback. */
+export async function getScheduledGame(
+  sport: Sport,
+  externalId: string,
+): Promise<TonightGame | null> {
+  const todayUtc = new Date();
+  todayUtc.setUTCHours(0, 0, 0, 0);
+  const r = await db.scheduledGame.findFirst({
+    where: { sport, externalId, date: { gte: todayUtc } },
+    include: {
+      homeTeam: { select: { abbreviation: true, name: true, externalId: true } },
+      awayTeam: { select: { abbreviation: true, name: true, externalId: true } },
+    },
+  });
+  if (!r) return null;
+  return {
+    externalId: r.externalId,
+    date: r.date.toISOString().slice(0, 10),
+    startTime: r.startTime ? r.startTime.toISOString() : null,
+    status: r.status,
+    home: {
+      abbr: r.homeTeam.abbreviation,
+      name: teamDisplayName(sport, r.homeTeam.abbreviation, r.homeTeam.name),
+      externalId: r.homeTeam.externalId,
+    },
+    away: {
+      abbr: r.awayTeam.abbreviation,
+      name: teamDisplayName(sport, r.awayTeam.abbreviation, r.awayTeam.name),
+      externalId: r.awayTeam.externalId,
+    },
+    homeProbablePitcher: r.homeProbablePitcher,
+    awayProbablePitcher: r.awayProbablePitcher,
+  };
 }

@@ -3,9 +3,16 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { GameLeans } from '@/components/GameLeans';
+import { ParkFactorNote } from '@/components/ParkFactorNote';
 import { TeamLogo } from '@/components/TeamLogo';
 import { MatchupTime } from '@/components/MatchupTime';
-import { getBoard, getSourcedBoards, getTonightSlate, hasUpcomingGames } from '@/lib/server/players';
+import {
+  getBoard,
+  getScheduledGame,
+  getSourcedBoards,
+  getTonightSlate,
+  hasUpcomingGames,
+} from '@/lib/server/players';
 import { getAvailableSources } from '@/lib/server/providedLines';
 import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import { formatIsoDate } from '@/lib/format';
@@ -28,7 +35,10 @@ async function findGame(sport: Sport, gameId: string): Promise<TonightGame | nul
     date: null,
     games: [] as TonightGame[],
   }));
-  return games.find((g) => g.externalId === gameId) ?? null;
+  return (
+    games.find((g) => g.externalId === gameId) ??
+    (await getScheduledGame(sport, gameId).catch(() => null))
+  );
 }
 
 const matchupLabel = (g: TonightGame) => `${g.away.abbr ?? '—'} @ ${g.home.abbr ?? '—'}`;
@@ -39,10 +49,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const cfg = SPORTS[sport];
   const game = await findGame(sport, gameId);
   const matchup = game ? matchupLabel(game) : 'Game';
-  const title = `${matchup} — ${cfg.name} Player Prop Leans`;
+  const title = `${matchup} — ${cfg.name} Player Prop Reads`;
   const description = game
-    ? `The strongest FireFactor player-prop leans for ${game.away.name ?? game.away.abbr} at ${game.home.name ?? game.home.abbr}, split by team and ranked from public game logs. Research, not picks.`
-    : `${cfg.name} game leans.`;
+    ? `The strongest FireFactor player-prop reads for ${game.away.name ?? game.away.abbr} at ${game.home.name ?? game.home.abbr}, split by team and ranked from public game logs. Research, not picks.`
+    : `${cfg.name} game reads.`;
   return {
     title,
     description,
@@ -143,12 +153,12 @@ export default async function GamePage({ params }: PageProps) {
       </header>
 
       <h1 className="mt-6 text-xl font-bold tracking-tight">
-        {cfg.name} leans · {matchupLabel(game)}
+        {cfg.name} reads · {matchupLabel(game)}
       </h1>
       <p className="mb-5 mt-1 max-w-2xl text-sm text-muted">
-        The strongest FireFactor leans for this matchup, split by team.{' '}
+        The strongest FireFactor reads for this matchup, split by team.{' '}
         {hasSources
-          ? 'Lines are the real book numbers — switch books above.'
+          ? 'Lines are the real book numbers — switch books below.'
           : 'Lines are our own typical-game (median) line, not a sportsbook line.'}
       </p>
 
@@ -160,6 +170,17 @@ export default async function GamePage({ params }: PageProps) {
         defaultSource={initialSource}
         medianRows={medianRows}
       />
+
+      {/* Ballpark context for the venue (the home team's park) — MLB only. */}
+      {sport === 'mlb' && (
+        <div className="mt-6">
+          <ParkFactorNote
+            teamExternalId={game.home.externalId}
+            teamName={game.home.name}
+            context="game"
+          />
+        </div>
+      )}
 
       <p className="mt-8 text-xs leading-relaxed text-muted">
         Descriptive research from public game logs, ranked by a sample-size–adjusted FireFactor — not
