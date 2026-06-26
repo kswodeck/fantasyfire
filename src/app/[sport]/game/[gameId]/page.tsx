@@ -41,7 +41,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const matchup = game ? matchupLabel(game) : 'Game';
   const title = `${matchup} — ${cfg.name} Player Prop Leans`;
   const description = game
-    ? `The strongest FireScore player-prop leans for ${game.away.name ?? game.away.abbr} at ${game.home.name ?? game.home.abbr}, split by team and ranked from public game logs. Research, not picks.`
+    ? `The strongest FireFactor player-prop leans for ${game.away.name ?? game.away.abbr} at ${game.home.name ?? game.home.abbr}, split by team and ranked from public game logs. Research, not picks.`
     : `${cfg.name} game leans.`;
   return {
     title,
@@ -146,7 +146,7 @@ export default async function GamePage({ params }: PageProps) {
         {cfg.name} leans · {matchupLabel(game)}
       </h1>
       <p className="mb-5 mt-1 max-w-2xl text-sm text-muted">
-        The strongest FireScore leans for this matchup, split by team.{' '}
+        The strongest FireFactor leans for this matchup, split by team.{' '}
         {hasSources
           ? 'Lines are the real book numbers — switch books above.'
           : 'Lines are our own typical-game (median) line, not a sportsbook line.'}
@@ -162,7 +162,7 @@ export default async function GamePage({ params }: PageProps) {
       />
 
       <p className="mt-8 text-xs leading-relaxed text-muted">
-        Descriptive research from public game logs, ranked by a sample-size–adjusted FireScore — not
+        Descriptive research from public game logs, ranked by a sample-size–adjusted FireFactor — not
         predictions, picks, or betting advice. Confirm lineups, scratches, and injuries yourself.
       </p>
     </div>

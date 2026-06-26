@@ -1,34 +1,59 @@
-// Single source of truth for FireScore tier + matchup-grade colors. All colors
-// are theme-aware signal tokens (defined in globals.css as light-dark() pairs,
-// WCAG-AA in both modes): green = over/good, red = under/tough, deeper at the
-// strong end and warming to amber/orange. The lean arrow inherits via currentColor.
+// Single source of truth for the FireFactor "heat read" + the A–F matchup-grade
+// colors. The heat read maps the internal strength tier ('Strong lean' … 'Pass') +
+// side to a user-facing word, a flame/snowflake icon, and a warm/cool color:
+//   over  = warm flame  — Warm (amber) → Hot (orange) → Blazing (red)
+//   under = cool snowflake — Cool (sky) → Cold (blue) → Frozen (indigo)
+//   neutral = "No read" (muted). Deeper color = stronger edge.
+// All colors are theme-aware tokens (globals.css light-dark() pairs, WCAG-AA in both
+// modes); the icon inherits via currentColor.
 type Side = 'over' | 'under';
 
-/** Text/icon color class for a tier + side. */
-export function tierTextClass(tier: string, side: Side): string {
-  if (tier === 'No lean' || tier === 'Pass') return 'text-muted';
+const isNeutral = (tier: string) => tier === 'No lean' || tier === 'Pass';
+
+/** The user-facing heat word for a (strength tier, side). */
+export function heatLabel(tier: string, side: Side): string {
+  if (isNeutral(tier)) return 'No read';
   if (side === 'over') {
-    if (tier === 'Strong lean') return 'text-sig-green-strong';
-    if (tier === 'Lean') return 'text-sig-green';
-    return 'text-sig-amber'; // Slight lean
+    if (tier === 'Strong lean') return 'Blazing';
+    if (tier === 'Lean') return 'Hot';
+    return 'Warm';
   }
-  if (tier === 'Strong lean') return 'text-sig-red-strong';
-  if (tier === 'Lean') return 'text-sig-red';
-  return 'text-sig-orange'; // Slight lean
+  if (tier === 'Strong lean') return 'Frozen';
+  if (tier === 'Lean') return 'Cold';
+  return 'Cool';
 }
 
-/** Border + fill tint for the verdict-panel box, by tier + side. Decorative
- * tints (low-opacity palette colors) read correctly on both light and dark. */
-export function tierBoxClass(tier: string, side: Side): string {
-  if (tier === 'No lean' || tier === 'Pass') return 'border-line bg-surface-2';
+/** Which glyph HeatIcon (LeanArrow) should draw. */
+export function heatIcon(tier: string, side: Side): 'flame' | 'snowflake' | 'dash' {
+  if (isNeutral(tier)) return 'dash';
+  return side === 'over' ? 'flame' : 'snowflake';
+}
+
+/** Text/icon color class for a tier + side (warm = over, cool = under). */
+export function tierTextClass(tier: string, side: Side): string {
+  if (isNeutral(tier)) return 'text-muted';
   if (side === 'over') {
-    if (tier === 'Strong lean') return 'border-emerald-500/30 bg-emerald-500/10';
-    if (tier === 'Lean') return 'border-green-500/25 bg-green-500/[0.07]';
-    return 'border-amber-500/25 bg-amber-500/[0.07]';
+    if (tier === 'Strong lean') return 'text-heat-3';
+    if (tier === 'Lean') return 'text-heat-2';
+    return 'text-heat-1';
   }
-  if (tier === 'Strong lean') return 'border-red-500/30 bg-red-500/10';
-  if (tier === 'Lean') return 'border-red-500/25 bg-red-500/[0.07]';
-  return 'border-orange-500/25 bg-orange-500/[0.07]';
+  if (tier === 'Strong lean') return 'text-ice-3';
+  if (tier === 'Lean') return 'text-ice-2';
+  return 'text-ice-1';
+}
+
+/** Border + fill tint for the verdict-panel box, by tier + side. Low-opacity tints
+ * read correctly on both light and dark. */
+export function tierBoxClass(tier: string, side: Side): string {
+  if (isNeutral(tier)) return 'border-line bg-surface-2';
+  if (side === 'over') {
+    if (tier === 'Strong lean') return 'border-heat-3/30 bg-heat-3/10';
+    if (tier === 'Lean') return 'border-heat-2/25 bg-heat-2/[0.07]';
+    return 'border-heat-1/25 bg-heat-1/[0.07]';
+  }
+  if (tier === 'Strong lean') return 'border-ice-3/30 bg-ice-3/10';
+  if (tier === 'Lean') return 'border-ice-2/25 bg-ice-2/[0.07]';
+  return 'border-ice-1/25 bg-ice-1/[0.07]';
 }
 
 /** Text color for an A–F matchup grade (A = softest/green, F = toughest/red). */

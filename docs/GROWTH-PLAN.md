@@ -3,11 +3,11 @@
 _Last updated: 2026-06-24. This is a strategy/sequencing doc, not a spec. Each item lists the
 concrete files it touches so it can be picked up directly._
 
-> **Update 2026-06-25 — NFL added + FireScore.** A third sport, **NFL** (ESPN
+> **Update 2026-06-25 — NFL added + FireFactor.** A third sport, **NFL** (ESPN
 > `football/nfl` ingest), now rides the same shared schema and section routes
 > (board / streaks / trends / leaders / matchups / players / today), so
 > the "two sports" framing below is now **three** (NBA + MLB + NFL). The "projection /
-> lean" idea from X1/X5 shipped concretely as **FireScore** (`src/lib/stats/fireScore.ts`)
+> lean" idea from X1/X5 shipped concretely as **FireFactor** (`src/lib/stats/fireScore.ts`)
 > — a descriptive, Wilson-lower-bound-gated tier + 0–100 signal powering the per-sport
 > **Top Leans** board. NFL is **weekly**, not nightly, so the slate cadence needs an
 > NFL-specific pass (tracked separately). Everything below predates these changes;
@@ -16,7 +16,7 @@ concrete files it touches so it can be picked up directly._
 > **Update 2026-06-25 — Accuracy removed; real lines added.** The public
 > `/[sport]/accuracy` calibration and its `ProjectionSnapshot` pipeline (snapshot /
 > grade / backtest) have been **removed** — a moving-target track record proved too
-> costly to maintain and live up to. FireScore stays (it still powers the Top Leans
+> costly to maintain and live up to. FireFactor stays (it still powers the Top Leans
 > board). In its place: a new **`ProvidedLine`** model + a scraped provided-lines ingest
 > (`src/ingest/run-ingest-providedlines.ts`), OFF by default behind
 > `PROVIDED_LINES_ENABLED`, so the board / player pages can show the real
@@ -36,7 +36,7 @@ concrete files it touches so it can be picked up directly._
     `RelatedLinks` mesh, a `SportNav` sub-nav, JSON-LD (BreadcrumbList + Dataset) + sitemap coverage.
   - **X4** ⏸️ deferred — nightly precompute tables. ISR already amortizes the DvP query to once/revalidation;
     revisit only if traffic makes per-revalidation compute a real cost.
-  - **X5** ❌ removed (2026-06-25) — projection snapshots + grading + public `/[sport]/accuracy` shipped, then were pulled (track record too costly to maintain as a moving target). FireScore itself stays. Replaced by the opt-in `ProvidedLine` real-lines feed.
+  - **X5** ❌ removed (2026-06-25) — projection snapshots + grading + public `/[sport]/accuracy` shipped, then were pulled (track record too costly to maintain as a moving target). FireFactor itself stays. Replaced by the opt-in `ProvidedLine` real-lines feed.
 - **LATER:** **L1** ✅ schedule → `/[sport]/today`; **L5** ✅ ESPN ingest fallback. L2 (push), L3 (favorites),
   L4 (OG cards), L6 (park factors) remain.
 

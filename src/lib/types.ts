@@ -10,7 +10,7 @@ import type {
   RecentFormEstimate,
   Consistency,
   MatchupGrade,
-  FireScoreResult,
+  FireFactorResult,
   PlayerSplits,
 } from '@/lib/stats';
 import type { Sport } from '@/lib/sports';
@@ -83,8 +83,8 @@ export interface PlayerVerdict {
   consistency: Consistency;
   /** A-F matchup grade from DvP; null when there is no matchup. */
   matchupGrade: MatchupGrade | null;
-  /** The composite FireScore signal (LEAN mode — no user price). */
-  fireScore: FireScoreResult;
+  /** The composite FireFactor signal (LEAN mode — no user price). */
+  fireScore: FireFactorResult;
 }
 
 export interface PlayerResearch {
@@ -99,7 +99,7 @@ export interface PlayerResearch {
   gamesPlayed: number;
   /** ISO date (YYYY-MM-DD) of this player's most recent game; null if none. */
   lastGameDate: string | null;
-  /** The FireScore verdict + its sub-reads for this stat + line. */
+  /** The FireFactor verdict + its sub-reads for this stat + line. */
   verdict: PlayerVerdict;
   /** Home/away + days-since-last-game splits for this stat + line. */
   splits: PlayerSplits;
@@ -130,7 +130,7 @@ export interface PlayerResearch {
 
 /** One ranked row on the cross-player board. */
 export interface BoardRow {
-  /** Absolute FireScore rank in the full board (stable under client filtering). */
+  /** Absolute FireFactor rank in the full board (stable under client filtering). */
   rank: number;
   player: PlayerListItem;
   stat: StatKey;
@@ -138,7 +138,7 @@ export interface BoardRow {
   line: number;
   /** Stabilized recent-form estimate (for the "recent X vs line Y" read). */
   projection: number | null;
-  fireScore: FireScoreResult;
+  fireScore: FireFactorResult;
 }
 
 /** One row on the trends board: how recent form has swung from the season baseline,
@@ -201,7 +201,7 @@ export interface SlateResult {
   line?: number;
   /** American odds the user supplied for the over (drives edge + EV). */
   odds?: number | null;
-  fireScore?: FireScoreResult;
+  fireScore?: FireFactorResult;
   /** Season over rate at the user's line. */
   overHitRate?: number | null;
   /** historical hit rate − price-implied prob (only with odds). */

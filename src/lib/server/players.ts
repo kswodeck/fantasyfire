@@ -22,11 +22,11 @@ import {
   recentFormEstimate,
   computeConsistency,
   matchupGrade,
-  computeFireScore,
+  computeFireFactor,
   computeSplits,
   wilsonInterval,
   STAT_DEFS,
-  FIRESCORE_MIN_GAMES,
+  FIREFACTOR_MIN_GAMES,
   defaultLine,
   defaultPropLine,
 } from '@/lib/stats';
@@ -804,7 +804,7 @@ export async function getPlayerResearch(
     dvp: dvp ? { cell: dvp, opponentAbbreviation: matchupOpponent!.abbreviation, unitLabel } : null,
   });
 
-  // Verdict: the FireScore "good prop" read + its sub-signals, computed on the
+  // Verdict: the FireFactor "good prop" read + its sub-signals, computed on the
   // qualified games already loaded (no extra query). LEAN mode — VALUE/EV is an
   // opt-in, per-price client read in the fair-price section.
   const projection = recentFormEstimate(seasonResult.values, seasonResult.mean);
@@ -815,7 +815,7 @@ export async function getPlayerResearch(
     line,
   );
   const grade = dvp ? matchupGrade(dvp) : null;
-  const fireScore = computeFireScore({
+  const fireScore = computeFireFactor({
     line,
     windows: windows.map((w) => ({
       window: w.window,
@@ -871,7 +871,7 @@ function boardStatsFor(sport: Sport, posBucket: string | null): StatKey[] {
 
 /**
  * Cross-player board: the strongest recent-form leans, ranked by the
- * confidence-adjusted FireScore vs OUR default (season-median) line — NOT a
+ * confidence-adjusted FireFactor vs OUR default (season-median) line — NOT a
  * sportsbook line, so it's a research starting point, not a +EV claim. Free data
  * only (no odds feed). Bounded to the most active players + a small per-player
  * cap for performance and variety. Never throws for an empty result — the route
@@ -951,9 +951,9 @@ function computeBoardRows(
   const out: Omit<BoardRow, 'rank'>[] = [];
   for (const p of players) {
     const allGames = gamesByPlayer.get(p.id);
-    if (!allGames || allGames.length < FIRESCORE_MIN_GAMES) continue;
+    if (!allGames || allGames.length < FIREFACTOR_MIN_GAMES) continue;
     const games = qualifyGames(sport, p.posBucket, allGames);
-    if (games.length < FIRESCORE_MIN_GAMES) continue;
+    if (games.length < FIREFACTOR_MIN_GAMES) continue;
     const listItem = boardListItem(sport, p, games.length);
 
     for (const { stat, line, provided } of statLinesFor(sport, p.posBucket, games, providedLines, p.id, requireProvided)) {
@@ -968,9 +968,9 @@ function computeBoardRows(
       const seasonHr = computeHitRate(games, stat, line, 'season');
       const projection = recentFormEstimate(seasonHr.values, seasonHr.mean);
       const consistency = computeConsistency(seasonHr.values, seasonHr.mean, seasonHr.stdev, line);
-      // No matchup component here (avoids a per-player DvP query); FireScore
+      // No matchup component here (avoids a per-player DvP query); FireFactor
       // degrades gracefully. The full read (with matchup) is on the player page.
-      const fireScore = computeFireScore({
+      const fireScore = computeFireFactor({
         line,
         windows,
         projection: projection.stabilized,
@@ -1172,15 +1172,15 @@ function computeTrendRows(
   const out: Omit<TrendRow, 'rank'>[] = [];
   for (const p of players) {
     const allGames = gamesByPlayer.get(p.id);
-    if (!allGames || allGames.length < FIRESCORE_MIN_GAMES) continue;
+    if (!allGames || allGames.length < FIREFACTOR_MIN_GAMES) continue;
     const games = qualifyGames(sport, p.posBucket, allGames);
-    if (games.length < FIRESCORE_MIN_GAMES) continue;
+    if (games.length < FIREFACTOR_MIN_GAMES) continue;
     const listItem = boardListItem(sport, p, games.length);
     for (const { stat, line, provided } of statLinesFor(sport, p.posBucket, games, providedLines, p.id, requireProvided)) {
       if (!provided && line <= 0.5) continue;
       const recent = computeHitRate(games, stat, line, 10);
       const season = computeHitRate(games, stat, line, 'season');
-      if (recent.decided < 4 || season.decided < FIRESCORE_MIN_GAMES) continue;
+      if (recent.decided < 4 || season.decided < FIREFACTOR_MIN_GAMES) continue;
       const recentOver = recent.hitRateOver ?? 0.5;
       const side: 'over' | 'under' = recentOver >= 0.5 ? 'over' : 'under';
       if (line <= 0.5 && side === 'under') continue; // trivial under on a 0.5 line
@@ -1345,7 +1345,7 @@ export async function getLeaders(sport: Sport, stat: StatKey, limit = 50): Promi
 /**
  * Analyze a pasted slate of REAL book lines: parse each line, resolve the player
  * (exact name, else a unique last-name match — never a guess), and compute the
- * FireScore against the user's actual number (not our median), plus edge + EV
+ * FireFactor against the user's actual number (not our median), plus edge + EV
  * when odds are supplied. Capped at 30 entries. Unmatched lines come back with a
  * reason instead of being dropped.
  */
@@ -1423,7 +1423,7 @@ export async function analyzeSlate(sport: Sport, text: string): Promise<SlateRes
     });
   }
 
-  // Matched first, strongest FireScore first.
+  // Matched first, strongest FireFactor first.
   results.sort((a, b) => {
     if (a.matched !== b.matched) return a.matched ? -1 : 1;
     return (b.fireScore?.score ?? -1) - (a.fireScore?.score ?? -1);

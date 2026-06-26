@@ -52,7 +52,7 @@ export function PushOptIn() {
   if (state === 'subscribed') {
     return (
       <div className="mt-6 flex items-center justify-between gap-3 rounded-xl border border-line bg-over-soft p-4 text-sm">
-        <span>🔔 You&rsquo;ll get a heads-up when your players have a strong lean.</span>
+        <span>🔔 You&rsquo;ll get a heads-up when a saved player turns Blazing or Frozen.</span>
         <button
           type="button"
           onClick={disable}
@@ -69,7 +69,7 @@ export function PushOptIn() {
     return (
       <p className="mt-6 rounded-xl border border-line bg-surface p-4 text-xs text-muted">
         Notifications are blocked for this site in your browser settings. Re-enable them there to
-        get lean alerts.
+        get heat alerts.
       </p>
     );
   }
@@ -77,10 +77,10 @@ export function PushOptIn() {
   // 'default' | 'granted' (not subscribed)
   return (
     <div className="mt-6 rounded-xl border border-line bg-surface p-4">
-      <h2 className="text-sm font-semibold">Get a heads-up on strong leans</h2>
+      <h2 className="text-sm font-semibold">Get a heads-up on Blazing &amp; Frozen reads</h2>
       <p className="mt-1 text-sm text-muted">
-        An optional push, a few times a week at most — only when a saved-sport player shows a strong
-        FireScore lean. No account, no email, unsubscribe anytime.
+        An optional push, a few times a week at most — only when a saved-sport player shows a Blazing
+        or Frozen FireFactor read. No account, no email, unsubscribe anytime.
       </p>
       <button
         type="button"
@@ -88,7 +88,7 @@ export function PushOptIn() {
         disabled={busy}
         className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-brand px-4 py-2 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
       >
-        {busy ? 'Enabling…' : '🔔 Enable lean alerts'}
+        {busy ? 'Enabling…' : '🔔 Enable heat alerts'}
       </button>
     </div>
   );

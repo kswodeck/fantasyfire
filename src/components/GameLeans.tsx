@@ -8,7 +8,7 @@ import { TeamLogo } from './TeamLogo';
 import { useSourced } from './useSourced';
 
 /**
- * The leans for a single game, split into the two teams and ranked by FireScore within
+ * The leans for a single game, split into the two teams and ranked by FireFactor within
  * each. Book selection comes from the shared, persisted selector (same as the board), so
  * switching books re-ranks both teams instantly. Rows are already filtered to this game's
  * two teams on the server; this just picks the book and groups them.

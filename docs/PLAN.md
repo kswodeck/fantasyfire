@@ -4,7 +4,7 @@ NBA player-props/pickem research tool. v1 = free data only, lowest-hanging fruit
 
 > **⚠️ Historical — superseded.** This is the original single-sport (NBA) MVP spec
 > and build prompts. The shipped product has since grown to **three sports
-> (NBA + MLB + NFL)** with a retention/trust engine on top (FireScore leans,
+> (NBA + MLB + NFL)** with a retention/trust engine on top (FireFactor leans,
 > streaks/trends/leaders, a "today" slate, methodology/E-E-A-T pages, and an
 > optional real-lines feed (`ProvidedLine`)). Treat §4 (schema), §7
 > (folder tree), and §6 (phases) as **history, not current state** — the live

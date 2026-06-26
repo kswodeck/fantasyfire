@@ -3,7 +3,7 @@
 Multi-sport player-props research tool — **NBA, MLB, and NFL**. Hit rates,
 matchup context (defense-vs-position / opposing pitching), sample-size confidence
 (Wilson intervals), fair-price math, and a transparent "is this a good prop?"
-FireScore — all computed from **free, public game logs**. Public, read-only,
+FireFactor — all computed from **free, public game logs**. Public, read-only,
 SEO-driven. No login.
 
 Origins and the original single-sport spec: [`docs/PLAN.md`](docs/PLAN.md)
@@ -18,7 +18,7 @@ Origins and the original single-sport spec: [`docs/PLAN.md`](docs/PLAN.md)
   (MLB), ranked, with sample-size flags and an A–F matchup grade.
 - **Depth panels** — home/away & rest-day splits, an EWMA + shrinkage projection,
   consistency (floor/ceiling), and an auto plain-language "why" readout.
-- **FireScore** — a descriptive lean signal (tier + 0–100, gated by the Wilson
+- **FireFactor** — a descriptive lean signal (tier + 0–100, gated by the Wilson
   lower bound) on the per-sport **Top Leans** board. Never a pick or +EV claim.
 - **Daily-changing boards** — Today's slate, Streaks, Trends, Leaders, Matchups.
 - **Real lines (optional, off by default)** — public DFS/sportsbook feeds (PrizePicks +
@@ -93,7 +93,7 @@ The hard part of this product is the data, not the math.
 
 - **Lines are user-entered.** No free API provides player prop lines; the app
   computes everything else (hit rates, matchup context, confidence, fair price,
-  FireScore) from game logs.
+  FireFactor) from game logs.
 - **Three free, keyless, unofficial sources**, one ingest job each:
   - **NBA → `stats.nba.com`** (`playerindex` + `leaguegamelog`). Free but
     **frequently blocks datacenter/cloud IPs** (AWS / Vercel / sometimes CI).
@@ -234,7 +234,7 @@ pull off Vercel's blocked IPs.
 
 ## License / disclaimer
 
-Research tool only. Hit rates, matchup numbers, and FireScore describe **past
+Research tool only. Hit rates, matchup numbers, and FireFactor describe **past
 performance** — they are not predictions or betting advice. Not affiliated with the
 NBA, MLB, or NFL. See [`docs/PLAN.md`](docs/PLAN.md) §11 for the legal/compliance
 notes (gambling-adjacent; get review before monetizing). 21+ — if you or someone you

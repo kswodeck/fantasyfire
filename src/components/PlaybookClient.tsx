@@ -10,7 +10,7 @@ import { useHitRate } from '@/hooks/useHitRate';
 import { STAT_DEFS } from '@/lib/stats';
 import { SPORTS, SPORT_LIST, type Sport } from '@/lib/sports';
 import { pct } from '@/lib/format';
-import { tierTextClass } from '@/lib/tierStyle';
+import { tierTextClass, heatLabel } from '@/lib/tierStyle';
 import { LeanArrow } from './LeanArrow';
 import { SideArrow } from './SideArrow';
 
@@ -283,7 +283,7 @@ function PropRow({ prop }: { prop: SavedProp }) {
               <LeanArrow tier={fs.tier} side={fs.side} size={13} />
               {fsIsLean ? (
                 <>
-                  {fs.side === 'over' ? 'Over' : 'Under'} {fs.tier}
+                  {heatLabel(fs.tier, fs.side)} {fs.side}
                   <span className="text-muted">· {fs.score}</span>
                   {fs.side === side ? (
                     <span className="ml-0.5 text-over">✓ your side</span>
@@ -292,7 +292,7 @@ function PropRow({ prop }: { prop: SavedProp }) {
                   )}
                 </>
               ) : (
-                <span className="text-muted">no lean · {fs.score}</span>
+                <span className="text-muted">no read · {fs.score}</span>
               )}
             </span>
           </div>

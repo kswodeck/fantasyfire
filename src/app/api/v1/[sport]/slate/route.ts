@@ -1,7 +1,7 @@
 // POST /api/v1/{sport}/slate
 //
 // Body: { text: string } — the user's pasted prop lines. Returns analyzed
-// results (FireScore vs the user's REAL line, plus edge/EV when odds are given).
+// results (FireFactor vs the user's REAL line, plus edge/EV when odds are given).
 // Dynamic + same-origin (the board page calls it); no caching.
 import type { NextRequest } from 'next/server';
 import { slateBodySchema } from '@/lib/schemas';

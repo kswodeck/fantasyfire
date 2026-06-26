@@ -4,7 +4,7 @@ import type { Sport } from '@/lib/sports';
 import { PlayerAvatar } from './PlayerAvatar';
 import { LeanArrow } from './LeanArrow';
 import { getTeam } from '@/lib/teams';
-import { tierTextClass } from '@/lib/tierStyle';
+import { tierTextClass, heatLabel } from '@/lib/tierStyle';
 
 /**
  * Ranked cross-player board (presentational). Each row links to the player page
@@ -40,11 +40,11 @@ export function BoardTable({ sport, rows }: { sport: Sport; rows: BoardRow[] }) 
                 <div
                   className={`flex items-center justify-end gap-1 text-sm font-semibold ${tierTextClass(r.fireScore.tier, r.fireScore.side)}`}
                 >
-                  <LeanArrow tier={r.fireScore.tier} side={r.fireScore.side} size={13} />
-                  {r.fireScore.tier}
+                  <LeanArrow tier={r.fireScore.tier} side={r.fireScore.side} size={15} />
+                  {heatLabel(r.fireScore.tier, r.fireScore.side)}
                 </div>
                 <div className="text-[11px] tabular-nums text-muted">
-                  FireScore {r.fireScore.score}
+                  FireFactor {r.fireScore.score}
                 </div>
               </div>
             </Link>

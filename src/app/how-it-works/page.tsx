@@ -11,8 +11,8 @@ import {
   EWMA_ALPHA,
   SHRINKAGE_K,
   CONSISTENCY_CV_THRESHOLDS,
-  FIRESCORE_WEIGHTS,
-  FIRESCORE_MIN_GAMES,
+  FIREFACTOR_WEIGHTS,
+  FIREFACTOR_MIN_GAMES,
 } from '@/lib/stats';
 
 export const metadata: Metadata = {
@@ -168,7 +168,7 @@ export default function HowItWorksPage() {
           prediction</strong> that the over or under will hit.
         </p>
 
-        <h2>Recent-form estimate &amp; the FireScore signal (experimental)</h2>
+        <h2>Recent-form estimate &amp; the FireFactor signal (experimental)</h2>
         <p>
           As a quick read we add a <strong>recent-form estimate</strong>: a
           recency-weighted average (EWMA, α = {EWMA_ALPHA}) of recent games, then regressed
@@ -196,11 +196,17 @@ export default function HowItWorksPage() {
           Splits describe past games in that situation; they are not a forecast.
         </p>
         <p>
-          <strong>FireScore</strong> blends these descriptive signals into one transparent
-          read of how a line leans — <em>Strong lean</em>, <em>Lean</em>,{' '}
-          <em>Slight lean</em>, <em>No lean</em>, or <em>Pass</em>. It is a{' '}
-          <strong>research signal, not a pick, prediction, or guarantee</strong>. Two
-          things keep it honest:
+          <strong>FireFactor</strong> blends these descriptive signals into one transparent{' '}
+          <strong>heat read</strong>. An over read runs warm — a{' '}
+          <span className="font-medium text-heat-1">Warm</span>,{' '}
+          <span className="font-medium text-heat-2">Hot</span>, or{' '}
+          <span className="font-medium text-heat-3">Blazing</span> flame as the edge grows; an
+          under read runs cool — <span className="font-medium text-ice-1">Cool</span>,{' '}
+          <span className="font-medium text-ice-2">Cold</span>, or{' '}
+          <span className="font-medium text-ice-3">Frozen</span> snowflake — and a balanced line
+          is <em>No read</em>. Deeper color means a stronger edge. It is a{' '}
+          <strong>research signal, not a pick, prediction, or guarantee</strong>. Three things
+          keep it honest:
         </p>
         <ul>
           <li>
@@ -212,14 +218,22 @@ export default function HowItWorksPage() {
           <li>
             The number is always shown with its <strong>component breakdown</strong> (hit
             rate, recent-form estimate, consistency, matchup), weighted{' '}
-            {Math.round(FIRESCORE_WEIGHTS.hit * 100)}/
-            {Math.round(FIRESCORE_WEIGHTS.proj * 100)}/
-            {Math.round(FIRESCORE_WEIGHTS.consistency * 100)}/
-            {Math.round(FIRESCORE_WEIGHTS.matchup * 100)}, and any missing input is dropped
-            rather than guessed. Fewer than {FIRESCORE_MIN_GAMES}{' '}games is always a Pass.
-            If you enter a real price, FireScore adds the one legitimate value read — the
+            {Math.round(FIREFACTOR_WEIGHTS.hit * 100)}/
+            {Math.round(FIREFACTOR_WEIGHTS.proj * 100)}/
+            {Math.round(FIREFACTOR_WEIGHTS.consistency * 100)}/
+            {Math.round(FIREFACTOR_WEIGHTS.matchup * 100)}, and any missing input is dropped
+            rather than guessed. Fewer than {FIREFACTOR_MIN_GAMES}{' '}games is always a No read.
+            If you enter a real price, FireFactor adds the one legitimate value read — the
             edge and expected value versus the number you typed, labeled as such and never a
             guarantee.
+          </li>
+          <li>
+            When a line is posted at more than one book, FireFactor compares your book&rsquo;s
+            number to the <strong>market consensus</strong> (the median across books) and folds a
+            small, capped <strong>line-value</strong> boost into the read: a genuinely softer
+            number — one you&rsquo;d clear more often — nudges the heat up, but can never
+            manufacture an edge on its own. The full book-by-book comparison lives on each
+            player&rsquo;s page.
           </li>
         </ul>
 
@@ -240,7 +254,7 @@ export default function HowItWorksPage() {
           </li>
           <li>
             <strong>No trained/fitted projection model.</strong> The recent-form estimate
-            and FireScore are transparent heuristics with published weights, shown with
+            and FireFactor are transparent heuristics with published weights, shown with
             their uncertainty — not a fitted forecast of a specific game.
           </li>
           <li>

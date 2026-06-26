@@ -1,4 +1,4 @@
-// Recent-form ESTIMATE (descriptive) — the base for the FireScore "good prop"
+// Recent-form ESTIMATE (descriptive) — the base for the FireFactor "good prop"
 // signal. Pure (no React/Next/db). This is NOT a forecast of a specific game:
 // it is a recency-weighted, sample-stabilized read of a player's recent values,
 // always surfaced as a small RANGE (raw L5/L10 + median + stabilized), never one

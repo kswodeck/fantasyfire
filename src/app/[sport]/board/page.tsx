@@ -26,7 +26,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!isSport(sport)) return { title: 'Not found' };
   const cfg = SPORTS[sport];
   const title = `${cfg.name} Top Leans — Today's Slate & Player Props`;
-  const description = `The strongest recent-form ${cfg.name} player-prop leans, ranked by a sample-size-adjusted FireScore from public game logs. Filter to today's slate or a single matchup, switch books, and open any player for the full read. Research, not picks.`;
+  const description = `The strongest recent-form ${cfg.name} player-prop leans, ranked by a sample-size-adjusted FireFactor from public game logs. Filter to today's slate or a single matchup, switch books, and open any player for the full read. Research, not picks.`;
   return {
     title,
     description,
@@ -95,7 +95,7 @@ export default async function BoardPage({ params }: PageProps) {
       <h1 className="text-3xl font-bold tracking-tight">{cfg.name} Top Leans</h1>
       <p className="mt-2 max-w-2xl text-sm text-muted">
         The strongest recent-form leans across the most active {cfg.name} players, ranked by our
-        sample-size-adjusted <strong className="text-foreground">FireScore</strong>.{' '}
+        sample-size-adjusted <strong className="text-foreground">FireFactor</strong>.{' '}
         {hasSources ? (
           <>Lines are the real book numbers — switch books with the selector. </>
         ) : (
@@ -135,7 +135,7 @@ export default async function BoardPage({ params }: PageProps) {
       <RelatedLinks links={sportMeshLinks(sport, 'board')} />
 
       <p className="mt-4 text-xs leading-relaxed text-muted">
-        Descriptive research from public game logs, ranked by a sample-size–adjusted FireScore (recent
+        Descriptive research from public game logs, ranked by a sample-size–adjusted FireFactor (recent
         hit rate vs the line, discounted for thin samples via a 95% Wilson interval) — not
         predictions, picks, or betting advice. We don&rsquo;t track who&rsquo;s active; confirm
         lineups, scratches, and injuries yourself.

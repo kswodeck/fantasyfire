@@ -67,6 +67,14 @@ const TERMS: { term: string; def: string }[] = [
     def: 'An over hits when the stat is above the line; an under when it is below.',
   },
   {
+    term: 'FireFactor',
+    def: 'Our 0–100 research signal for a line, shown as a heat read: an over runs warm — Warm, Hot, or Blazing (a flame, amber → red) — and an under runs cool — Cool, Cold, or Frozen (a snowflake, sky → indigo); a balanced line is No read. Deeper color means a stronger edge. It blends the recency-weighted hit rate, recent-form estimate, consistency, and matchup, and is research, never a pick.',
+  },
+  {
+    term: 'Line value (discount)',
+    def: 'How a book’s number compares to the market consensus (the median line across books). A softer number you’d clear more often is a discount, and FireFactor folds a small, capped boost into the heat for it. Each player’s page shows the full book-by-book comparison.',
+  },
+  {
     term: 'Push',
     def: 'When the stat lands exactly on the line. Pushes are excluded from the hit-rate denominator.',
   },

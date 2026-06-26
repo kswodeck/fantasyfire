@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { computeFireScore, type FireScoreInput, type WindowHits } from './fireScore';
+import { computeFireFactor, type FireFactorInput, type WindowHits } from './fireScore';
 import { wilsonInterval } from './confidence';
 
 function win(overs: number, decided: number, window = '10'): WindowHits {
   return { window, overs, decided };
 }
 
-const base: FireScoreInput = {
+const base: FireFactorInput = {
   line: 20,
   windows: [win(7, 10, '5'), win(14, 20, '10'), win(27, 40, '20'), win(40, 62, 'season')],
   projection: 22,
@@ -16,9 +16,9 @@ const base: FireScoreInput = {
   gamesPlayed: 62,
 };
 
-describe('computeFireScore', () => {
+describe('computeFireFactor', () => {
   it('leans over with a strong, well-sampled over history and gives a real tier', () => {
-    const r = computeFireScore(base);
+    const r = computeFireFactor(base);
     expect(r.side).toBe('over');
     expect(r.score).toBeGreaterThan(30);
     expect(['Strong lean', 'Lean', 'Slight lean']).toContain(r.tier);
@@ -37,7 +37,7 @@ describe('computeFireScore', () => {
       /\bpick\b/i,
       /\bwin probability\b/i,
     ];
-    const scenarios: FireScoreInput[] = [
+    const scenarios: FireFactorInput[] = [
       base,
       { ...base, windows: [win(2, 10), win(5, 20), win(10, 40), win(16, 62)], projection: 16 },
       { ...base, windows: [win(3, 4)], gamesPlayed: 4 },
@@ -45,7 +45,7 @@ describe('computeFireScore', () => {
       { ...base, projection: null, stdev: null, matchup: undefined },
     ];
     for (const s of scenarios) {
-      const note = computeFireScore(s).note;
+      const note = computeFireFactor(s).note;
       for (const re of BANNED) expect(note, `matched ${re}`).not.toMatch(re);
     }
   });
@@ -53,20 +53,20 @@ describe('computeFireScore', () => {
   it('discounts a thin, marginal streak vs a large solid sample (Wilson gate)', () => {
     // 4/5 (80% on 5 games) has a low Wilson lower bound, so both its trustFactor
     // and its score sit below a 45/50 (90% on 50 games) sample.
-    const hot = computeFireScore({ ...base, windows: [win(4, 5, '5')], gamesPlayed: 5 });
-    const big = computeFireScore({ ...base, windows: [win(45, 50, '10')], gamesPlayed: 50 });
+    const hot = computeFireFactor({ ...base, windows: [win(4, 5, '5')], gamesPlayed: 5 });
+    const big = computeFireFactor({ ...base, windows: [win(45, 50, '10')], gamesPlayed: 50 });
     expect(big.trustFactor).toBeGreaterThan(hot.trustFactor);
     expect(big.score).toBeGreaterThan(hot.score);
   });
 
   it('Passes when there are too few games', () => {
-    const r = computeFireScore({ ...base, windows: [win(3, 4, '5')], gamesPlayed: 4 });
+    const r = computeFireFactor({ ...base, windows: [win(3, 4, '5')], gamesPlayed: 4 });
     expect(r.tier).toBe('Pass');
-    expect(r.note).toMatch(/Pass/i);
+    expect(r.note).toMatch(/no read/i);
   });
 
   it('degrades gracefully when projection + matchup are missing', () => {
-    const r = computeFireScore({ ...base, projection: null, stdev: null, matchup: undefined });
+    const r = computeFireFactor({ ...base, projection: null, stdev: null, matchup: undefined });
     const keys = r.components.map((c) => c.key);
     expect(keys).toContain('hit');
     expect(keys).not.toContain('proj');
@@ -76,7 +76,7 @@ describe('computeFireScore', () => {
   });
 
   it('leans under when history is mostly under the line', () => {
-    const r = computeFireScore({
+    const r = computeFireFactor({
       ...base,
       windows: [win(2, 10, '5'), win(5, 20, '10'), win(10, 40, '20'), win(16, 62, 'season')],
       projection: 16,
@@ -85,24 +85,33 @@ describe('computeFireScore', () => {
   });
 
   it('VALUE mode lifts the score and flags valueMode when a price gives positive EV', () => {
-    const lean = computeFireScore(base);
-    const value = computeFireScore({ ...base, evPerDollar: { over: 0.2 } });
+    const lean = computeFireFactor(base);
+    const value = computeFireFactor({ ...base, evPerDollar: { over: 0.2 } });
     expect(value.valueMode).toBe(true);
     expect(value.components.some((c) => c.key === 'value')).toBe(true);
     expect(value.score).toBeGreaterThanOrEqual(lean.score);
   });
 
+  it('a positive cross-book line edge boosts the score; a worse number does not penalize', () => {
+    const baseRead = computeFireFactor(base);
+    const better = computeFireFactor({ ...base, lineValueEdge: 0.2 });
+    const worse = computeFireFactor({ ...base, lineValueEdge: -0.2 });
+    expect(better.components.some((c) => c.key === 'lineValue')).toBe(true);
+    expect(better.score).toBeGreaterThan(baseRead.score);
+    expect(worse.score).toBe(baseRead.score);
+  });
+
   it('hit sub-score uses the Wilson CENTER vs 0.5 (not the lower bound)', () => {
     const overs = 70;
     const decided = 100;
-    const r = computeFireScore({ ...base, windows: [win(overs, decided, 'season')], gamesPlayed: decided });
+    const r = computeFireFactor({ ...base, windows: [win(overs, decided, 'season')], gamesPlayed: decided });
     const center = wilsonInterval(overs, decided).center;
     const hit = r.components.find((c) => c.key === 'hit')!.score;
     expect(hit).toBeCloseTo(Math.max(0, Math.min(1, (center - 0.5) / 0.2)), 5);
   });
 
   it('a ~50/50 history gives a near-zero hit sub-score and no real lean', () => {
-    const r = computeFireScore({
+    const r = computeFireFactor({
       line: 20,
       windows: [win(50, 100, 'season')],
       projection: 20,
@@ -117,7 +126,7 @@ describe('computeFireScore', () => {
   });
 
   it('a strong, well-sampled over maps to Strong lean under the current cutoffs', () => {
-    const r = computeFireScore({
+    const r = computeFireFactor({
       line: 20,
       windows: [win(72, 100, '5'), win(72, 100, '10'), win(72, 100, '20'), win(72, 100, 'season')],
       projection: 26,

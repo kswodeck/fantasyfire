@@ -1,11 +1,11 @@
 import type { PlayerVerdict } from '@/lib/types';
 import { num1 } from '@/lib/format';
 import { LeanArrow } from './LeanArrow';
-import { tierTextClass, tierBoxClass, gradeTextClass } from '@/lib/tierStyle';
+import { tierTextClass, tierBoxClass, gradeTextClass, heatLabel } from '@/lib/tierStyle';
 
 /**
  * The "verdict" read for a player + stat + line. Presentational only (data via
- * props). Honesty contract: the tier label leads, the FireScore number is
+ * props). Honesty contract: the tier label leads, the FireFactor number is
  * secondary and never shown without its component breakdown, every estimate is a
  * range, and the descriptive/responsible-gaming disclosure sits adjacent.
  */
@@ -22,9 +22,9 @@ export function VerdictPanel({
   const tierText = tierTextClass(fireScore.tier, fireScore.side);
   const tierBox = tierBoxClass(fireScore.tier, fireScore.side);
   const headline =
-    fireScore.tier === 'Pass'
-      ? 'Pass'
-      : `${fireScore.side === 'over' ? 'Over' : 'Under'} — ${fireScore.tier}`;
+    fireScore.tier === 'Pass' || fireScore.tier === 'No lean'
+      ? 'No read'
+      : `${heatLabel(fireScore.tier, fireScore.side)} ${fireScore.side}`;
 
   return (
     <section aria-label="Verdict" className={`mb-6 rounded-xl border p-4 ${tierBox}`}>
@@ -47,7 +47,7 @@ export function VerdictPanel({
           <LeanArrow tier={fireScore.tier} side={fireScore.side} size={22} />
           {headline}
         </span>
-        <span className="text-sm tabular-nums text-muted">FireScore {fireScore.score}/100</span>
+        <span className="text-sm tabular-nums text-muted">FireFactor {fireScore.score}/100</span>
       </div>
 
       {/* Component breakdown — the number is never shown without this. */}

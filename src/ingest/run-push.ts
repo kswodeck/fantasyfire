@@ -1,6 +1,6 @@
 // src/ingest/run-push.ts
 //
-// Send a capped, value-first push digest of today's strongest FireScore leans to
+// Send a capped, value-first push digest of today's strongest FireFactor leans to
 // opted-in browsers. Meant to run on its own schedule (NOT wired into the nightly
 // ingest — sending notifications is an outward-facing action you opt into).
 //
@@ -86,7 +86,7 @@ async function main(): Promise<number> {
       .map((p) => `${p.firstName.charAt(0)}. ${p.lastName} ${p.side} ${p.line} ${p.statShort}`)
       .join('  ·  ');
     const payload = JSON.stringify({
-      title: "Today's top leans 🔥",
+      title: "Today's hottest reads 🔥",
       body,
       url: `/${picks[0].sport}/board`,
       tag: 'ff-daily',

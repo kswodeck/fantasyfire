@@ -141,8 +141,8 @@ export function GameBarChart({
       </div>
       <figcaption className="mt-2 text-center text-xs text-muted">
         Last {n} games — {statShort} per game vs. line {num1(line)}.{' '}
-        <span className="text-over">Green = over</span>,{' '}
-        <span className="text-under">red = under</span>.
+        <span className="text-over">Warm = over</span>,{' '}
+        <span className="text-under">cool = under</span>.
       </figcaption>
     </figure>
   );

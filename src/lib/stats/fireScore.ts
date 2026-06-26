@@ -1,10 +1,12 @@
-// FireScore — the transparent "is this a good prop?" signal. Pure (no React/Next).
+// FireFactor — the transparent "is this a good prop?" signal. Pure (no React/Next).
 //
 // Honest by construction:
 //  - It is a RESEARCH SIGNAL, never a pick/prediction/+EV claim (enforced by the
 //    banned-token test on its captions).
-//  - It leads with a descriptive TIER ("Strong lean" … "Pass"); the 0-100 number
-//    is secondary and must always render with its component breakdown.
+//  - It leads with a descriptive heat read (Blazing/Hot/Warm over · Cool/Cold/Frozen
+//    under · No read); the 0-100 number is secondary and always renders with its
+//    component breakdown. The internal `tier` is the side-agnostic STRENGTH; the
+//    heat word + flame/snowflake icon + warm/cool color are derived in tierStyle.ts.
 //  - It ranks/gates by the WILSON LOWER BOUND, so small samples and hot streaks
 //    are discounted, not hyped (trustFactor drags the score down).
 //  - It DEGRADES GRACEFULLY: any missing component (no projection, no matchup, no
@@ -20,15 +22,18 @@ export type FireSide = 'over' | 'under';
 export type FireTier = 'Strong lean' | 'Lean' | 'Slight lean' | 'No lean' | 'Pass';
 
 /** Component weights (LEAN mode), renormalized over whichever are present. */
-export const FIRESCORE_WEIGHTS = { hit: 0.34, proj: 0.24, consistency: 0.16, matchup: 0.14 } as const;
+export const FIREFACTOR_WEIGHTS = { hit: 0.34, proj: 0.24, consistency: 0.16, matchup: 0.14 } as const;
 /** In VALUE mode, how the signal blend and the price-value split the score. */
-export const FIRESCORE_VALUE_SPLIT = { signal: 0.7, value: 0.3 } as const;
+export const FIREFACTOR_VALUE_SPLIT = { signal: 0.7, value: 0.3 } as const;
 /** 0-100 cutoffs for the tier label. */
-export const FIRESCORE_TIER_CUTOFFS = { strong: 66, lean: 56, slight: 42, none: 28 } as const;
+export const FIREFACTOR_TIER_CUTOFFS = { strong: 66, lean: 56, slight: 42, none: 28 } as const;
 /** Below this many games we never grade above "Pass". */
-export const FIRESCORE_MIN_GAMES = 5;
+export const FIREFACTOR_MIN_GAMES = 5;
+/** Cross-book line value: boost = clamp(0, edge * gain, cap) added to the 0-100 score,
+ *  so a genuine discount can lift the read up a tier but can't manufacture one alone. */
+export const FIREFACTOR_LINE_VALUE = { gain: 40, cap: 10 } as const;
 /** Recency weight per window when blending the Wilson lower bound. */
-export const FIRESCORE_WINDOW_RECENCY: Record<string, number> = {
+export const FIREFACTOR_WINDOW_RECENCY: Record<string, number> = {
   '5': 1.3,
   '10': 1.2,
   '20': 1.0,
@@ -52,7 +57,7 @@ export interface WindowHits {
   decided: number;
 }
 
-export interface FireScoreInput {
+export interface FireFactorInput {
   line: number;
   /** Per-window over/decided — drives the Wilson hit component + trust gate. */
   windows: WindowHits[];
@@ -66,11 +71,15 @@ export interface FireScoreInput {
   matchup?: MatchupGrade;
   /** EV per $1 per side from a USER-ENTERED price (VALUE mode only). */
   evPerDollar?: { over?: number | null; under?: number | null };
+  /** Cross-book line value for the leaning side: this book's hit rate minus the
+   *  consensus (median across books) line's hit rate. Positive = a softer/better
+   *  number than the market; folds a capped boost into the score. */
+  lineValueEdge?: number | null;
   /** Total games available (gates the Pass floor). */
   gamesPlayed: number;
 }
 
-export interface FireScoreComponent {
+export interface FireFactorComponent {
   key: string;
   label: string;
   /** Sub-score in [0,1] for the chosen side. */
@@ -78,14 +87,14 @@ export interface FireScoreComponent {
   weight: number;
 }
 
-export interface FireScoreResult {
+export interface FireFactorResult {
   side: FireSide;
   /** 0-100 — SECONDARY. Never render without `components`. */
   score: number;
   tier: FireTier;
   /** Wilson-lower-bound trust multiplier in [0.35, 1]. */
   trustFactor: number;
-  components: FireScoreComponent[];
+  components: FireFactorComponent[];
   /** True when a user-entered price drove the value component. */
   valueMode: boolean;
   /** Honest one-liner the UI must surface alongside the score. */
@@ -101,7 +110,7 @@ function blendWilson(windows: WindowHits[], side: FireSide): { lower: number; ce
     if (w.decided <= 0) continue;
     const successes = side === 'over' ? w.overs : w.decided - w.overs;
     const iv = wilsonInterval(successes, w.decided);
-    const wt = w.decided * (FIRESCORE_WINDOW_RECENCY[w.window] ?? 1);
+    const wt = w.decided * (FIREFACTOR_WINDOW_RECENCY[w.window] ?? 1);
     lowerNum += wt * iv.lower;
     centerNum += wt * iv.center;
     den += wt;
@@ -111,15 +120,16 @@ function blendWilson(windows: WindowHits[], side: FireSide): { lower: number; ce
 
 function tierFor(score: number, ok: boolean): FireTier {
   if (!ok) return 'Pass';
-  if (score >= FIRESCORE_TIER_CUTOFFS.strong) return 'Strong lean';
-  if (score >= FIRESCORE_TIER_CUTOFFS.lean) return 'Lean';
-  if (score >= FIRESCORE_TIER_CUTOFFS.slight) return 'Slight lean';
-  if (score >= FIRESCORE_TIER_CUTOFFS.none) return 'No lean';
+  if (score >= FIREFACTOR_TIER_CUTOFFS.strong) return 'Strong lean';
+  if (score >= FIREFACTOR_TIER_CUTOFFS.lean) return 'Lean';
+  if (score >= FIREFACTOR_TIER_CUTOFFS.slight) return 'Slight lean';
+  if (score >= FIREFACTOR_TIER_CUTOFFS.none) return 'No lean';
   return 'Pass';
 }
 
-export function computeFireScore(input: FireScoreInput): FireScoreResult {
-  const { line, windows, projection, stdev, cv, matchup, evPerDollar, gamesPlayed } = input;
+export function computeFireFactor(input: FireFactorInput): FireFactorResult {
+  const { line, windows, projection, stdev, cv, matchup, evPerDollar, lineValueEdge, gamesPlayed } =
+    input;
 
   // Side = the side recent history leans (blended Wilson CENTER of the over).
   const overBlend = blendWilson(windows, 'over');
@@ -129,7 +139,7 @@ export function computeFireScore(input: FireScoreInput): FireScoreResult {
   const trustFactor =
     blended === null ? 0.35 : Math.max(0.35, Math.min(1, (blended.lower + 0.1) / 0.6));
 
-  const comps: FireScoreComponent[] = [];
+  const comps: FireFactorComponent[] = [];
   if (blended !== null) {
     // Strength = how far the leaned side's rate sits above the fair 50% point
     // (0.50 -> 0, ~0.70 -> max). We use the recency-weighted CENTER for the
@@ -139,7 +149,7 @@ export function computeFireScore(input: FireScoreInput): FireScoreResult {
       key: 'hit',
       label: 'Hit rate (confidence-adjusted)',
       score: clamp01((blended.center - 0.5) / 0.2),
-      weight: FIRESCORE_WEIGHTS.hit,
+      weight: FIREFACTOR_WEIGHTS.hit,
     });
   }
   if (projection !== null && stdev !== null) {
@@ -148,7 +158,7 @@ export function computeFireScore(input: FireScoreInput): FireScoreResult {
       key: 'proj',
       label: 'Recent-form estimate vs line',
       score: side === 'over' ? sigmoid(1.1 * z) : sigmoid(-1.1 * z),
-      weight: FIRESCORE_WEIGHTS.proj,
+      weight: FIREFACTOR_WEIGHTS.proj,
     });
   }
   if (cv !== null) {
@@ -156,7 +166,7 @@ export function computeFireScore(input: FireScoreInput): FireScoreResult {
       key: 'consistency',
       label: 'Consistency',
       score: 1 - clamp01(cv / 0.6),
-      weight: FIRESCORE_WEIGHTS.consistency,
+      weight: FIREFACTOR_WEIGHTS.consistency,
     });
   }
   if (matchup && GRADE_SCORE[matchup] !== null) {
@@ -165,7 +175,7 @@ export function computeFireScore(input: FireScoreInput): FireScoreResult {
       key: 'matchup',
       label: 'Matchup',
       score: side === 'over' ? g : 1 - g,
-      weight: FIRESCORE_WEIGHTS.matchup,
+      weight: FIREFACTOR_WEIGHTS.matchup,
     });
   }
 
@@ -179,18 +189,31 @@ export function computeFireScore(input: FireScoreInput): FireScoreResult {
   if (valueMode) {
     const sValue = clamp01(0.5 + (evForSide as number) * 2);
     comps.push({ key: 'value', label: 'Value vs your price', score: sValue, weight: 0 });
-    score = 100 * (FIRESCORE_VALUE_SPLIT.signal * raw + FIRESCORE_VALUE_SPLIT.value * sValue) * trustFactor;
+    score = 100 * (FIREFACTOR_VALUE_SPLIT.signal * raw + FIREFACTOR_VALUE_SPLIT.value * sValue) * trustFactor;
   } else {
     score = 100 * raw * trustFactor;
   }
+
+  // Cross-book line value: a softer number than the market lifts the score (capped), so a
+  // genuine discount can nudge the read up a tier — but never conjures one from nothing.
+  if (lineValueEdge != null && blended !== null) {
+    comps.push({
+      key: 'lineValue',
+      label: 'Line value vs market',
+      score: clamp01(0.5 + lineValueEdge * 2),
+      weight: 0,
+    });
+    score += Math.max(0, Math.min(FIREFACTOR_LINE_VALUE.cap, lineValueEdge * FIREFACTOR_LINE_VALUE.gain));
+  }
+
   score = Math.round(clamp01(score / 100) * 100);
 
-  const insufficient = blended === null || gamesPlayed < FIRESCORE_MIN_GAMES;
-  const tier = tierFor(score, !insufficient && score >= FIRESCORE_TIER_CUTOFFS.none);
+  const insufficient = blended === null || gamesPlayed < FIREFACTOR_MIN_GAMES;
+  const tier = tierFor(score, !insufficient && score >= FIREFACTOR_TIER_CUTOFFS.none);
 
   const note = insufficient
-    ? 'Not enough decided games to read this line — treat as a Pass.'
-    : `Recent history leans ${side} this line (${tier}). Descriptive research from past games — not betting advice.`;
+    ? 'Not enough decided games to read this line — treat as no read.'
+    : `Recent history runs ${side} on this line. Descriptive research from past games — not betting advice.`;
 
   return { side, score, tier, trustFactor, components: comps, valueMode, note };
 }

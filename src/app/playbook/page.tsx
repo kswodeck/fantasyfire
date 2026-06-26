@@ -6,7 +6,7 @@ import { PushOptIn } from '@/components/PushOptIn';
 export const metadata: Metadata = {
   title: 'My Playbook',
   description:
-    'Your saved players and props — pinned on this device for quick access to their hit rates, matchups, and live FireScore reads. No login required.',
+    'Your saved players and props — pinned on this device for quick access to their hit rates, matchups, and live FireFactor reads. No login required.',
   alternates: { canonical: '/playbook' },
   // Personal, device-local, and empty for crawlers — keep it out of the index.
   robots: { index: false, follow: true },
