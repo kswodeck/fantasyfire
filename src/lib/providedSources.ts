@@ -12,7 +12,7 @@ export const PROVIDED_SOURCE_LABELS: Record<string, string> = {
   prizepicks: 'PrizePicks',
   underdog: 'Underdog',
   sleeper: 'Sleeper',
-  pick6: 'DraftKings Pick6',
+  pick6: 'DK Pick6',
   rtsports: 'RT Sports',
   dabble: 'Dabble',
   betr: 'Betr',
