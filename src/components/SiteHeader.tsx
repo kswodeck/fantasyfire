@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { FlameMark } from './FlameMark';
 import { SportMenu } from './SportMenu';
 import { ThemeToggle } from './ThemeToggle';
+import { MobileNav } from './MobileNav';
 import { SPORT_LIST } from '@/lib/sports';
 
 // Site chrome. Data-agnostic; safe to reuse in any build.
@@ -15,7 +16,9 @@ export function SiteHeader() {
             Fantasy<span className="text-brand">Fire</span>
           </span>
         </Link>
-        <nav className="flex items-center gap-4 text-sm text-muted sm:gap-5">
+
+        {/* Desktop / tablet (sm+): inline nav with hover menus. */}
+        <nav className="hidden items-center gap-4 text-sm text-muted sm:flex sm:gap-5">
           <Link href="/" className="transition-colors hover:text-foreground">
             Home
           </Link>
@@ -33,6 +36,12 @@ export function SiteHeader() {
           </Link>
           <ThemeToggle className="-mr-1.5" />
         </nav>
+
+        {/* Mobile (sub-sm): theme toggle + hamburger menu. */}
+        <div className="flex items-center gap-1 sm:hidden">
+          <ThemeToggle />
+          <MobileNav />
+        </div>
       </div>
     </header>
   );
