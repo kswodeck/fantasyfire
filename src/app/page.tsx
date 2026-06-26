@@ -1,15 +1,30 @@
 import Link from 'next/link';
 import { FlameMark } from '@/components/FlameMark';
 import { BoardTable } from '@/components/BoardTable';
-import { getBoard, hasUpcomingGames } from '@/lib/server/players';
+import { SourcedBoardTable } from '@/components/SourcedBoardTable';
+import { getBoard, getSourcedBoards, hasUpcomingGames } from '@/lib/server/players';
+import { getAvailableSources } from '@/lib/server/providedLines';
+import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import { SPORT_LIST, SPORTS, type Sport } from '@/lib/sports';
 import type { BoardRow } from '@/lib/types';
 
 export const revalidate = 1800; // 30 min — keep the leans close to the ~15-min lines ingest (prod is on Pro; board reads are optimized)
 
 async function loadSport(sport: Sport) {
+  // Prefer real book lines (PrizePicks / Underdog / …) with a per-book dropdown; fall
+  // back to our computed median line only when no book lines are ingested.
+  const sources = await getAvailableSources(sport).catch(() => [] as string[]);
+  const initialSource = sources.includes(DEFAULT_PROVIDED_SOURCE)
+    ? DEFAULT_PROVIDED_SOURCE
+    : (sources[0] ?? DEFAULT_PROVIDED_SOURCE);
+  if (sources.length > 0) {
+    const boardsBySource = await getSourcedBoards(sport, sources, { limit: 6 }).catch(
+      () => ({}) as Record<string, BoardRow[]>,
+    );
+    return { sources, initialSource, boardsBySource, leans: boardsBySource[initialSource] ?? [] };
+  }
   const leans = await getBoard(sport, { limit: 6 }).catch(() => [] as BoardRow[]);
-  return { leans };
+  return { sources, initialSource, boardsBySource: {} as Record<string, BoardRow[]>, leans };
 }
 
 export default async function Home() {
@@ -50,7 +65,8 @@ export default async function Home() {
         <section className={`grid gap-5 pb-10 ${gridCols}`}>
           {activeSports.map((sport) => {
             const cfg = SPORTS[sport];
-            const { leans } = data[sport];
+            const { leans, sources, initialSource, boardsBySource } = data[sport];
+            const hasSources = sources.length > 0;
             return (
               <div
                 key={sport}
@@ -72,13 +88,30 @@ export default async function Home() {
                 </div>
 
                 <div className="space-y-2 border-t border-line p-4">
-                  <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted">
-                    Top leans
-                  </h3>
-                  {leans.length === 0 ? (
-                    <p className="px-1 py-4 text-sm text-muted">No data available yet.</p>
+                  {hasSources ? (
+                    <SourcedBoardTable
+                      sport={sport}
+                      boardsBySource={boardsBySource}
+                      sources={sources}
+                      defaultSource={initialSource}
+                      heading={
+                        <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted">
+                          Top leans
+                        </h3>
+                      }
+                      emptyText="No props on this book right now."
+                    />
                   ) : (
-                    <BoardTable sport={sport} rows={leans} />
+                    <>
+                      <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted">
+                        Top leans
+                      </h3>
+                      {leans.length === 0 ? (
+                        <p className="px-1 py-4 text-sm text-muted">No data available yet.</p>
+                      ) : (
+                        <BoardTable sport={sport} rows={leans} />
+                      )}
+                    </>
                   )}
                   <Link
                     href={`/${sport}/board`}

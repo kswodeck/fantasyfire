@@ -4,8 +4,11 @@ import { notFound } from 'next/navigation';
 import { FlameMark } from '@/components/FlameMark';
 import { SearchForm } from '@/components/SearchForm';
 import { BoardTable } from '@/components/BoardTable';
+import { SourcedBoardTable } from '@/components/SourcedBoardTable';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
-import { getBoard } from '@/lib/server/players';
+import { getBoard, getSourcedBoards } from '@/lib/server/players';
+import { getAvailableSources } from '@/lib/server/providedLines';
+import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
 import type { BoardRow } from '@/lib/types';
 
@@ -38,12 +41,25 @@ export default async function SportHome({ params }: PageProps) {
   const sport: Sport = raw;
   const cfg = SPORTS[sport];
 
+  // Prefer real book lines (PrizePicks / Underdog / …) with a per-book dropdown; fall
+  // back to our computed median line only when no book lines are ingested.
+  let sources: string[] = [];
+  let boardsBySource: Record<string, BoardRow[]> = {};
   let leans: BoardRow[] = [];
+  let initialSource = DEFAULT_PROVIDED_SOURCE;
   try {
-    leans = await getBoard(sport, { limit: 9 });
+    sources = await getAvailableSources(sport);
+    if (sources.length > 0) {
+      initialSource = sources.includes(DEFAULT_PROVIDED_SOURCE) ? DEFAULT_PROVIDED_SOURCE : sources[0];
+      boardsBySource = await getSourcedBoards(sport, sources, { limit: 9 });
+      leans = boardsBySource[initialSource] ?? [];
+    } else {
+      leans = await getBoard(sport, { limit: 9 });
+    }
   } catch {
     // DB unavailable — render the hero without the leans.
   }
+  const hasSources = sources.length > 0;
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4">
@@ -77,15 +93,34 @@ export default async function SportHome({ params }: PageProps) {
         </div>
       </section>
 
-      {leans.length > 0 && (
+      {(hasSources || leans.length > 0) && (
         <section className="mx-auto max-w-3xl pb-10">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted">
-            {cfg.name} Top Leans
-            <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium normal-case text-muted">
-              experimental
-            </span>
-          </h2>
-          <BoardTable sport={sport} rows={leans} />
+          {hasSources ? (
+            <SourcedBoardTable
+              sport={sport}
+              boardsBySource={boardsBySource}
+              sources={sources}
+              defaultSource={initialSource}
+              heading={
+                <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted">
+                  {cfg.name} Top Leans
+                  <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium normal-case text-muted">
+                    experimental
+                  </span>
+                </h2>
+              }
+            />
+          ) : (
+            <>
+              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted">
+                {cfg.name} Top Leans
+                <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium normal-case text-muted">
+                  experimental
+                </span>
+              </h2>
+              <BoardTable sport={sport} rows={leans} />
+            </>
+          )}
           <Link
             href={`/${sport}/board`}
             className="mt-4 inline-block text-sm font-medium text-brand transition-colors hover:text-brand-strong"
