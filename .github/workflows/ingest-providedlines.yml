@@ -19,8 +19,8 @@ name: Ingest provided lines (PrizePicks + Underdog)
 # this is anchored to PDT (UTC-7), the current Pacific offset:
 #   - PEAK 8AM-9PM PDT (15:00-04:00 UTC): every 15 min — from ~2h before the Sunday
 #     early NFL slate (1PM ET) through the latest NBA tip-offs (~8PM PT).
-#   - OFF-PEAK 9PM-8AM PDT (04:00-15:00 UTC): every 4 hours.
-# ~55 runs/day (~1.6k min/month; under the 2,000 free tier on a PRIVATE repo).
+#   - OFF-PEAK overnight lull: just 07:00 + 13:00 UTC (= midnight + 6AM PDT).
+# ~54 runs/day (~1.6k min/month; under the 2,000 free tier on a PRIVATE repo).
 # When DST ends (early Nov 2026) the wall-clock window shifts to 7AM-8PM PST until
 # spring — bump every UTC hour here +1 to restore 8AM-9PM. GitHub schedules are
 # best-effort: high-frequency crons can slip 5-15 min or skip under load, so 15 min
@@ -35,8 +35,8 @@ on:
     # PEAK 8AM-9PM PDT = 15:00-04:00 UTC — every 15 min (hours 15-23, then 00-03).
     - cron: '*/15 15-23 * * *'
     - cron: '*/15 0-3 * * *'
-    # OFF-PEAK 9PM-8AM PDT = 04:00-15:00 UTC — every 4 hours.
-    - cron: '0 4,8,12 * * *'
+    # OFF-PEAK overnight lull — 07:00 + 13:00 UTC (= midnight + 6AM PDT).
+    - cron: '0 7,13 * * *'
   workflow_dispatch: {}
 
 concurrency:
