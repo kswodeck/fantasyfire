@@ -88,6 +88,13 @@ const nextConfig: NextConfig = {
       { source: '/((?!embed/).*)', headers: securityHeaders },
     ];
   },
+  async redirects() {
+    return [
+      // /[sport]/today merged into the Top Leans board (which now has a "today's
+      // slate" toggle). Keep the old URL as a permanent redirect to preserve SEO.
+      { source: '/:sport/today', destination: '/:sport/board', permanent: true },
+    ];
+  },
 };
 
 export default nextConfig;

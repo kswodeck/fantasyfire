@@ -11,8 +11,7 @@ export function sportMeshLinks(
   const name = SPORTS[sport].name;
   const leadersStat = sport === 'mlb' ? 'hits' : sport === 'nfl' ? 'passYds' : 'pts';
   const items: { seg: string; label: string; href: string; hint: string }[] = [
-    { seg: 'today', label: `${name} Today`, href: `/${sport}/today`, hint: "Today's slate and leans on the teams playing." },
-    { seg: 'board', label: `${name} Top Leans`, href: `/${sport}/board`, hint: 'Strongest FireScore leans, ranked.' },
+    { seg: 'board', label: `${name} Top Leans`, href: `/${sport}/board`, hint: "Strongest FireScore leans + today's slate." },
     { seg: 'streaks', label: `${name} Streaks`, href: `/${sport}/streaks`, hint: 'Longest current over/under runs.' },
     { seg: 'trends', label: `${name} Trends`, href: `/${sport}/trends`, hint: 'Who is heating up versus their baseline.' },
     { seg: 'leaders', label: `${name} Leaders`, href: `/${sport}/leaders/${leadersStat}`, hint: 'Season per-game leaders by stat.' },

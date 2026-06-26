@@ -78,17 +78,17 @@ export default async function SportHome({ params }: PageProps) {
         </div>
         <div className="flex flex-wrap items-center justify-center gap-3">
           <Link
-            href={`/${sport}/today`}
+            href={`/${sport}/board`}
             className="rounded-full px-5 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
             style={{ backgroundColor: cfg.accent }}
           >
-            {cfg.name} Today →
+            {cfg.name} Top Leans →
           </Link>
           <Link
-            href={`/${sport}/board`}
+            href={`/${sport}/players`}
             className="rounded-full border border-line px-5 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-surface-2"
           >
-            Top Leans board
+            Browse all players
           </Link>
         </div>
       </section>

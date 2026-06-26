@@ -4,8 +4,7 @@
  * under /[sport]; `desc` is the one-line hint shown in the header dropdown.
  */
 export const SPORT_SECTIONS: { label: string; seg: string; desc: string }[] = [
-  { label: 'Today', seg: 'today', desc: "Today's slate + leans" },
-  { label: 'Top Leans', seg: 'board', desc: 'Strongest FireScore leans' },
+  { label: 'Top Leans', seg: 'board', desc: "Strongest leans + today's slate" },
   { label: 'Streaks', seg: 'streaks', desc: 'Longest current over/under runs' },
   { label: 'Trends', seg: 'trends', desc: 'Heating up vs the baseline' },
   { label: 'Leaders', seg: 'leaders', desc: 'Per-game stat leaders' },

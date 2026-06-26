@@ -2,14 +2,12 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
-import { FilterableBoard } from '@/components/FilterableBoard';
-import { SourcedBoard } from '@/components/SourcedBoard';
-import { SlatePaster } from '@/components/SlatePaster';
-import { getBoard, getSourcedBoards, hasUpcomingGames } from '@/lib/server/players';
+import { BoardExplorer } from '@/components/BoardExplorer';
+import { getBoard, getSourcedBoards, getTonightSlate, hasUpcomingGames } from '@/lib/server/players';
 import { getAvailableSources } from '@/lib/server/providedLines';
-import { DEFAULT_PROVIDED_SOURCE, sourceLabel } from '@/lib/providedSources';
+import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
-import type { BoardRow } from '@/lib/types';
+import type { BoardRow, TonightGame } from '@/lib/types';
 import { RelatedLinks } from '@/components/RelatedLinks';
 import { OffSeasonFallback } from '@/components/OffSeasonFallback';
 import { sportMeshLinks } from '@/lib/relatedLinks';
@@ -27,8 +25,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { sport } = await params;
   if (!isSport(sport)) return { title: 'Not found' };
   const cfg = SPORTS[sport];
-  const title = `${cfg.name} Top Leans — FantasyFire Board`;
-  const description = `The strongest recent-form ${cfg.name} player-prop leans, ranked by a sample-size-adjusted FireScore from public game logs — a research starting point, not picks or betting advice.`;
+  const title = `${cfg.name} Top Leans — Today's Slate & Player Props`;
+  const description = `The strongest recent-form ${cfg.name} player-prop leans, ranked by a sample-size-adjusted FireScore from public game logs. Filter to today's slate or a single matchup, switch books, and open any player for the full read. Research, not picks.`;
   return {
     title,
     description,
@@ -42,6 +40,8 @@ export default async function BoardPage({ params }: PageProps) {
   if (!isSport(raw)) notFound();
   const sport: Sport = raw;
   const cfg = SPORTS[sport];
+  // NFL plays weekly, so "today's slate" is framed as the week.
+  const slateWord = sport === 'nfl' ? 'This week' : 'Today';
 
   // Off-season (no scheduled games) → the auto board's "current" leans are stale,
   // so we show a season-leaders fallback instead. Default to in-season on error.
@@ -49,32 +49,38 @@ export default async function BoardPage({ params }: PageProps) {
 
   // Real book lines available for this sport (PrizePicks, Underdog, …). Empty when
   // the feature is off / nothing's ingested — then we fall back to our median line.
-  const sources = upcoming ? await getAvailableSources(sport).catch(() => []) : [];
+  const sources = upcoming ? await getAvailableSources(sport).catch((): string[] => []) : [];
   const hasSources = sources.length > 0;
   const initialSource = sources.includes(DEFAULT_PROVIDED_SOURCE)
     ? DEFAULT_PROVIDED_SOURCE
     : (sources[0] ?? DEFAULT_PROVIDED_SOURCE);
 
-  // Pre-compute one board per book (ranked vs that book's real line) so the dropdown
-  // switches instantly and the page stays static/ISR. No sources → a single board
-  // vs our median line (prior behavior).
+  // One board per book (ranked vs that book's real line) + the slate, so the client
+  // can switch books / toggle today / filter by matchup instantly (static/ISR).
   let boardsBySource: Record<string, BoardRow[]> = {};
-  let rows: BoardRow[] = [];
+  let medianRows: BoardRow[] = [];
+  let slate: { date: string | null; games: TonightGame[] } = { date: null, games: [] };
   if (upcoming) {
     try {
       if (hasSources) {
-        // One player+games load → a pure-slate board per book (no extra egress
-        // per book; switching books is a client-side swap of pre-rendered rows).
-        boardsBySource = await getSourcedBoards(sport, sources, { limit: 150, perStatCap: 30 });
-        rows = boardsBySource[initialSource] ?? [];
+        [slate, boardsBySource] = await Promise.all([
+          getTonightSlate(sport),
+          getSourcedBoards(sport, sources, { limit: 150, perStatCap: 30 }),
+        ]);
       } else {
-        rows = await getBoard(sport, { limit: 150, perStatCap: 30 });
+        [slate, medianRows] = await Promise.all([
+          getTonightSlate(sport),
+          getBoard(sport, { limit: 150, perStatCap: 30 }),
+        ]);
       }
     } catch {
-      // DB unavailable — fall through to the empty state rather than erroring.
-      rows = [];
+      // DB unavailable — render the empty state.
     }
   }
+
+  const hasBoard = hasSources
+    ? Object.values(boardsBySource).some((r) => r.length > 0)
+    : medianRows.length > 0;
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8">
@@ -83,7 +89,7 @@ export default async function BoardPage({ params }: PageProps) {
         items={[
           { label: 'Home', href: '/' },
           { label: cfg.name, href: `/${sport}` },
-          { label: 'Board' },
+          { label: 'Top Leans' },
         ]}
       />
       <h1 className="text-3xl font-bold tracking-tight">{cfg.name} Top Leans</h1>
@@ -91,65 +97,48 @@ export default async function BoardPage({ params }: PageProps) {
         The strongest recent-form leans across the most active {cfg.name} players, ranked by our
         sample-size-adjusted <strong className="text-foreground">FireScore</strong>.{' '}
         {hasSources ? (
-          <>
-            Lines are the real numbers from{' '}
-            <strong className="text-foreground">{sourceLabel(initialSource)}</strong> — switch books
-            with the selector below. Open a player to enter your own line and odds for the full read.
-          </>
+          <>Lines are the real book numbers — switch books with the selector. </>
         ) : (
-          <>
-            The lines shown are{' '}
-            <strong className="text-foreground">our own typical-game (median) line</strong>, not a
-            sportsbook line — so this is a research starting point. Open a player to enter the real line
-            and odds for the full read.
-          </>
+          <>The lines shown are our own typical-game (median) line, not a sportsbook line. </>
         )}
+        Filter to {slateWord.toLowerCase()}&rsquo;s slate or a single matchup, and open a player to
+        enter your own line and odds.
       </p>
 
-      <div className="mt-6">
-        <SlatePaster sport={sport} />
-      </div>
-
       {!upcoming ? (
-        <OffSeasonFallback sport={sport} what="live top leans" />
+        <div className="mt-6">
+          <OffSeasonFallback sport={sport} what="live top leans" />
+        </div>
+      ) : hasBoard || slate.games.length > 0 ? (
+        <div className="mt-6">
+          <BoardExplorer
+            sport={sport}
+            boardsBySource={boardsBySource}
+            sources={sources}
+            defaultSource={initialSource}
+            medianRows={medianRows}
+            games={slate.games}
+            slateWord={slateWord}
+            slateDate={slate.date}
+          />
+        </div>
       ) : (
-        <>
-          {rows.length === 0 ? (
-            <p className="mt-2 rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
-              No board data yet — check back after the next nightly update, or{' '}
-              <Link href={`/${sport}/players`} className="text-brand hover:text-brand-strong">
-                browse all {cfg.name} players
-              </Link>
-              .
-            </p>
-          ) : (
-            <div className="mt-5">
-              {hasSources ? (
-                <SourcedBoard
-                  sport={sport}
-                  boardsBySource={boardsBySource}
-                  sources={sources}
-                  defaultSource={initialSource}
-                />
-              ) : (
-                <>
-                  <h2 className="mb-2 mt-2 text-xs font-semibold uppercase tracking-wide text-muted">
-                    Auto board — strongest leans vs our typical line
-                  </h2>
-                  <FilterableBoard sport={sport} rows={rows} />
-                </>
-              )}
-            </div>
-          )}
-        </>
+        <p className="mt-6 rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
+          No board data yet — check back after the next nightly update, or{' '}
+          <Link href={`/${sport}/players`} className="text-brand hover:text-brand-strong">
+            browse all {cfg.name} players
+          </Link>
+          .
+        </p>
       )}
 
       <RelatedLinks links={sportMeshLinks(sport, 'board')} />
 
       <p className="mt-4 text-xs leading-relaxed text-muted">
         Descriptive research from public game logs, ranked by a sample-size–adjusted FireScore (recent
-        hit rate vs the line, discounted for thin samples via a 95% Wilson interval) — not predictions,
-        picks, or betting advice.
+        hit rate vs the line, discounted for thin samples via a 95% Wilson interval) — not
+        predictions, picks, or betting advice. We don&rsquo;t track who&rsquo;s active; confirm
+        lineups, scratches, and injuries yourself.
       </p>
     </div>
   );

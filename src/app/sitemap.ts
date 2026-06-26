@@ -55,7 +55,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       { url: absoluteUrl(`/${sport}`), changeFrequency: 'daily', priority: 0.9, lastModified: sportMod },
       { url: absoluteUrl(`/${sport}/players`), changeFrequency: 'daily', priority: 0.8, lastModified: sportMod },
       { url: absoluteUrl(`/${sport}/board`), changeFrequency: 'daily', priority: 0.8, lastModified: sportMod },
-      { url: absoluteUrl(`/${sport}/today`), changeFrequency: 'daily', priority: 0.8, lastModified: sportMod },
       { url: absoluteUrl(`/${sport}/streaks`), changeFrequency: 'daily', priority: 0.7, lastModified: sportMod },
       { url: absoluteUrl(`/${sport}/trends`), changeFrequency: 'daily', priority: 0.7, lastModified: sportMod },
       { url: absoluteUrl(`/${sport}/matchups`), changeFrequency: 'daily', priority: 0.7, lastModified: sportMod },
