@@ -1,16 +1,17 @@
 'use client';
 
-import { useState } from 'react';
 import type { Sport } from '@/lib/sports';
 import type { BoardRow } from '@/lib/types';
 import { FilterableBoard } from './FilterableBoard';
 import { SourceSelector } from './SourceSelector';
+import { useSourced } from './useSourced';
 
 /**
  * Board with a book-source dropdown. Each source's board is pre-computed on the
  * server (ranked against that book's real lines) and passed in, so switching is
- * instant and the page stays static/ISR. `key={source}` resets the inner filters
- * when the book changes.
+ * instant and the page stays static/ISR. Only books that produced board rows are
+ * offered — a book RotoWire barely covers is auto-hidden instead of showing an empty
+ * board. `key={source}` resets the inner filters when the book changes.
  */
 export function SourcedBoard({
   sport,
@@ -28,8 +29,7 @@ export function SourcedBoard({
   heading?: string | null;
   initialVisible?: number;
 }) {
-  const [source, setSource] = useState(defaultSource);
-  const rows = boardsBySource[source] ?? [];
+  const { source, setSource, liveSources, rows } = useSourced(boardsBySource, sources, defaultSource);
   return (
     <div>
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -38,7 +38,7 @@ export function SourcedBoard({
         ) : (
           <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">{heading}</h2>
         )}
-        <SourceSelector sources={sources} value={source} onChange={setSource} />
+        <SourceSelector sources={liveSources} value={source} onChange={setSource} />
       </div>
       {rows.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">

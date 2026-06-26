@@ -1,17 +1,18 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import type { Sport } from '@/lib/sports';
 import type { BoardRow } from '@/lib/types';
 import { BoardTable } from './BoardTable';
 import { SourceSelector } from './SourceSelector';
+import { useSourced } from './useSourced';
 
 /**
  * Compact teaser board (the home + sport-home "Top leans" lists) with a book-source
  * dropdown. Each source's rows are pre-computed on the server against that book's real
  * lines and passed in, so switching books is an instant client swap and the page stays
- * static/ISR. Mirrors SourcedBoard, but renders the small read-only BoardTable instead
- * of the full FilterableBoard.
+ * static/ISR. Only books that produced rows are offered (thin books auto-hidden).
+ * Mirrors SourcedBoard, but renders the small read-only BoardTable.
  */
 export function SourcedBoardTable({
   sport,
@@ -29,13 +30,12 @@ export function SourcedBoardTable({
   heading?: ReactNode;
   emptyText?: string;
 }) {
-  const [source, setSource] = useState(defaultSource);
-  const rows = boardsBySource[source] ?? [];
+  const { source, setSource, liveSources, rows } = useSourced(boardsBySource, sources, defaultSource);
   return (
     <div>
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="min-w-0">{heading}</div>
-        <SourceSelector sources={sources} value={source} onChange={setSource} />
+        <SourceSelector sources={liveSources} value={source} onChange={setSource} />
       </div>
       {rows.length === 0 ? (
         <p className="px-1 py-4 text-sm text-muted">{emptyText}</p>
