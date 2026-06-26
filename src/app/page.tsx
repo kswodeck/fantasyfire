@@ -1,30 +1,26 @@
-import Link from 'next/link';
 import { FlameMark } from '@/components/FlameMark';
-import { BoardTable } from '@/components/BoardTable';
-import { SourcedBoardTable } from '@/components/SourcedBoardTable';
+import { HomeTopLeans, type HomeCard } from '@/components/HomeTopLeans';
 import { getBoard, getSourcedBoards, hasUpcomingGames } from '@/lib/server/players';
 import { getAvailableSources } from '@/lib/server/providedLines';
-import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import { SPORT_LIST, SPORTS, type Sport } from '@/lib/sports';
 import type { BoardRow } from '@/lib/types';
 
 export const revalidate = 1800; // 30 min — keep the leans close to the ~15-min lines ingest (prod is on Pro; board reads are optimized)
 
-async function loadSport(sport: Sport) {
-  // Prefer real book lines (PrizePicks / Underdog / …) with a per-book dropdown; fall
-  // back to our computed median line only when no book lines are ingested.
+async function loadSport(
+  sport: Sport,
+): Promise<{ boardsBySource: Record<string, BoardRow[]>; medianLeans: BoardRow[] }> {
+  // Prefer real book lines (one board per book, switched by the page-wide selector);
+  // fall back to our computed median line only when no book lines are ingested.
   const sources = await getAvailableSources(sport).catch(() => [] as string[]);
-  const initialSource = sources.includes(DEFAULT_PROVIDED_SOURCE)
-    ? DEFAULT_PROVIDED_SOURCE
-    : (sources[0] ?? DEFAULT_PROVIDED_SOURCE);
   if (sources.length > 0) {
     const boardsBySource = await getSourcedBoards(sport, sources, { limit: 6 }).catch(
       () => ({}) as Record<string, BoardRow[]>,
     );
-    return { sources, initialSource, boardsBySource, leans: boardsBySource[initialSource] ?? [] };
+    return { boardsBySource, medianLeans: [] };
   }
-  const leans = await getBoard(sport, { limit: 6 }).catch(() => [] as BoardRow[]);
-  return { sources, initialSource, boardsBySource: {} as Record<string, BoardRow[]>, leans };
+  const medianLeans = await getBoard(sport, { limit: 6 }).catch(() => [] as BoardRow[]);
+  return { boardsBySource: {}, medianLeans };
 }
 
 export default async function Home() {
@@ -34,17 +30,18 @@ export default async function Home() {
     await Promise.all(SPORT_LIST.map(async (s) => ((await hasUpcomingGames(s)) ? s : null)))
   ).filter((s): s is Sport => s !== null);
 
-  const data = Object.fromEntries(
-    await Promise.all(activeSports.map(async (s) => [s, await loadSport(s)] as const)),
-  ) as Record<Sport, Awaited<ReturnType<typeof loadSport>>>;
-
-  // Lay the panels out by how many sports are in season (1 = centered, 2/3 = grid).
-  const gridCols =
-    activeSports.length >= 3
-      ? 'sm:grid-cols-2 lg:grid-cols-3'
-      : activeSports.length === 2
-        ? 'sm:grid-cols-2'
-        : 'mx-auto max-w-md';
+  const loaded = await Promise.all(activeSports.map(async (s) => [s, await loadSport(s)] as const));
+  const cards: HomeCard[] = loaded.map(([sport, d]) => {
+    const cfg = SPORTS[sport];
+    return {
+      sport,
+      name: cfg.name,
+      accent: cfg.accent,
+      tagline: cfg.tagline,
+      boardsBySource: d.boardsBySource,
+      medianLeans: d.medianLeans,
+    };
+  });
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4">
@@ -54,76 +51,15 @@ export default async function Home() {
           Honest player-prop research
         </h1>
         <p className="max-w-xl text-lg text-muted">
-          Hit rates, matchup context, sample-size confidence, and fair-price math across
-          the NBA, MLB, and NFL — computed from public game logs, with the uncertainty
-          shown rather than hidden.
+          Hit rates, matchup context, sample-size confidence, and fair-price math across the NBA,
+          MLB, and NFL — computed from public game logs, with the uncertainty shown rather than
+          hidden.
         </p>
       </section>
 
-      {/* Per-sport dashboard panels — only sports with an upcoming slate. */}
-      {activeSports.length > 0 ? (
-        <section className={`grid gap-5 pb-10 ${gridCols}`}>
-          {activeSports.map((sport) => {
-            const cfg = SPORTS[sport];
-            const { leans, sources, initialSource, boardsBySource } = data[sport];
-            const hasSources = sources.length > 0;
-            return (
-              <div
-                key={sport}
-                className="overflow-hidden rounded-2xl border border-line bg-surface"
-                style={{ borderTop: `3px solid ${cfg.accent}` }}
-              >
-                <div className="flex items-start justify-between gap-3 p-5">
-                  <div>
-                    <h2 className="text-2xl font-bold tracking-tight">{cfg.name}</h2>
-                    <p className="mt-1 max-w-xs text-sm text-muted">{cfg.tagline}</p>
-                  </div>
-                  <Link
-                    href={`/${sport}`}
-                    className="shrink-0 rounded-full px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
-                    style={{ backgroundColor: cfg.accent }}
-                  >
-                    Open {cfg.name} →
-                  </Link>
-                </div>
-
-                <div className="space-y-2 border-t border-line p-4">
-                  {hasSources ? (
-                    <SourcedBoardTable
-                      sport={sport}
-                      boardsBySource={boardsBySource}
-                      sources={sources}
-                      defaultSource={initialSource}
-                      heading={
-                        <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted">
-                          Top leans
-                        </h3>
-                      }
-                      emptyText="No props on this book right now."
-                    />
-                  ) : (
-                    <>
-                      <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted">
-                        Top leans
-                      </h3>
-                      {leans.length === 0 ? (
-                        <p className="px-1 py-4 text-sm text-muted">No data available yet.</p>
-                      ) : (
-                        <BoardTable sport={sport} rows={leans} />
-                      )}
-                    </>
-                  )}
-                  <Link
-                    href={`/${sport}/board`}
-                    className="mt-1 block rounded-lg px-1 py-2 text-sm font-medium text-brand transition-colors hover:text-brand-strong"
-                  >
-                    See the full {cfg.name} board →
-                  </Link>
-                </div>
-              </div>
-            );
-          })}
-        </section>
+      {/* One page-wide book selector drives every sport's Top Leans. */}
+      {cards.length > 0 ? (
+        <HomeTopLeans cards={cards} />
       ) : (
         <section className="mb-10 rounded-2xl border border-line bg-surface p-8 text-center">
           <p className="mx-auto max-w-md text-sm text-muted">

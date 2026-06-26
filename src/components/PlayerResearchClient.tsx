@@ -23,6 +23,7 @@ import { VerdictPanel } from './VerdictPanel';
 import { SavePropControl } from './SavePropControl';
 import { SplitsPanel } from './SplitsPanel';
 import { SourceSelector } from './SourceSelector';
+import { useSelectedSource } from './SelectedSourceProvider';
 import { sourceLabel } from '@/lib/providedSources';
 
 /** Sanitize raw odds: treat 0 / non-finite as "not entered". */
@@ -68,6 +69,7 @@ export function PlayerResearchClient({
   const [overOdds, setOverOdds] = useState<number | null>(null);
   const [underOdds, setUnderOdds] = useState<number | null>(null);
   const [edgeWindow, setEdgeWindow] = useState<string>('season');
+  const { source: globalSource, setSource: setGlobalSource } = useSelectedSource();
 
   // Hydrate stat/line from the URL once on mount — syncing from an external
   // system (the URL) into React. Done in an effect (not a lazy initializer) so
@@ -85,6 +87,14 @@ export function PlayerResearchClient({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Default the book to the user's saved choice (persisted across pages) when this
+  // sport offers it — keeps the selected source consistent everywhere.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (globalSource !== source && availableSources.includes(globalSource)) setSource(globalSource);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [globalSource]);
 
   // Seed React Query with the SSR payload ONLY for the initial stat/line key.
   // Passing it for other keys would (with staleTime) make the previous stat's
@@ -127,6 +137,7 @@ export function PlayerResearchClient({
 
   function handleSource(next: string) {
     setSource(next);
+    setGlobalSource(next); // persist the choice + sync it across pages
     setLine(undefined); // show the new book's line, not a stale custom line
     track('source_switched', { sport, source: next });
   }
