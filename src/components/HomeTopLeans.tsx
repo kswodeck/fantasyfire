@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 import type { Sport } from '@/lib/sports';
 import type { BoardRow } from '@/lib/types';
 import { BoardTable } from './BoardTable';
 import { SourceSelector } from './SourceSelector';
 import { useSelectedSource } from './SelectedSourceProvider';
+import { useSelectedSlate } from './SelectedSlateProvider';
 import { orderSources, DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 
 export interface HomeCard {
@@ -28,9 +28,9 @@ const DISPLAY = 6;
 /**
  * Home "Top leans" cards driven by ONE page-wide book selector AND one "today's slate"
  * toggle for the whole page (no per-sport controls). Every card shows the same book and
- * the same today/all view; changing either updates all sports at once, and the book
- * choice persists across pages (SelectedSourceProvider). The home cards deliberately
- * omit the matchups list — that lives on each sport's board.
+ * the same today/all view; changing either updates all sports at once, and both choices
+ * persist across pages (SelectedSourceProvider / SelectedSlateProvider). The home cards
+ * deliberately omit the matchups list — that lives on each sport's board.
  */
 export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
   const { source: selected, setSource } = useSelectedSource();
@@ -48,7 +48,7 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
       : (liveSources[0] ?? DEFAULT_PROVIDED_SOURCE);
 
   const anySlate = cards.some((c) => c.todayTeams.length > 0);
-  const [mode, setMode] = useState<'today' | 'all'>(anySlate ? 'today' : 'all');
+  const { mode, setMode } = useSelectedSlate();
 
   const single = cards.length === 1;
   const gridCols =

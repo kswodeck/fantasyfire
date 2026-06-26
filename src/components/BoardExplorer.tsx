@@ -7,6 +7,7 @@ import { FilterableBoard } from './FilterableBoard';
 import { SourceSelector } from './SourceSelector';
 import { MatchupStrip } from './MatchupStrip';
 import { useSourced } from './useSourced';
+import { useSelectedSlate } from './SelectedSlateProvider';
 import { formatIsoDate } from '@/lib/format';
 
 /**
@@ -42,7 +43,9 @@ export function BoardExplorer({
   const rows = hasSources ? sourced.rows : medianRows;
 
   const hasSlate = games.length > 0;
-  const [mode, setMode] = useState<'today' | 'all'>(hasSlate ? 'today' : 'all');
+  const { mode, setMode } = useSelectedSlate();
+  // No slate on this page → always show all players, whatever the saved choice was.
+  const effectiveMode = hasSlate ? mode : 'all';
   const [selectedGames, setSelectedGames] = useState<Set<string>>(new Set());
 
   const gameTeams = (g: TonightGame) =>
@@ -54,7 +57,7 @@ export function BoardExplorer({
     ),
   );
   const filteredRows =
-    mode === 'all'
+    effectiveMode === 'all'
       ? rows
       : rows.filter(
           (r) => r.player.teamAbbreviation && activeTeams.has(r.player.teamAbbreviation),
@@ -102,7 +105,7 @@ export function BoardExplorer({
         )}
       </div>
 
-      {mode === 'today' && hasSlate && (
+      {effectiveMode === 'today' && (
         <div className="mb-4">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
@@ -132,13 +135,13 @@ export function BoardExplorer({
 
       {filteredRows.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
-          {mode === 'today'
+          {effectiveMode === 'today'
             ? 'No leans for this selection right now.'
             : 'No props for this book right now.'}
         </p>
       ) : (
         <FilterableBoard
-          key={`${sourced.source}-${mode}`}
+          key={`${sourced.source}-${effectiveMode}`}
           sport={sport}
           rows={filteredRows}
           initialVisible={20}
