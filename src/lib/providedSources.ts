@@ -40,6 +40,40 @@ export function sourceLabel(id: string): string {
   return PROVIDED_SOURCE_LABELS[id] ?? id;
 }
 
+/** Canonical site domain per source — used to fetch the book's real logo. */
+const PROVIDED_SOURCE_DOMAINS: Record<string, string> = {
+  prizepicks: 'prizepicks.com',
+  underdog: 'underdogfantasy.com',
+  sleeper: 'sleeper.com',
+  pick6: 'pick6.draftkings.com',
+  rtsports: 'rtsports.com',
+  draftkings: 'draftkings.com',
+  fanduel: 'fanduel.com',
+  betmgm: 'betmgm.com',
+  caesars: 'caesars.com',
+  hardrock: 'hardrock.bet',
+  betrivers: 'betrivers.com',
+  espnbet: 'espnbet.com',
+  pointsbet: 'pointsbet.com',
+  unibet: 'unibet.com',
+  williamhill: 'williamhill.com',
+  bovada: 'bovada.lv',
+  dabble: 'dabble.com',
+  betr: 'betr.app',
+  parlayplay: 'parlayplay.io',
+};
+
+/**
+ * Real-logo URL for a source: the book's OWN favicon, served through DuckDuckGo's
+ * privacy-respecting icon proxy (no tracking, reliable across all our books). Returns
+ * null when the domain is unknown — the caller then shows the monogram badge. We
+ * reference the book's published mark rather than bundling artwork.
+ */
+export function sourceLogoUrl(id: string): string | null {
+  const domain = PROVIDED_SOURCE_DOMAINS[id];
+  return domain ? `https://icons.duckduckgo.com/ip3/${domain}.ico` : null;
+}
+
 /**
  * Lightweight brand mark per source: a short monogram + colors for a logo badge.
  * These are placeholders (best-effort brand colors) so the UI can show a logo

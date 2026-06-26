@@ -1,21 +1,18 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { sourceBrand, sourceLabel } from '@/lib/providedSources';
+import { sourceBrand, sourceLabel, sourceLogoUrl } from '@/lib/providedSources';
 
 /**
  * Small square logo for a line/odds source (PrizePicks, Underdog, Sleeper, …). Shows
- * the real book logo when artwork exists at `public/books/<id>.svg`; otherwise falls
- * back to a brand-colored monogram badge.
- *
- * Book logos are supplied as local files because no feed provides them — RotoWire's
- * API carries TEAM logos only, and the books' marks are trademarked — so drop an
- * official SVG named by source id (e.g. public/books/prizepicks.svg) to light one up.
+ * the book's real logo (its own favicon, via DuckDuckGo's privacy-respecting icon
+ * proxy — see sourceLogoUrl) and falls back to a brand-colored monogram badge if the
+ * logo can't load or the source's domain is unknown.
  *
  * The monogram is the BASE layer; the image is overlaid and revealed only once it
- * actually loads, so a missing file never flashes a broken-image icon (and the
- * already-complete-before-hydration case is handled in an effect). Decorative by
- * default (the source name is shown alongside it); pass `title` for standalone use.
+ * actually loads, so a slow/failed logo never flashes a broken-image icon (the
+ * load-before-hydration case is handled in an effect). Decorative by default (the
+ * source name is shown alongside it); pass `title` for standalone use.
  */
 export function BookLogo({
   source,
@@ -40,6 +37,7 @@ export function BookLogo({
 
   const { monogram, bg, fg } = sourceBrand(source);
   const label = title ?? sourceLabel(source);
+  const logoUrl = sourceLogoUrl(source);
   return (
     <span
       role={title ? 'img' : undefined}
@@ -57,19 +55,22 @@ export function BookLogo({
       }}
     >
       {!loaded && monogram}
-      {/* eslint-disable-next-line @next/next/no-img-element -- tiny local brand mark; next/image adds no value */}
-      <img
-        ref={ref}
-        src={`/books/${source}.svg`}
-        alt=""
-        width={size}
-        height={size}
-        className="absolute inset-0 h-full w-full object-contain"
-        style={{ opacity: loaded ? 1 : 0 }}
-        onLoad={(e) => {
-          if (e.currentTarget.naturalWidth > 0) setLoaded(true);
-        }}
-      />
+      {logoUrl && (
+        // eslint-disable-next-line @next/next/no-img-element -- tiny external brand mark; next/image adds no value
+        <img
+          ref={ref}
+          src={logoUrl}
+          alt=""
+          width={size}
+          height={size}
+          loading="lazy"
+          className="absolute inset-0 h-full w-full object-contain"
+          style={{ opacity: loaded ? 1 : 0 }}
+          onLoad={(e) => {
+            if (e.currentTarget.naturalWidth > 0) setLoaded(true);
+          }}
+        />
+      )}
     </span>
   );
 }
