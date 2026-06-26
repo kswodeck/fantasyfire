@@ -26,7 +26,7 @@ export function ListFilters({
 }) {
   const hasFilters = team !== '' || position !== '';
   const selectCls =
-    'rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-foreground outline-none focus:border-brand';
+    'rounded-lg border border-line bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-brand';
 
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -65,7 +65,7 @@ export function ListFilters({
             onTeamChange('');
             onPositionChange('');
           }}
-          className="rounded-lg px-2 py-1.5 text-xs font-medium text-brand transition-colors hover:text-brand-strong"
+          className="rounded-lg px-3 py-2 text-sm font-medium text-brand transition-colors hover:text-brand-strong"
         >
           Clear
         </button>

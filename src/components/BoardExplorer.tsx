@@ -77,7 +77,7 @@ export function BoardExplorer({
       onClick={() => setMode(m)}
       aria-pressed={mode === m}
       className={
-        'cursor-pointer rounded-md px-3 py-1 transition-colors ' +
+        'cursor-pointer rounded-md px-3 py-1.5 transition-colors sm:py-1 ' +
         (mode === m ? 'bg-brand text-brand-foreground' : 'text-muted hover:text-foreground')
       }
     >

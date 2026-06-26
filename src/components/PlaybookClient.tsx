@@ -267,7 +267,7 @@ function PropRow({ prop }: { prop: SavedProp }) {
         <div className="mt-0.5 text-[11px] text-muted">Saved {relativeTime(savedAt)}</div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-3 text-xs">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:flex-nowrap">
         {query.isPending ? (
           <span className="text-muted">loading…</span>
         ) : !fs ? (
@@ -279,7 +279,7 @@ function PropRow({ prop }: { prop: SavedProp }) {
               <span className="font-semibold tabular-nums text-foreground">{pct(sideRate)}</span>{' '}
               {side}
             </span>
-            <span className={`inline-flex items-center gap-1 font-medium ${tierTextClass(fs.tier, fs.side)}`}>
+            <span className={`inline-flex flex-wrap items-center gap-1 font-medium ${tierTextClass(fs.tier, fs.side)}`}>
               <LeanArrow tier={fs.tier} side={fs.side} size={13} />
               {fsIsLean ? (
                 <>

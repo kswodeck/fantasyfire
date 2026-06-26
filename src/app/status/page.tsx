@@ -91,8 +91,8 @@ export default async function StatusPage() {
           <h2 className="mt-8 text-xs font-semibold uppercase tracking-wide text-muted">
             Data freshness by sport
           </h2>
-          <div className="mt-2 overflow-hidden rounded-xl border border-line bg-surface">
-            <table className="w-full text-sm">
+          <div className="mt-2 overflow-x-auto rounded-xl border border-line bg-surface">
+            <table className="w-full min-w-[34rem] text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
                   <th className="px-3 py-2 font-semibold">Sport</th>
@@ -123,8 +123,8 @@ export default async function StatusPage() {
           <h2 className="mt-8 text-xs font-semibold uppercase tracking-wide text-muted">
             Nightly jobs
           </h2>
-          <div className="mt-2 overflow-hidden rounded-xl border border-line bg-surface">
-            <table className="w-full text-sm">
+          <div className="mt-2 overflow-x-auto rounded-xl border border-line bg-surface">
+            <table className="w-full min-w-[34rem] text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
                   <th className="px-3 py-2 font-semibold">Job</th>

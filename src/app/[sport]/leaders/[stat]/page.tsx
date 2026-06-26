@@ -124,7 +124,7 @@ export default async function LeadersPage({ params }: PageProps) {
             key={s}
             href={`/${sport}/leaders/${s}`}
             aria-current={s === stat ? 'page' : undefined}
-            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+            className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
               s === stat
                 ? 'border-brand bg-brand text-brand-foreground'
                 : 'border-line text-muted hover:text-foreground'

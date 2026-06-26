@@ -184,7 +184,7 @@ export default async function PlayerPage({ params }: PageProps) {
               />
               <span className="truncate">{player.teamName ?? player.teamAbbreviation}</span>
             </div>
-            <h1 className="mt-1 text-3xl font-bold tracking-tight">{player.fullName}</h1>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">{player.fullName}</h1>
             <p className="mt-1 text-sm text-muted">
               {[
                 player.jersey ? `#${player.jersey}` : null,

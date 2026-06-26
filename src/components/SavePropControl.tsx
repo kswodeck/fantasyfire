@@ -36,7 +36,7 @@ export function SavePropControl({
   const { props } = useSavedProps();
 
   return (
-    <div className="flex shrink-0 items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <div className="flex items-center gap-1.5">
         {(['over', 'under'] as PropSide[]).map((side) => {
           const saved = isPropSaved(props, { sport, slug, stat, line, side });
@@ -80,7 +80,7 @@ export function SavePropControl({
           );
         })}
       </div>
-      <span className="whitespace-nowrap text-xs text-muted">
+      <span className="text-xs text-muted">
         Save prop to your{' '}
         <Link
           href="/playbook"

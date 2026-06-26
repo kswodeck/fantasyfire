@@ -56,12 +56,12 @@ export function MatchupStrip({
                 href={`/${sport}/game/${g.externalId}`}
                 title={`Open the ${label} game page`}
                 aria-label={`Open the ${label} game page`}
-                className="flex items-center border-l border-line px-1.5 text-muted transition-colors hover:bg-brand/10 hover:text-brand"
+                className="flex min-w-[36px] items-center justify-center border-l border-line px-2.5 text-muted transition-colors hover:bg-brand/10 hover:text-brand"
               >
                 <svg
                   viewBox="0 0 24 24"
-                  width="12"
-                  height="12"
+                  width="14"
+                  height="14"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2.5"

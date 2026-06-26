@@ -9,7 +9,7 @@ export function DvpTable({ sport, rows, unit }: { sport: Sport; rows: DvpTableRo
   return (
     <ol className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
       {rows.map((r) => (
-        <li key={r.teamAbbreviation} className="flex items-center gap-3 px-3 py-2.5">
+        <li key={r.teamAbbreviation} className="flex items-center gap-2 px-3 py-2.5 sm:gap-3">
           <span className="w-5 shrink-0 text-right text-xs tabular-nums text-muted">{r.rank}</span>
           <TeamLogo sport={sport} externalId={r.teamExternalId} abbr={r.teamAbbreviation} size={22} />
           <div className="min-w-0 flex-1">
@@ -19,7 +19,8 @@ export function DvpTable({ sport, rows, unit }: { sport: Sport; rows: DvpTableRo
             </div>
           </div>
           <div className="shrink-0 text-right text-sm font-semibold tabular-nums">
-            {num1(r.avgAllowed)} <span className="text-xs font-normal text-muted">{unit}</span>
+            {num1(r.avgAllowed)}{' '}
+            <span className="hidden text-xs font-normal text-muted sm:inline">{unit}</span>
           </div>
           <span
             title="Matchup grade — A is the softest, F the toughest"

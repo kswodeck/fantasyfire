@@ -54,7 +54,7 @@ export function VerdictPanel({
       <div className="mt-3 space-y-1.5">
         {fireScore.components.map((c) => (
           <div key={c.key} className="flex items-center gap-2 text-xs">
-            <span className="w-40 shrink-0 text-muted">{c.label}</span>
+            <span className="w-28 shrink-0 text-muted sm:w-40">{c.label}</span>
             <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface">
               <span
                 className="block h-full rounded-full bg-brand"

@@ -49,13 +49,17 @@ export function GameBarChart({
 
   return (
     <figure className="rounded-xl border border-line bg-surface p-4">
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        className="h-auto w-full"
-        role="img"
-        aria-label={`Last ${n} games ${statShort} versus a line of ${line}`}
-        preserveAspectRatio="xMidYMid meet"
-      >
+      {/* Scroll horizontally on narrow screens instead of scaling the whole chart down to
+          an illegible sliver — bars and labels keep a fixed, readable size. */}
+      <div className="overflow-x-auto">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          width={width}
+          height={height}
+          className="block max-w-none"
+          role="img"
+          aria-label={`Last ${n} games ${statShort} versus a line of ${line}`}
+        >
         {/* Line marker */}
         <line
           x1={m.left}
@@ -133,7 +137,8 @@ export function GameBarChart({
             </g>
           );
         })}
-      </svg>
+        </svg>
+      </div>
       <figcaption className="mt-2 text-center text-xs text-muted">
         Last {n} games — {statShort} per game vs. line {num1(line)}.{' '}
         <span className="text-over">Green = over</span>,{' '}

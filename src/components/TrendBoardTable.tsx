@@ -17,7 +17,7 @@ export function TrendBoardTable({ sport, rows }: { sport: Sport; rows: TrendRow[
           <li key={`${r.player.slug}-${r.stat}`}>
             <Link
               href={`/${sport}/${r.player.slug}?stat=${r.stat}&line=${r.line}`}
-              className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-surface-2"
+              className="flex items-center gap-2 px-3 py-2.5 transition-colors hover:bg-surface-2 sm:gap-3"
             >
               <span className="w-5 shrink-0 text-right text-xs tabular-nums text-muted">{r.rank}</span>
               <PlayerAvatar
@@ -41,7 +41,8 @@ export function TrendBoardTable({ sport, rows }: { sport: Sport; rows: TrendRow[
                   <span className="text-xs font-normal text-muted">L10</span>
                 </div>
                 <div className="text-[11px] tabular-nums text-muted">
-                  {pct(r.recentRate)} · +{Math.round(r.delta * 100)} vs {pct(r.seasonRate)} season
+                  {pct(r.recentRate)} · +{Math.round(r.delta * 100)}
+                  <span className="hidden sm:inline"> vs {pct(r.seasonRate)} season</span>
                 </div>
                 {r.streak && (
                   <div
