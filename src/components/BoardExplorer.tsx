@@ -11,7 +11,7 @@ import { useSelectedSlate } from './SelectedSlateProvider';
 import { formatIsoDate } from '@/lib/format';
 
 /**
- * The unified Top Leans board. A "today's slate" toggle (default on when there are
+ * The unified Heat Check board. A "today's slate" toggle (default on when there are
  * games) shows a condensed, clickable matchups strip and filters the board to the
  * teams playing — click one or more games to narrow to those matchups (none = the
  * whole slate); toggle off for every active player. Book selection comes from the

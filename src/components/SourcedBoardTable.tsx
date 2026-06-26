@@ -8,7 +8,7 @@ import { SourceSelector } from './SourceSelector';
 import { useSourced } from './useSourced';
 
 /**
- * Compact teaser board (the home + sport-home "Top leans" lists) with a book-source
+ * Compact teaser board (the home + sport-home "Heat Check" lists) with a book-source
  * dropdown. Each source's rows are pre-computed on the server against that book's real
  * lines and passed in, so switching books is an instant client swap and the page stays
  * static/ISR. Only books that produced rows are offered (thin books auto-hidden).
@@ -26,7 +26,7 @@ export function SourcedBoardTable({
   boardsBySource: Record<string, BoardRow[]>;
   sources: string[];
   defaultSource: string;
-  /** Left-side label rendered on the selector row (e.g. the "Top leans" heading). */
+  /** Left-side label rendered on the selector row (e.g. the "Heat Check" heading). */
   heading?: ReactNode;
   emptyText?: string;
 }) {

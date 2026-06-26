@@ -9,7 +9,7 @@ import type { LeaderRow } from '@/lib/types';
 const MARQUEE: Record<Sport, StatKey> = { nba: 'pts', mlb: 'hits', nfl: 'passYds' };
 
 /**
- * Off-season fallback for the prop/matchup pages (Top Leans, Streaks, Trends).
+ * Off-season fallback for the prop/matchup pages (Heat Check, Trends).
  * Their lists describe upcoming or in-progress games, so with an empty schedule
  * they'd be stale. Instead we tell the user there are no games scheduled and show
  * the season's per-game leaders — which stay meaningful year-round — with a link

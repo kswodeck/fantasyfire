@@ -25,8 +25,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { sport } = await params;
   if (!isSport(sport)) return { title: 'Not found' };
   const cfg = SPORTS[sport];
-  const title = `${cfg.name} Top Leans — Today's Slate & Player Props`;
-  const description = `The strongest recent-form ${cfg.name} player-prop leans, ranked by a sample-size-adjusted FireFactor from public game logs. Filter to today's slate or a single matchup, switch books, and open any player for the full read. Research, not picks.`;
+  const title = `${cfg.name} Heat Check — Today's Slate & Player Props`;
+  const description = `The strongest recent-form ${cfg.name} player-prop reads, ranked by a sample-size-adjusted FireFactor from public game logs. Filter to today's slate or a single matchup, switch books, and open any player for the full read. Research, not picks.`;
   return {
     title,
     description,
@@ -43,7 +43,7 @@ export default async function BoardPage({ params }: PageProps) {
   // NFL plays weekly, so "today's slate" is framed as the week.
   const slateWord = sport === 'nfl' ? 'This week' : 'Today';
 
-  // Off-season (no scheduled games) → the auto board's "current" leans are stale,
+  // Off-season (no scheduled games) → the auto board's "current" reads are stale,
   // so we show a season-leaders fallback instead. Default to in-season on error.
   const upcoming = await hasUpcomingGames(sport).catch(() => true);
 
@@ -89,12 +89,12 @@ export default async function BoardPage({ params }: PageProps) {
         items={[
           { label: 'Home', href: '/' },
           { label: cfg.name, href: `/${sport}` },
-          { label: 'Top Leans' },
+          { label: 'Heat Check' },
         ]}
       />
-      <h1 className="text-3xl font-bold tracking-tight">{cfg.name} Top Leans</h1>
+      <h1 className="text-3xl font-bold tracking-tight">{cfg.name} Heat Check</h1>
       <p className="mt-2 max-w-2xl text-sm text-muted">
-        The strongest recent-form leans across the most active {cfg.name} players, ranked by our
+        The strongest recent-form reads across the most active {cfg.name} players, ranked by our
         sample-size-adjusted <strong className="text-foreground">FireFactor</strong>.{' '}
         {hasSources ? (
           <>Lines are the real book numbers — switch books with the selector. </>
@@ -107,7 +107,7 @@ export default async function BoardPage({ params }: PageProps) {
 
       {!upcoming ? (
         <div className="mt-6">
-          <OffSeasonFallback sport={sport} what="live top leans" />
+          <OffSeasonFallback sport={sport} what="live reads" />
         </div>
       ) : hasBoard || slate.games.length > 0 ? (
         <div className="mt-6">

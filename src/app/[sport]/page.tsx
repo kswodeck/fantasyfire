@@ -82,7 +82,7 @@ export default async function SportHome({ params }: PageProps) {
             className="rounded-full px-5 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
             style={{ backgroundColor: cfg.accent }}
           >
-            {cfg.name} Top Leans →
+            {cfg.name} Heat Check →
           </Link>
           <Link
             href={`/${sport}/players`}
@@ -103,7 +103,7 @@ export default async function SportHome({ params }: PageProps) {
               defaultSource={initialSource}
               heading={
                 <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted">
-                  {cfg.name} Top Leans
+                  {cfg.name} Heat Check
                   <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium normal-case text-muted">
                     experimental
                   </span>
@@ -113,7 +113,7 @@ export default async function SportHome({ params }: PageProps) {
           ) : (
             <>
               <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted">
-                {cfg.name} Top Leans
+                {cfg.name} Heat Check
                 <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium normal-case text-muted">
                   experimental
                 </span>

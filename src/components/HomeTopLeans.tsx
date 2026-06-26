@@ -26,7 +26,7 @@ export interface HomeCard {
 const DISPLAY = 6;
 
 /**
- * Home "Top leans" cards driven by ONE page-wide book selector AND one "today's slate"
+ * Home "Heat Check" cards driven by ONE page-wide book selector AND one "today's slate"
  * toggle for the whole page (no per-sport controls). Every card shows the same book and
  * the same today/all view; changing either updates all sports at once, and both choices
  * persist across pages (SelectedSourceProvider / SelectedSlateProvider). The home cards
@@ -119,7 +119,7 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
 
               <div className="space-y-2 border-t border-line p-4">
                 <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted">
-                  Top leans
+                  Heat Check
                 </h3>
                 {rows.length === 0 ? (
                   <p className="px-1 py-4 text-sm text-muted">

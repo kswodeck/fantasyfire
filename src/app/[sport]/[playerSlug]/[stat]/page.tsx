@@ -219,7 +219,7 @@ export default async function PlayerStatPage({ params }: PageProps) {
             href: `/${sport}/matchups`,
             hint: 'Which opponents inflate or suppress this prop.',
           },
-          { label: `${cfg.name} Top Leans`, href: `/${sport}/board`, hint: 'The strongest leans across the league.' },
+          { label: `${cfg.name} Heat Check`, href: `/${sport}/board`, hint: 'The strongest reads across the league.' },
         ]}
       />
 

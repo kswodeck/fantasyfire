@@ -75,7 +75,7 @@ export default async function Home() {
         </p>
       </section>
 
-      {/* One page-wide book selector + today's-slate toggle drive every sport's Top Leans. */}
+      {/* One page-wide book selector + today's-slate toggle drive every sport's Heat Check. */}
       {cards.length > 0 ? (
         <HomeTopLeans cards={cards} />
       ) : (

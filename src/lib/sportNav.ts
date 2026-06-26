@@ -16,7 +16,7 @@ export interface SportSection {
  */
 export function sportSections(sport: Sport): SportSection[] {
   return [
-    { label: 'Top Leans', seg: 'board', desc: "Strongest leans + today's slate" },
+    { label: 'Heat Check', seg: 'board', desc: "Strongest reads + today's slate" },
     { label: 'Trends', seg: 'trends', desc: 'Form swings + current streaks' },
     { label: 'Leaders', seg: 'leaders', desc: 'Per-game stat leaders' },
     {

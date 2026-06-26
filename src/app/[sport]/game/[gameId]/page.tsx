@@ -68,7 +68,7 @@ export default async function GamePage({ params }: PageProps) {
       items={[
         { label: 'Home', href: '/' },
         { label: cfg.name, href: `/${sport}` },
-        { label: 'Top Leans', href: `/${sport}/board` },
+        { label: 'Heat Check', href: `/${sport}/board` },
         { label },
       ]}
     />
