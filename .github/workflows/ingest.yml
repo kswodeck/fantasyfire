@@ -103,3 +103,11 @@ jobs:
         env:
           NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL || 'https://fantasyfire.app' }}
         run: pnpm indexnow
+
+      # Nightly retention prune — drop ProvidedLine rows older than 30d and IngestRun
+      # rows older than 90d (safe windows; see src/ingest/run-prune.ts). Keeps the DB
+      # lean without a separate cron. Best-effort + non-fatal so a prune hiccup never
+      # fails the data pipeline.
+      - name: Prune old data
+        if: ${{ success() || failure() }}
+        run: pnpm db:prune

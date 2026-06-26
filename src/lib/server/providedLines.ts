@@ -16,11 +16,15 @@ export function providedLinesEnabled(): boolean {
   return process.env.PROVIDED_LINES_ENABLED === 'true';
 }
 
-/** Only consider lines from roughly the current slate window. */
+/** Board/streaks/trends only consider lines from roughly the current slate window. */
 const RECENT_WINDOW_DAYS = 3;
+/** The player research page tolerates a slightly older line than the live board (a
+ *  player may be between games), but it's still bounded so a stale post-game line
+ *  never shows as "current" — and so old rows stay safely prunable (run-prune.ts). */
+const RESEARCH_WINDOW_DAYS = 14;
 
-function recentCutoff(now: Date = new Date()): Date {
-  return new Date(now.getTime() - RECENT_WINDOW_DAYS * 86_400_000);
+function recentCutoff(days: number = RECENT_WINDOW_DAYS, now: Date = new Date()): Date {
+  return new Date(now.getTime() - days * 86_400_000);
 }
 
 /**
@@ -46,7 +50,9 @@ export async function getAvailableSources(sport: Sport): Promise<string[]> {
 
 /**
  * Latest line for one player + stat from a SPECIFIC source, or null when the
- * feature is off / that book has no line. Used by the player research page.
+ * feature is off / that book has no recent line. Used by the player research page.
+ * Bounded to RESEARCH_WINDOW_DAYS so a stale post-game line never displays as the
+ * current number (older rows fall back to the computed line, and stay prunable).
  */
 export async function getProvidedLine(
   sport: Sport,
@@ -57,7 +63,7 @@ export async function getProvidedLine(
   if (!providedLinesEnabled()) return null;
   try {
     const row = await db.providedLine.findFirst({
-      where: { sport, playerId, stat, source },
+      where: { sport, playerId, stat, source, gameDate: { gte: recentCutoff(RESEARCH_WINDOW_DAYS) } },
       orderBy: [{ gameDate: 'desc' }, { fetchedAt: 'desc' }],
       select: { line: true },
     });
