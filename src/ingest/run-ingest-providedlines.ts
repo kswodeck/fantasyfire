@@ -20,6 +20,7 @@ import { db } from '../lib/db';
 import { recordIngestRun } from './ingestRun';
 import { fetchPrizePicksLines } from './prizepicks';
 import { fetchUnderdogLines } from './underdog';
+import { fetchRotowireLines } from './rotowire';
 import type { ProvidedLineRow } from './providedTypes';
 import { normalizeName } from '../lib/slate';
 import type { Sport } from '../lib/sports';
@@ -27,6 +28,10 @@ import type { Sport } from '../lib/sports';
 const SOURCES: Array<{ id: string; fetch: () => Promise<ProvidedLineRow[]> }> = [
   { id: 'prizepicks', fetch: fetchPrizePicksLines },
   { id: 'underdog', fetch: fetchUnderdogLines },
+  // RotoWire aggregator — one public, proxy-free call returns rows for many books at
+  // once (Sleeper, DraftKings Pick6, RT Sports + sportsbooks). Each row carries its
+  // own `source`; PrizePicks/Underdog are excluded there (scraped directly above).
+  { id: 'rotowire', fetch: fetchRotowireLines },
 ];
 
 /** name → playerId for a sport, with collisions collapsed to null so we never guess. */
