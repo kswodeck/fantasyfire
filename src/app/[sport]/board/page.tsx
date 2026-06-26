@@ -5,7 +5,7 @@ import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { FilterableBoard } from '@/components/FilterableBoard';
 import { SourcedBoard } from '@/components/SourcedBoard';
 import { SlatePaster } from '@/components/SlatePaster';
-import { getBoard, hasUpcomingGames } from '@/lib/server/players';
+import { getBoard, getSourcedBoards, hasUpcomingGames } from '@/lib/server/players';
 import { getAvailableSources } from '@/lib/server/providedLines';
 import { DEFAULT_PROVIDED_SOURCE, sourceLabel } from '@/lib/providedSources';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
@@ -14,7 +14,7 @@ import { RelatedLinks } from '@/components/RelatedLinks';
 import { OffSeasonFallback } from '@/components/OffSeasonFallback';
 import { sportMeshLinks } from '@/lib/relatedLinks';
 
-export const revalidate = 3600;
+export const revalidate = 21600; // 6h — board scans are egress-heavy; matches the lines refresh cadence
 export const dynamicParams = false;
 
 export function generateStaticParams() {
@@ -63,24 +63,9 @@ export default async function BoardPage({ params }: PageProps) {
   if (upcoming) {
     try {
       if (hasSources) {
-        const entries = await Promise.all(
-          sources.map(
-            async (s) =>
-              [
-                s,
-                // Pure slate: only props this book actually lists, ranked vs its real
-                // line. Wider scan so more of the book's board is eligible.
-                await getBoard(sport, {
-                  limit: 150,
-                  perStatCap: 30,
-                  scan: 200,
-                  source: s,
-                  requireProvidedLine: true,
-                }),
-              ] as const,
-          ),
-        );
-        boardsBySource = Object.fromEntries(entries);
+        // One player+games load → a pure-slate board per book (no extra egress
+        // per book; switching books is a client-side swap of pre-rendered rows).
+        boardsBySource = await getSourcedBoards(sport, sources, { limit: 150, perStatCap: 30 });
         rows = boardsBySource[initialSource] ?? [];
       } else {
         rows = await getBoard(sport, { limit: 150, perStatCap: 30 });

@@ -265,21 +265,24 @@ export async function getPlayerBySlug(sport: Sport, slug: string): Promise<Playe
   return p ? toSummary(p) : null;
 }
 
-/** Prisma stat row shape used by the game mapper (model fields + opponent abbr). */
+/** Prisma stat row shape used by the game mapper (model fields + opponent abbr).
+ * Stat columns are OPTIONAL so a per-sport narrowed `select` (boardStatSelect) — which
+ * omits other sports' columns to cut egress — is still assignable; the full-row query
+ * (player page) provides them all. Missing columns map to undefined → statValue → 0. */
 type StatGameRow = {
-  points: number | null; rebounds: number | null; oreb: number | null; dreb: number | null;
-  assists: number | null; steals: number | null; blocks: number | null; turnovers: number | null;
-  fouls: number | null; fgm: number | null; fga: number | null; fg3m: number | null;
-  fg3a: number | null; ftm: number | null; fta: number | null; minutes: number | null;
-  atBats: number | null; hits: number | null; doubles: number | null; triples: number | null;
-  homeRuns: number | null; runs: number | null; rbi: number | null; walks: number | null;
-  strikeouts: number | null; stolenBases: number | null; totalBases: number | null; hbp: number | null;
-  outs: number | null; hitsAllowed: number | null; runsAllowed: number | null; earnedRuns: number | null;
-  walksAllowed: number | null; strikeoutsPitched: number | null;
-  passYards: number | null; passTds: number | null; passCompletions: number | null;
-  passAttempts: number | null; passInts: number | null; rushYards: number | null;
-  rushAttempts: number | null; rushTds: number | null; receptions: number | null;
-  targets: number | null; recYards: number | null; recTds: number | null; fumblesLost: number | null;
+  points?: number | null; rebounds?: number | null; oreb?: number | null; dreb?: number | null;
+  assists?: number | null; steals?: number | null; blocks?: number | null; turnovers?: number | null;
+  fouls?: number | null; fgm?: number | null; fga?: number | null; fg3m?: number | null;
+  fg3a?: number | null; ftm?: number | null; fta?: number | null; minutes?: number | null;
+  atBats?: number | null; hits?: number | null; doubles?: number | null; triples?: number | null;
+  homeRuns?: number | null; runs?: number | null; rbi?: number | null; walks?: number | null;
+  strikeouts?: number | null; stolenBases?: number | null; totalBases?: number | null; hbp?: number | null;
+  outs?: number | null; hitsAllowed?: number | null; runsAllowed?: number | null; earnedRuns?: number | null;
+  walksAllowed?: number | null; strikeoutsPitched?: number | null;
+  passYards?: number | null; passTds?: number | null; passCompletions?: number | null;
+  passAttempts?: number | null; passInts?: number | null; rushYards?: number | null;
+  rushAttempts?: number | null; rushTds?: number | null; receptions?: number | null;
+  targets?: number | null; recYards?: number | null; recTds?: number | null; fumblesLost?: number | null;
   gameDate: Date; opponentTeamId: number; opponentTeam: { abbreviation: string; externalId: number };
   isHome: boolean; wl: string | null; plusMinus: number | null;
 };
@@ -893,69 +896,66 @@ export interface BoardOptions {
 
 export async function getBoard(sport: Sport, opts: BoardOptions = {}): Promise<BoardRow[]> {
   const { limit = 40, scan = 120, perPlayerCap = 2, perStatCap = 10 } = opts;
-  const requireProvided = opts.requireProvidedLine === true;
-  const players = await db.player.findMany({
-    where: { sport },
-    include: { team: { select: { abbreviation: true, name: true, externalId: true } } },
-    orderBy: { gameStats: { _count: 'desc' } },
-    take: scan,
-  });
+  const { players, gamesByPlayer } = await loadBoardPool(sport, scan);
   if (players.length === 0) return [];
-
-  const rows = await db.playerGameStat.findMany({
-    where: { playerId: { in: players.map((p) => p.id) } },
-    orderBy: { gameDate: 'desc' },
-    include: { opponentTeam: { select: { abbreviation: true, externalId: true } } },
+  // Real lines from the chosen book; empty map (no query) when the feature is off,
+  // so the board falls back to the computed default line and behaves as before.
+  const providedLines = await getProvidedLineMap(sport, players.map((p) => p.id), opts.source);
+  return computeBoardRows(sport, players, gamesByPlayer, providedLines, {
+    limit,
+    perPlayerCap,
+    perStatCap,
+    requireProvided: opts.requireProvidedLine === true,
   });
-  const gamesByPlayer = new Map<number, PlayerGame[]>();
-  for (const r of rows) {
-    const list = gamesByPlayer.get(r.playerId);
-    if (list) list.push(toPlayerGame(r));
-    else gamesByPlayer.set(r.playerId, [toPlayerGame(r)]);
+}
+
+/**
+ * One board per book from a SINGLE player+games load (the heavy, egress-costly
+ * query). Switching books on the board therefore adds no extra egress — just a
+ * small per-source provided-line lookup. Each board is pure-slate (only props that
+ * book lists). Returns { [source]: BoardRow[] }.
+ */
+export async function getSourcedBoards(
+  sport: Sport,
+  sources: string[],
+  opts: BoardOptions = {},
+): Promise<Record<string, BoardRow[]>> {
+  const { limit = 150, scan = 120, perPlayerCap = 2, perStatCap = 30 } = opts;
+  const result: Record<string, BoardRow[]> = {};
+  const { players, gamesByPlayer } = await loadBoardPool(sport, scan);
+  if (players.length === 0) {
+    for (const s of sources) result[s] = [];
+    return result;
   }
+  const ids = players.map((p) => p.id);
+  for (const s of sources) {
+    const providedLines = await getProvidedLineMap(sport, ids, s);
+    result[s] = computeBoardRows(sport, players, gamesByPlayer, providedLines, {
+      limit,
+      perPlayerCap,
+      perStatCap,
+      requireProvided: true,
+    });
+  }
+  return result;
+}
 
-  // Real lines from the chosen book, keyed `${playerId}:${stat}`. Empty map (no
-  // query) when PROVIDED_LINES_ENABLED is off — so the board falls back to the
-  // computed default line and behaves exactly as before.
-  const providedLines = await getProvidedLineMap(
-    sport,
-    players.map((p) => p.id),
-    opts.source,
-  );
-
+/** Rank a loaded player pool into board rows against a given line map (pure compute). */
+function computeBoardRows(
+  sport: Sport,
+  players: BoardPlayer[],
+  gamesByPlayer: Map<number, PlayerGame[]>,
+  providedLines: Map<string, number>,
+  opts: { limit: number; perPlayerCap: number; perStatCap: number; requireProvided: boolean },
+): BoardRow[] {
+  const { limit, perPlayerCap, perStatCap, requireProvided } = opts;
   const out: Omit<BoardRow, 'rank'>[] = [];
   for (const p of players) {
     const allGames = gamesByPlayer.get(p.id);
     if (!allGames || allGames.length < FIRESCORE_MIN_GAMES) continue;
-
-    const qualifyFactor = sport === 'nba' ? 1 : 0.6;
-    const cutoff =
-      qualifyFactor *
-      blendedRoleThreshold(allGames.map((g) => opportunityFor(sport, p.posBucket, g)));
-    const games = allGames.filter((g) => {
-      const opp = opportunityFor(sport, p.posBucket, g);
-      if (opp == null) return true;
-      return opp > 0 && opp >= cutoff;
-    });
+    const games = qualifyGames(sport, p.posBucket, allGames);
     if (games.length < FIRESCORE_MIN_GAMES) continue;
-
-    const listItem: PlayerListItem = {
-      sport,
-      externalId: p.externalId,
-      slug: p.slug,
-      firstName: p.firstName,
-      lastName: p.lastName,
-      fullName: `${p.firstName} ${p.lastName}`.trim(),
-      position: p.position ?? null,
-      posBucket: (p.posBucket as PosBucket | null) ?? null,
-      jersey: p.jersey ?? null,
-      height: p.height ?? null,
-      weight: p.weight ?? null,
-      teamAbbreviation: p.team?.abbreviation ?? null,
-      teamName: teamDisplayName(sport, p.team?.abbreviation, p.team?.name ?? null),
-      teamExternalId: p.team?.externalId ?? null,
-      gamesPlayed: games.length,
-    };
+    const listItem = boardListItem(sport, p, games.length);
 
     // The (stat, line) pairs to rank for this player. Pure-slate mode walks every
     // market the chosen book actually offers this player (its real line); else the
@@ -1009,22 +1009,7 @@ export async function getBoard(sport: Sport, opts: BoardOptions = {}): Promise<B
   }
 
   out.sort((a, b) => b.fireScore.score - a.fireScore.score);
-
-  // Cap per player and per stat so one name — or one stat like low-volume 3PM,
-  // which structurally produces reliable unders — can't dominate the board.
-  const perPlayer = new Map<string, number>();
-  const perStat = new Map<string, number>();
-  const capped: BoardRow[] = [];
-  for (const r of out) {
-    const np = perPlayer.get(r.player.slug) ?? 0;
-    const ns = perStat.get(r.stat) ?? 0;
-    if (np >= perPlayerCap || ns >= perStatCap) continue;
-    perPlayer.set(r.player.slug, np + 1);
-    perStat.set(r.stat, ns + 1);
-    capped.push({ ...r, rank: capped.length + 1 });
-    if (capped.length >= limit) break;
-  }
-  return capped;
+  return capBoardRows(out, limit, perPlayerCap, perStatCap);
 }
 
 // ---- Shared board-scan helpers (streaks / trends reuse getBoard's load) ----
@@ -1043,6 +1028,29 @@ type BoardPlayer = {
   team: { abbreviation: string; name: string; externalId: number } | null;
 };
 
+// Columns the board needs, per sport. PlayerGameStat carries all 3 sports' ~50
+// columns; selecting only the current sport's (plus the shared meta) roughly halves
+// each row's wire size — the single biggest lever on Supabase egress, since the
+// board reads every game for 120+ players on each render.
+const BOARD_META_SELECT = {
+  playerId: true,
+  gameDate: true,
+  opponentTeamId: true,
+  isHome: true,
+  wl: true,
+  plusMinus: true,
+  minutes: true,
+  opponentTeam: { select: { abbreviation: true, externalId: true } },
+};
+const BOARD_STAT_COLS: Record<Sport, Record<string, true>> = {
+  nba: { points: true, rebounds: true, oreb: true, dreb: true, assists: true, steals: true, blocks: true, turnovers: true, fouls: true, fgm: true, fga: true, fg3m: true, fg3a: true, ftm: true, fta: true },
+  mlb: { atBats: true, hits: true, doubles: true, triples: true, homeRuns: true, runs: true, rbi: true, walks: true, strikeouts: true, stolenBases: true, totalBases: true, hbp: true, outs: true, hitsAllowed: true, runsAllowed: true, earnedRuns: true, walksAllowed: true, strikeoutsPitched: true },
+  nfl: { passYards: true, passTds: true, passCompletions: true, passAttempts: true, passInts: true, rushYards: true, rushAttempts: true, rushTds: true, receptions: true, targets: true, recYards: true, recTds: true, fumblesLost: true },
+};
+function boardStatSelect(sport: Sport) {
+  return { ...BOARD_META_SELECT, ...BOARD_STAT_COLS[sport] };
+}
+
 /** Top-`scan` most-active players + all their games (one batched query each). */
 async function loadBoardPool(
   sport: Sport,
@@ -1055,11 +1063,13 @@ async function loadBoardPool(
     take: scan,
   });
   if (players.length === 0) return { players: [], gamesByPlayer: new Map() };
-  const rows = await db.playerGameStat.findMany({
+  // Per-sport column select (egress saver). The dynamic select loses Prisma's precise
+  // payload type, so map through StatGameRow (stat fields optional; missing → 0).
+  const rows = (await db.playerGameStat.findMany({
     where: { playerId: { in: players.map((p) => p.id) } },
     orderBy: { gameDate: 'desc' },
-    include: { opponentTeam: { select: { abbreviation: true, externalId: true } } },
-  });
+    select: boardStatSelect(sport),
+  })) as unknown as Array<StatGameRow & { playerId: number }>;
   const gamesByPlayer = new Map<number, PlayerGame[]>();
   for (const r of rows) {
     const list = gamesByPlayer.get(r.playerId);

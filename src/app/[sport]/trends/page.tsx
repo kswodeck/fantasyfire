@@ -12,7 +12,7 @@ import { breadcrumbList, datasetNode, graph } from '@/lib/jsonLd';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
 import type { TrendRow } from '@/lib/types';
 
-export const revalidate = 3600;
+export const revalidate = 21600; // 6h — board scans are egress-heavy; matches the lines refresh cadence
 export const dynamicParams = false;
 
 export function generateStaticParams() {

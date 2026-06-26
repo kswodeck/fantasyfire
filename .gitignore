@@ -13,6 +13,9 @@
 # testing
 /coverage
 
+# runtime logs (scheduled provided-lines ingest, etc.)
+/logs
+
 # next.js
 /.next/
 /out/

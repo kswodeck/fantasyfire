@@ -3,7 +3,7 @@ import { getPlayerSlugsWithFreshness, getPropStatParams } from '@/lib/server/pla
 import { absoluteUrl } from '@/lib/site';
 import { SPORT_LIST, type Sport } from '@/lib/sports';
 
-export const revalidate = 3600;
+export const revalidate = 21600; // 6h — regenerating queries every player; hourly is wasteful egress
 
 const newer = (a: Date | null, b: Date | null): Date | null =>
   a && b ? (a > b ? a : b) : (a ?? b);
