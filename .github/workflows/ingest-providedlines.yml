@@ -1,8 +1,9 @@
 name: Ingest provided lines (PrizePicks + Underdog)
 
 # Scrapes DFS pick'em lines into the PROD `ProvidedLine` table on a schedule, so the
-# real lines stay fresh WITHOUT a local machine being on. Cloud counterpart of the
-# Windows scheduled task — once this is live, disable that task so they don't double-run.
+# real lines stay fresh WITHOUT a local machine being on. This is the SOLE ingest path
+# (the old Windows scheduled task is retired — the probe confirmed GitHub runners reach
+# PrizePicks/Underdog directly, no proxy needed).
 #
 # ⚠️ PrizePicks/Underdog BLOCK datacenter IPs, so GitHub's runners may be refused
 # (HTTP 403). First run this via "Run workflow" and check the logs:
@@ -14,9 +15,13 @@ name: Ingest provided lines (PrizePicks + Underdog)
 # NOTE: scheduled + manual runs only fire from the DEFAULT branch (main), so this
 # only starts running once it's on main (it lands there when you merge develop -> main).
 #
-# Scheduled crons on GitHub are best-effort and can be delayed/skipped under load;
-# every-30-min is a realistic floor. On a PRIVATE repo each run also burns Actions
-# minutes (~1 min/run) — at 30-min that's ~1.4k min/month, near the 2,000 free tier.
+# Time-aware cadence (all times UTC — the only timezone GitHub cron supports):
+#   - PEAK 15:00-02:00 UTC (games posting / lines moving): every 15 min.
+#   - OFF-PEAK 02:00-15:00 UTC (overnight + morning, few changes): every 4 hours.
+# Nets ~48 runs/day — same as the old */30 — so Actions-minutes are unchanged
+# (~1.4k min/month; near the 2,000 free tier on a PRIVATE repo). GitHub schedules are
+# best-effort: high-frequency crons can be delayed 5-15 min or skipped under load, so
+# 15 min is a ceiling, not a guarantee. Use "Run workflow" for an on-demand refresh.
 #
 # Secrets (Production environment):
 #   DATABASE_URL      — prod transaction-pooler URL (:6543, sslmode=require)
@@ -24,7 +29,11 @@ name: Ingest provided lines (PrizePicks + Underdog)
 
 on:
   schedule:
-    - cron: '*/30 * * * *' # every 30 min
+    # PEAK 15:00-02:00 UTC — every 15 min (hours 15-23, then 00-01).
+    - cron: '*/15 15-23 * * *'
+    - cron: '*/15 0-1 * * *'
+    # OFF-PEAK 02:00-15:00 UTC — every 4 hours.
+    - cron: '0 2,6,10,14 * * *'
   workflow_dispatch: {}
 
 concurrency:
