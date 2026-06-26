@@ -22,6 +22,7 @@ import {
   recentFormEstimate,
   computeConsistency,
   matchupGrade,
+  type MatchupGrade,
   computeFireFactor,
   computeSplits,
   wilsonInterval,
@@ -865,10 +866,11 @@ export async function getPlayerResearch(
   // median. When the displayed line is a real book line, fold its discount into the read.
   const linesBySource = await getProvidedLinesBySource(sport, record.id, stat);
   const lineValue = lineValueComparison(games, stat, prelim.side, linesBySource);
-  const heldBook =
-    lineValue && lineSource != null
-      ? lineValue.books.find((b) => Math.abs(b.line - line) < 1e-9)
-      : undefined;
+  // Apply the line-value boost whenever the shown line matches a book's number — so an
+  // explicit ?line= that equals a book line reads the same as selecting that book, and
+  // matches the board (whose lines are book lines). The edge depends only on the line
+  // vs the consensus, not on which book posted it.
+  const heldBook = lineValue?.books.find((b) => Math.abs(b.line - line) < 1e-9);
   const fireScore = heldBook
     ? computeFireFactor({ ...ffInput, lineValueEdge: heldBook.edge })
     : prelim;
@@ -945,11 +947,14 @@ export async function getBoard(sport: Sport, opts: BoardOptions = {}): Promise<B
   // Real lines from the chosen book; empty map (no query) when the feature is off,
   // so the board falls back to the computed default line and behaves as before.
   const providedLines = await getProvidedLineMap(sport, players.map((p) => p.id), opts.source);
+  const season = await getActiveSeason(sport);
+  const matchupGrades = await boardMatchupGrades(sport, players, season);
   return computeBoardRows(sport, players, gamesByPlayer, providedLines, {
     limit,
     perPlayerCap,
     perStatCap,
     requireProvided: opts.requireProvidedLine === true,
+    matchupGrades,
   });
 }
 
@@ -977,6 +982,8 @@ export async function getSourcedBoards(
   const allMaps: Record<string, Map<string, number>> = {};
   for (const s of sources) allMaps[s] = await getProvidedLineMap(sport, ids, s);
   const consensus = consensusLineMap(allMaps);
+  const season = await getActiveSeason(sport);
+  const matchupGrades = await boardMatchupGrades(sport, players, season);
   for (const s of sources) {
     result[s] = computeBoardRows(sport, players, gamesByPlayer, allMaps[s], {
       limit,
@@ -984,6 +991,7 @@ export async function getSourcedBoards(
       perStatCap,
       requireProvided: true,
       lineValue: { allMaps, consensus },
+      matchupGrades,
     });
   }
   return result;
@@ -1009,6 +1017,68 @@ function consensusLineMap(allMaps: Record<string, Map<string, number>>): Map<str
   return out;
 }
 
+/** Matchup grade per `${playerId}:${stat}` for the board: each player's next opponent's
+ *  DvP cell, graded the SAME way as the player page — so a board FireFactor matches the
+ *  player-page FireFactor for the same line/stat/matchup. DvP tables load once per
+ *  (posBucket, stat) and are indexed by opponent (bounded, not per-row). */
+async function boardMatchupGrades(
+  sport: Sport,
+  players: BoardPlayer[],
+  season: string,
+): Promise<Map<string, MatchupGrade>> {
+  const out = new Map<string, MatchupGrade>();
+  const teamIds = [...new Set(players.map((p) => p.teamId).filter((x): x is number => x != null))];
+  if (teamIds.length === 0) return out;
+
+  // Next opponent (DB team id) per board team — one query over upcoming games, earliest
+  // per team (same "next game" the player page resolves via getNextOpponent).
+  const todayUtc = new Date();
+  todayUtc.setUTCHours(0, 0, 0, 0);
+  const games = await db.scheduledGame.findMany({
+    where: {
+      sport,
+      date: { gte: todayUtc },
+      OR: [{ homeTeamId: { in: teamIds } }, { awayTeamId: { in: teamIds } }],
+    },
+    orderBy: { date: 'asc' },
+    select: { homeTeamId: true, awayTeamId: true },
+  });
+  const oppByTeam = new Map<number, number>();
+  for (const g of games) {
+    if (!oppByTeam.has(g.homeTeamId)) oppByTeam.set(g.homeTeamId, g.awayTeamId);
+    if (!oppByTeam.has(g.awayTeamId)) oppByTeam.set(g.awayTeamId, g.homeTeamId);
+  }
+  if (oppByTeam.size === 0) return out;
+
+  // DvP grade tables, memoized per (posBucket, stat): opponentTeamId -> grade.
+  const tableCache = new Map<string, Map<number, MatchupGrade>>();
+  const gradeTable = async (bucket: PosBucket, stat: StatKey): Promise<Map<number, MatchupGrade>> => {
+    const key = `${bucket}:${stat}`;
+    const cached = tableCache.get(key);
+    if (cached) return cached;
+    let cells: DvpCell[] = [];
+    if (sport === 'nba') cells = await getNbaDvpTable(bucket, stat, season);
+    else if (sport === 'mlb' && bucket === 'H') cells = await getMlbHitterMatchupTable(stat, season);
+    else if (sport === 'nfl') cells = await getNflDvpTable(bucket, stat, season);
+    const m = new Map<number, MatchupGrade>();
+    for (const c of cells) m.set(c.opponentTeamId, matchupGrade(c));
+    tableCache.set(key, m);
+    return m;
+  };
+
+  for (const p of players) {
+    if (p.teamId == null || !p.posBucket) continue;
+    const opp = oppByTeam.get(p.teamId);
+    if (opp == null) continue;
+    const bucket = p.posBucket as PosBucket;
+    for (const stat of statKeysForSport(sport, bucket)) {
+      const grade = (await gradeTable(bucket, stat)).get(opp);
+      if (grade) out.set(`${p.id}:${stat}`, grade);
+    }
+  }
+  return out;
+}
+
 /** Rank a loaded player pool into board rows against a given line map (pure compute). */
 function computeBoardRows(
   sport: Sport,
@@ -1023,6 +1093,9 @@ function computeBoardRows(
     /** Present only for the multi-book sourced boards: every book's line map + the
      *  consensus (median per key), so each row can score its book vs the market. */
     lineValue?: { allMaps: Record<string, Map<string, number>>; consensus: Map<string, number> };
+    /** Next-opponent DvP grade per `${playerId}:${stat}`, so the board's FireFactor
+     *  includes the same matchup component as the player page. */
+    matchupGrades?: Map<string, MatchupGrade>;
   },
 ): BoardRow[] {
   const { limit, perPlayerCap, perStatCap, requireProvided } = opts;
@@ -1046,14 +1119,15 @@ function computeBoardRows(
       const seasonHr = computeHitRate(games, stat, line, 'season');
       const projection = recentFormEstimate(seasonHr.values, seasonHr.mean);
       const consistency = computeConsistency(seasonHr.values, seasonHr.mean, seasonHr.stdev, line);
-      // No matchup component here (avoids a per-player DvP query); FireFactor
-      // degrades gracefully. The full read (with matchup) is on the player page.
+      // Matchup grade (next opponent's DvP) comes from the batched `matchupGrades` map
+      // so the board's FireFactor matches the player page; absent → degrades gracefully.
       const ffInput = {
         line,
         windows,
         projection: projection.stabilized,
         stdev: seasonHr.stdev,
         cv: consistency.cv,
+        matchup: opts.matchupGrades?.get(`${p.id}:${stat}`),
         gamesPlayed: games.length,
       };
       const prelim = computeFireFactor(ffInput);
@@ -1123,6 +1197,8 @@ type BoardPlayer = {
   jersey: string | null;
   height: string | null;
   weight: number | null;
+  /** Team FK (DB id) — used to resolve each player's next opponent for the board matchup. */
+  teamId: number | null;
   team: { abbreviation: string; name: string; externalId: number } | null;
 };
 

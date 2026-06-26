@@ -15,7 +15,6 @@ import { PlayerResearchClient } from '@/components/PlayerResearchClient';
 import { PlayerAvatar } from '@/components/PlayerAvatar';
 import { TeamLogo } from '@/components/TeamLogo';
 import { PlayerBioBar } from '@/components/PlayerBioBar';
-import { LineValueTable } from '@/components/LineValueTable';
 import { FavoriteToggle } from '@/components/FavoriteToggle';
 import { ShareButton } from '@/components/ShareButton';
 import { EmbedButton } from '@/components/EmbedButton';
@@ -205,10 +204,6 @@ export default async function PlayerStatPage({ params }: PageProps) {
         availableSources={availableSources}
         initialSource={initialSource}
       />
-
-      {research.lineValue && (
-        <LineValueTable data={research.lineValue} statShort={STAT_DEFS[stat].short} />
-      )}
 
       <RelatedLinks
         title={`More ${player.fullName} research`}

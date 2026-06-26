@@ -22,6 +22,7 @@ import { ParkFactorNote } from './ParkFactorNote';
 import { VerdictPanel } from './VerdictPanel';
 import { SavePropControl } from './SavePropControl';
 import { SplitsPanel } from './SplitsPanel';
+import { LineValueTable } from './LineValueTable';
 import { SourceSelector } from './SourceSelector';
 import { useSelectedSource } from './SelectedSourceProvider';
 import { sourceLabel } from '@/lib/providedSources';
@@ -191,11 +192,6 @@ export function PlayerResearchClient({
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted">Line</span>
             <LineInput value={effectiveLine} onCommit={handleLine} />
-            {lineSourceLabel && (
-              <span className="rounded-full bg-surface px-2 py-0.5 text-[11px] font-medium text-muted">
-                {lineSourceLabel}
-              </span>
-            )}
           </div>
           {availableSources.length > 0 && (
             <SourceSelector sources={availableSources} value={source} onChange={handleSource} />
@@ -224,7 +220,7 @@ export function PlayerResearchClient({
         />
       </div>
 
-      {/* Verdict — the FireScore "good prop" read + sub-signals */}
+      {/* Verdict — the FireFactor "good prop" read + sub-signals */}
       <VerdictPanel verdict={data.verdict} statShort={statDef.short} line={data.line} />
 
       {/* Hit-rate cards */}
@@ -265,6 +261,10 @@ export function PlayerResearchClient({
           />
         )}
       </section>
+
+      {/* Line shopping — best number across books (sits above the fair-price calculator;
+          updates live with the stat/book since it reads the current research). */}
+      {data.lineValue && <LineValueTable data={data.lineValue} statShort={statDef.short} />}
 
       {/* Odds -> fair price */}
       <section className="mb-6 space-y-4 rounded-xl border border-line bg-surface-2 p-4">
