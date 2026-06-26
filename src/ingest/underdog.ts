@@ -13,6 +13,7 @@
 import type { Sport } from '../lib/sports';
 import type { StatKey } from '../lib/stats';
 import type { ProvidedLineRow } from './providedTypes';
+import { scrapeFetch } from './scrapeFetch';
 
 const URL = 'https://api.underdogfantasy.com/beta/v5/over_under_lines';
 const HEADERS = {
@@ -114,7 +115,7 @@ function todayUtc(): Date {
 }
 
 export async function fetchUnderdogLines(): Promise<ProvidedLineRow[]> {
-  const res = await fetch(URL, { headers: HEADERS });
+  const res = await scrapeFetch(URL, { headers: HEADERS });
   if (!res.ok) throw new Error(`Underdog HTTP ${res.status}`);
   const body = (await res.json()) as UdResponse;
   const appearances = new Map<string, UdAppearance>();

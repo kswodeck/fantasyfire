@@ -5,7 +5,7 @@ import { getBoard, hasUpcomingGames } from '@/lib/server/players';
 import { SPORT_LIST, SPORTS, type Sport } from '@/lib/sports';
 import type { BoardRow } from '@/lib/types';
 
-export const revalidate = 21600; // 6h — board scans are egress-heavy; matches the lines refresh cadence
+export const revalidate = 1800; // 30 min — keep the leans close to the ~15-min lines ingest (prod is on Pro; board reads are optimized)
 
 async function loadSport(sport: Sport) {
   const leans = await getBoard(sport, { limit: 6 }).catch(() => [] as BoardRow[]);

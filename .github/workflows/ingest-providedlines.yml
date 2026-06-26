@@ -1,0 +1,64 @@
+name: Ingest provided lines (PrizePicks + Underdog)
+
+# Scrapes DFS pick'em lines into the PROD `ProvidedLine` table on a schedule, so the
+# real lines stay fresh WITHOUT a local machine being on. Cloud counterpart of the
+# Windows scheduled task — once this is live, disable that task so they don't double-run.
+#
+# ⚠️ PrizePicks/Underdog BLOCK datacenter IPs, so GitHub's runners may be refused
+# (HTTP 403). First run this via "Run workflow" and check the logs:
+#   • "[providedlines] upserted N ..."  → the runner IP works; you're done (free).
+#   • fetch failures / HTTP 403         → set the SCRAPE_PROXY_URL secret to a
+#       residential proxy / web-unblocker; the scrapers route through it (src/ingest/
+#       scrapeFetch.ts). Re-run to confirm.
+#
+# NOTE: scheduled + manual runs only fire from the DEFAULT branch (main), so this
+# only starts running once it's on main (it lands there when you merge develop -> main).
+#
+# Scheduled crons on GitHub are best-effort and can be delayed/skipped under load;
+# every-30-min is a realistic floor. On a PRIVATE repo each run also burns Actions
+# minutes (~1 min/run) — at 30-min that's ~1.4k min/month, near the 2,000 free tier.
+#
+# Secrets (Production environment):
+#   DATABASE_URL      — prod transaction-pooler URL (:6543, sslmode=require)
+#   SCRAPE_PROXY_URL  — (optional) residential proxy, e.g. http://user:pass@host:port
+
+on:
+  schedule:
+    - cron: '*/30 * * * *' # every 30 min
+  workflow_dispatch: {}
+
+concurrency:
+  group: ingest-providedlines
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # DATABASE_URL secret lives on the Production environment (same as ingest.yml).
+    environment: Production
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SCRAPE_PROXY_URL: ${{ secrets.SCRAPE_PROXY_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Check database secret
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL secret is not set on the Production environment."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Ingest provided lines
+        run: pnpm ingest:providedlines

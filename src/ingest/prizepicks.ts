@@ -12,6 +12,7 @@
 import type { Sport } from '../lib/sports';
 import type { StatKey } from '../lib/stats';
 import type { ProvidedLineRow } from './providedTypes';
+import { scrapeFetch } from './scrapeFetch';
 
 const URL = 'https://partner-api.prizepicks.com/projections?per_page=25000';
 const HEADERS = {
@@ -92,7 +93,7 @@ function dateOnlyUtc(iso: unknown): Date {
 }
 
 export async function fetchPrizePicksLines(): Promise<ProvidedLineRow[]> {
-  const res = await fetch(URL, { headers: HEADERS });
+  const res = await scrapeFetch(URL, { headers: HEADERS });
   if (!res.ok) throw new Error(`PrizePicks HTTP ${res.status}`);
   const body = (await res.json()) as PpResponse;
   const players = new Map<string, PpResource>();

@@ -11,7 +11,7 @@ import type { TonightGame, BoardRow } from '@/lib/types';
 import { RelatedLinks } from '@/components/RelatedLinks';
 import { sportMeshLinks } from '@/lib/relatedLinks';
 
-export const revalidate = 21600; // 6h — board scans are egress-heavy; matches the lines refresh cadence
+export const revalidate = 1800; // 30 min — keep the leans close to the ~15-min lines ingest (prod is on Pro; board reads are optimized)
 export const dynamicParams = false;
 
 export function generateStaticParams() {
