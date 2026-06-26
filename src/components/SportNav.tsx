@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { Sport } from '@/lib/sports';
-import { SPORT_SECTIONS } from '@/lib/sportNav';
+import { sportSections } from '@/lib/sportNav';
 
 // Per-sport secondary nav — same section list the header sport buttons show as a
 // hover menu. Scrollable on mobile; highlights the current section.
@@ -14,7 +14,7 @@ export function SportNav({ sport }: { sport: Sport }) {
   return (
     <nav aria-label={`${sport.toUpperCase()} sections`} className="-mx-4 overflow-x-auto px-4">
       <ul className="flex gap-1 whitespace-nowrap text-sm">
-        {SPORT_SECTIONS.map((it) => {
+        {sportSections(sport).map((it) => {
           const href = `/${sport}/${it.seg}`;
           const active = pathname === href || pathname.startsWith(`${href}/`);
           return (

@@ -4,7 +4,7 @@ import { useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { SPORTS, type Sport } from '@/lib/sports';
-import { SPORT_SECTIONS } from '@/lib/sportNav';
+import { sportSections } from '@/lib/sportNav';
 
 /**
  * Header sport button with a hover/focus dropdown of that sport's section pages.
@@ -77,7 +77,7 @@ export function SportMenu({ sport }: { sport: Sport }) {
           className="absolute right-0 top-full z-30 pt-2"
         >
           <div className="w-60 overflow-hidden rounded-xl border border-line bg-surface shadow-xl shadow-black/40">
-            {SPORT_SECTIONS.map((s) => (
+            {sportSections(sport).map((s) => (
               <Link
                 key={s.seg}
                 href={`/${sport}/${s.seg}`}

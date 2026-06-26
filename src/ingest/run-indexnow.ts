@@ -14,7 +14,7 @@ import { db } from '../lib/db';
 import { recordIngestRun } from './ingestRun';
 import { SITE, absoluteUrl } from '../lib/site';
 import { SPORT_LIST, type Sport } from '../lib/sports';
-import { SPORT_SECTIONS } from '../lib/sportNav';
+import { sportSections } from '../lib/sportNav';
 import { submitIndexNow } from '../lib/indexnow';
 
 /** Sports with a game in this window count as "in season" for the boards. */
@@ -57,7 +57,7 @@ async function main() {
 
   for (const sport of activeSports) {
     urls.add(absoluteUrl(`/${sport}`));
-    for (const section of SPORT_SECTIONS) urls.add(absoluteUrl(`/${sport}/${section.seg}`));
+    for (const section of sportSections(sport)) urls.add(absoluteUrl(`/${sport}/${section.seg}`));
   }
 
   for (const row of changed) {
