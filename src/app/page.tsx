@@ -1,26 +1,43 @@
 import { FlameMark } from '@/components/FlameMark';
 import { HomeTopLeans, type HomeCard } from '@/components/HomeTopLeans';
-import { getBoard, getSourcedBoards, hasUpcomingGames } from '@/lib/server/players';
+import { getBoard, getSourcedBoards, getTonightSlate, hasUpcomingGames } from '@/lib/server/players';
 import { getAvailableSources } from '@/lib/server/providedLines';
 import { SPORT_LIST, SPORTS, type Sport } from '@/lib/sports';
-import type { BoardRow } from '@/lib/types';
+import type { BoardRow, TonightGame } from '@/lib/types';
 
 export const revalidate = 1800; // 30 min — keep the leans close to the ~15-min lines ingest (prod is on Pro; board reads are optimized)
 
-async function loadSport(
-  sport: Sport,
-): Promise<{ boardsBySource: Record<string, BoardRow[]>; medianLeans: BoardRow[] }> {
+function slateTeams(games: TonightGame[]): string[] {
+  return [
+    ...new Set(games.flatMap((g) => [g.home.abbr, g.away.abbr]).filter((a): a is string => !!a)),
+  ];
+}
+
+async function loadSport(sport: Sport): Promise<{
+  boardsBySource: Record<string, BoardRow[]>;
+  medianLeans: BoardRow[];
+  todayTeams: string[];
+}> {
   // Prefer real book lines (one board per book, switched by the page-wide selector);
-  // fall back to our computed median line only when no book lines are ingested.
+  // fall back to our computed median line only when no book lines are ingested. We
+  // pull a bit more than the 6 we show so the page-wide "today's slate" filter still
+  // yields a full teaser — `limit` only caps the rows returned, not the DB reads.
   const sources = await getAvailableSources(sport).catch(() => [] as string[]);
+  const slate = getTonightSlate(sport).catch(() => ({ date: null, games: [] as TonightGame[] }));
   if (sources.length > 0) {
-    const boardsBySource = await getSourcedBoards(sport, sources, { limit: 6 }).catch(
-      () => ({}) as Record<string, BoardRow[]>,
-    );
-    return { boardsBySource, medianLeans: [] };
+    const [s, boardsBySource] = await Promise.all([
+      slate,
+      getSourcedBoards(sport, sources, { limit: 24 }).catch(
+        () => ({}) as Record<string, BoardRow[]>,
+      ),
+    ]);
+    return { boardsBySource, medianLeans: [], todayTeams: slateTeams(s.games) };
   }
-  const medianLeans = await getBoard(sport, { limit: 6 }).catch(() => [] as BoardRow[]);
-  return { boardsBySource: {}, medianLeans };
+  const [s, medianLeans] = await Promise.all([
+    slate,
+    getBoard(sport, { limit: 24 }).catch(() => [] as BoardRow[]),
+  ]);
+  return { boardsBySource: {}, medianLeans, todayTeams: slateTeams(s.games) };
 }
 
 export default async function Home() {
@@ -40,6 +57,7 @@ export default async function Home() {
       tagline: cfg.tagline,
       boardsBySource: d.boardsBySource,
       medianLeans: d.medianLeans,
+      todayTeams: d.todayTeams,
     };
   });
 
@@ -57,7 +75,7 @@ export default async function Home() {
         </p>
       </section>
 
-      {/* One page-wide book selector drives every sport's Top Leans. */}
+      {/* One page-wide book selector + today's-slate toggle drive every sport's Top Leans. */}
       {cards.length > 0 ? (
         <HomeTopLeans cards={cards} />
       ) : (

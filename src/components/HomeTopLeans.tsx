@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import type { Sport } from '@/lib/sports';
 import type { BoardRow } from '@/lib/types';
@@ -17,13 +18,19 @@ export interface HomeCard {
   boardsBySource: Record<string, BoardRow[]>;
   /** Fallback leans vs our median line (used when boardsBySource is empty). */
   medianLeans: BoardRow[];
+  /** Team abbreviations playing today / this week — drives the "today's slate" filter. */
+  todayTeams: string[];
 }
 
+/** Leans shown per sport card (a teaser; the full board lives at /[sport]/board). */
+const DISPLAY = 6;
+
 /**
- * Home "Top leans" cards driven by ONE overarching book selector for the whole page
- * (instead of a selector per sport). Every card shows the same selected book; changing
- * it updates all sports at once and the choice persists across pages (localStorage via
- * SelectedSourceProvider). Sources with no rows in any card are auto-hidden.
+ * Home "Top leans" cards driven by ONE page-wide book selector AND one "today's slate"
+ * toggle for the whole page (no per-sport controls). Every card shows the same book and
+ * the same today/all view; changing either updates all sports at once, and the book
+ * choice persists across pages (SelectedSourceProvider). The home cards deliberately
+ * omit the matchups list — that lives on each sport's board.
  */
 export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
   const { source: selected, setSource } = useSelectedSource();
@@ -40,21 +47,56 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
       ? DEFAULT_PROVIDED_SOURCE
       : (liveSources[0] ?? DEFAULT_PROVIDED_SOURCE);
 
+  const anySlate = cards.some((c) => c.todayTeams.length > 0);
+  const [mode, setMode] = useState<'today' | 'all'>(anySlate ? 'today' : 'all');
+
   const single = cards.length === 1;
   const gridCols =
     cards.length >= 3 ? 'sm:grid-cols-2 lg:grid-cols-3' : cards.length === 2 ? 'sm:grid-cols-2' : '';
 
+  const toggleBtn = (m: 'today' | 'all', text: string) => (
+    <button
+      type="button"
+      onClick={() => setMode(m)}
+      aria-pressed={mode === m}
+      className={
+        'cursor-pointer rounded-md px-3 py-1 transition-colors ' +
+        (mode === m ? 'bg-brand text-brand-foreground' : 'text-muted hover:text-foreground')
+      }
+    >
+      {text}
+    </button>
+  );
+
   return (
     <section className={single ? 'mx-auto max-w-md pb-10' : 'pb-10'}>
-      {liveSources.length > 0 && (
-        <div className="mb-3 flex items-center justify-end">
-          <SourceSelector sources={liveSources} value={shown} onChange={setSource} />
+      {(anySlate || liveSources.length > 0) && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          {anySlate ? (
+            <div className="inline-flex items-center rounded-lg border border-line bg-surface p-0.5 text-xs font-semibold">
+              {toggleBtn('today', 'Today')}
+              {toggleBtn('all', 'All players')}
+            </div>
+          ) : (
+            <span />
+          )}
+          {liveSources.length > 0 ? (
+            <SourceSelector sources={liveSources} value={shown} onChange={setSource} />
+          ) : (
+            <span />
+          )}
         </div>
       )}
+
       <div className={`grid gap-5 ${gridCols}`}>
         {cards.map((c) => {
           const hasSources = Object.keys(c.boardsBySource).length > 0;
-          const rows = hasSources ? (c.boardsBySource[shown] ?? []) : c.medianLeans;
+          let rows = hasSources ? (c.boardsBySource[shown] ?? []) : c.medianLeans;
+          if (mode === 'today' && c.todayTeams.length > 0) {
+            const teams = new Set(c.todayTeams);
+            rows = rows.filter((r) => r.player.teamAbbreviation && teams.has(r.player.teamAbbreviation));
+          }
+          rows = rows.slice(0, DISPLAY);
           return (
             <div
               key={c.sport}
@@ -81,7 +123,11 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
                 </h3>
                 {rows.length === 0 ? (
                   <p className="px-1 py-4 text-sm text-muted">
-                    {hasSources ? 'No props on this book right now.' : 'No data available yet.'}
+                    {mode === 'today' && c.todayTeams.length > 0
+                      ? 'No leans on the slate for this book right now.'
+                      : hasSources
+                        ? 'No props on this book right now.'
+                        : 'No data available yet.'}
                   </p>
                 ) : (
                   <BoardTable sport={c.sport} rows={rows} />
