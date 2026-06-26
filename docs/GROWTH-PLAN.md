@@ -17,7 +17,7 @@ concrete files it touches so it can be picked up directly._
 > `/[sport]/accuracy` calibration and its `ProjectionSnapshot` pipeline (snapshot /
 > grade / backtest) have been **removed** — a moving-target track record proved too
 > costly to maintain and live up to. FireScore stays (it still powers the Top Leans
-> board). In its place: a new **`ProvidedLine`** model + a SportsGameOdds ingest
+> board). In its place: a new **`ProvidedLine`** model + a scraped provided-lines ingest
 > (`src/ingest/run-ingest-providedlines.ts`), OFF by default behind
 > `PROVIDED_LINES_ENABLED`, so the board / player pages can show the real
 > PrizePicks / Underdog / etc. line instead of our median. Mentions of `/accuracy`

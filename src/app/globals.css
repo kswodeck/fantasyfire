@@ -101,15 +101,17 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Buttons and links use a pointer cursor by default — Tailwind v4's preflight
-   doesn't set this, so browsers would otherwise show the arrow on <button>.
-   Disabled buttons keep the not-allowed cursor. */
+/* Buttons, links and select menus use a pointer cursor by default — Tailwind v4's
+   preflight doesn't set this, so browsers would otherwise show the arrow on
+   <button> / the text caret on <select>. Disabled controls keep not-allowed. */
 button:not(:disabled),
+select:not(:disabled),
 a {
   cursor: pointer;
 }
 
-button:disabled {
+button:disabled,
+select:disabled {
   cursor: not-allowed;
 }
 

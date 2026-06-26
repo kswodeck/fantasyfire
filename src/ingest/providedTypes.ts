@@ -1,6 +1,6 @@
-// Shared shape produced by every provided-line source (SportsGameOdds, PrizePicks,
-// Underdog, …) and consumed by run-ingest-providedlines.ts. Kept provider-neutral
-// so each client file depends on this, not on each other.
+// Shared shape produced by every provided-line source (PrizePicks, Underdog, the
+// RotoWire aggregator, …) and consumed by run-ingest-providedlines.ts. Kept provider-
+// neutral so each client file depends on this, not on each other.
 import type { Sport } from '../lib/sports';
 import type { StatKey } from '../lib/stats';
 

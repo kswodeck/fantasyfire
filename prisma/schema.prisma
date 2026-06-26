@@ -184,7 +184,7 @@ model ScheduledGame {
   @@index([sport, date])
 }
 
-// OPTIONAL real prop lines pulled from a DFS/sportsbook feed (e.g. SportsGameOdds),
+// OPTIONAL real prop lines scraped from public DFS/sportsbook feeds,
 // so the app can show the number a user actually sees on PrizePicks / Underdog /
 // DK Pick6 / Sleeper instead of our derived median line. Additive and OFF by
 // default (gated by PROVIDED_LINES_ENABLED) — when empty or disabled, every

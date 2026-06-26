@@ -17,7 +17,7 @@ export const PROVIDED_SOURCE_LABELS: Record<string, string> = {
   dabble: 'Dabble',
   betr: 'Betr',
   parlayplay: 'ParlayPlay',
-  // Sportsbooks (from RotoWire's picks aggregator + SportsGameOdds)
+  // Sportsbooks (from RotoWire's picks aggregator)
   draftkings: 'DraftKings',
   fanduel: 'FanDuel',
   betmgm: 'BetMGM',

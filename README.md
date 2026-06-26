@@ -21,9 +21,10 @@ Origins and the original single-sport spec: [`docs/PLAN.md`](docs/PLAN.md)
 - **FireScore** — a descriptive lean signal (tier + 0–100, gated by the Wilson
   lower bound) on the per-sport **Top Leans** board. Never a pick or +EV claim.
 - **Daily-changing boards** — Today's slate, Streaks, Trends, Leaders, Matchups.
-- **Real lines (optional, off by default)** — a SportsGameOdds feed can populate the
-  actual PrizePicks / Underdog / DK Pick6 / Sleeper number into `ProvidedLine`; when
-  enabled the board + player pages prefer it over our median line. See `.env.example`.
+- **Real lines (optional, off by default)** — public DFS/sportsbook feeds (PrizePicks +
+  Underdog direct, plus RotoWire's picks aggregator for Sleeper / DK Pick6 / RT Sports /
+  sportsbooks) populate `ProvidedLine`; when enabled the board + player pages prefer the
+  real number over our median line, with a per-book dropdown. See `.env.example`.
 - **Fair-price readout** — enter the book's odds → implied probability, no-vig fair
   price, and edge vs. the historical hit rate.
 - **Programmatic SEO** — indexable per-player, per-stat, per-matchup, and leader
@@ -126,7 +127,7 @@ The hard part of this product is the data, not the math.
 | `pnpm ingest:mlb`   | Pull MLB data (statsapi.mlb.com → Postgres)           |
 | `pnpm ingest:nfl`   | Pull NFL data (ESPN football/nfl → Postgres)          |
 | `pnpm schedule`     | Pull the upcoming slate (schedule feeds) → Postgres   |
-| `pnpm ingest:providedlines` | Pull real prop lines (SportsGameOdds) → Postgres (opt-in) |
+| `pnpm ingest:providedlines` | Pull real prop lines (PrizePicks/Underdog/RotoWire) → Postgres (opt-in) |
 | `pnpm db:migrate`   | Create + apply a dev migration                        |
 | `pnpm db:deploy`    | Apply migrations (CI/prod)                            |
 | `pnpm db:studio`    | Prisma Studio                                         |
@@ -180,7 +181,8 @@ src/
 └─ ingest/
    ├─ nba/                    stats.nba.com client
    ├─ nfl/                    ESPN football/nfl client
-   ├─ mlb.ts · espn.ts · espn-fallback.ts · schedule.ts · sportsgameodds.ts
+   ├─ mlb.ts · espn.ts · espn-fallback.ts · schedule.ts
+   ├─ prizepicks.ts · underdog.ts · rotowire.ts · scrapeFetch.ts  (provided lines)
    └─ run-*.ts                ingest / schedule / providedlines / push
 prisma/                       schema.prisma + migrations
 tests/e2e/                    Playwright

@@ -1,20 +1,17 @@
 // src/ingest/run-ingest-providedlines.ts
 //
-// Pull REAL DFS pick'em lines (PrizePicks + Underdog) into the ProvidedLine table,
-// so the board / player pages can show the number users actually see instead of our
-// computed median line. Source ids: "prizepicks", "underdog".
+// Pull REAL prop lines into the ProvidedLine table, so the board / player pages can
+// show the number users actually see instead of our computed median line. Sources:
+//   • prizepicks, underdog  — direct scrapers (prizepicks.ts / underdog.ts)
+//   • rotowire              — public picks aggregator (rotowire.ts) that adds Sleeper,
+//                             DraftKings Pick6, RT Sports + sportsbooks in one call,
+//                             each fanned out to its own `source`.
 //
-//   pnpm ingest:providedlines
+//   pnpm ingest:providedlines   (runs on the cloud cron — ingest-providedlines.yml)
 //
-// NOTE: these are UNOFFICIAL public endpoints (see prizepicks.ts / underdog.ts) —
-// ToS gray area, no SLA, may IP-block from datacenter IPs. Running this script is
-// the opt-in; it is deliberately NOT wired into the nightly ingest.yml. The WEB APP
-// only PREFERS these lines when PROVIDED_LINES_ENABLED=true (separate switch), so
-// ingesting alone never changes what's rendered.
-//
-// SportsGameOdds (sportsbook lines) is a separate, contracted alternative — see
-// fetchProvidedLines in sportsgameodds.ts — intentionally not wired here since the
-// chosen sources are the DFS books.
+// These are UNOFFICIAL public endpoints (ToS gray area, no SLA) but all reachable
+// directly from GitHub Actions — no proxy. The web app only PREFERS these lines when
+// PROVIDED_LINES_ENABLED=true, so ingesting alone never changes what's rendered.
 import 'dotenv/config';
 import { db } from '../lib/db';
 import { recordIngestRun } from './ingestRun';

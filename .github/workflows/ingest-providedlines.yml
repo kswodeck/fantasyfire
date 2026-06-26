@@ -1,16 +1,10 @@
-name: Ingest provided lines (PrizePicks + Underdog)
+name: Ingest provided lines (PrizePicks + Underdog + RotoWire)
 
-# Scrapes DFS pick'em lines into the PROD `ProvidedLine` table on a schedule, so the
-# real lines stay fresh WITHOUT a local machine being on. This is the SOLE ingest path
-# (the old Windows scheduled task is retired — the probe confirmed GitHub runners reach
-# PrizePicks/Underdog directly, no proxy needed).
-#
-# ⚠️ PrizePicks/Underdog BLOCK datacenter IPs, so GitHub's runners may be refused
-# (HTTP 403). First run this via "Run workflow" and check the logs:
-#   • "[providedlines] upserted N ..."  → the runner IP works; you're done (free).
-#   • fetch failures / HTTP 403         → set the SCRAPE_PROXY_URL secret to a
-#       residential proxy / web-unblocker; the scrapers route through it (src/ingest/
-#       scrapeFetch.ts). Re-run to confirm.
+# Scrapes player-prop lines into the PROD `ProvidedLine` table on a schedule, so the
+# real lines stay fresh WITHOUT a local machine being on (the old Windows task is
+# retired). Sources: PrizePicks + Underdog (direct) and RotoWire's public picks
+# aggregator (adds Sleeper, DraftKings Pick6, RT Sports + sportsbooks). All reach
+# GitHub's runners directly — NO proxy, no residential dependency.
 #
 # NOTE: scheduled + manual runs only fire from the DEFAULT branch (main), so this
 # only starts running once it's on main (it lands there when you merge develop -> main).
@@ -26,9 +20,8 @@ name: Ingest provided lines (PrizePicks + Underdog)
 # best-effort: high-frequency crons can slip 5-15 min or skip under load, so 15 min
 # is a ceiling, not a guarantee. Use "Run workflow" for an on-demand refresh.
 #
-# Secrets (Production environment):
-#   DATABASE_URL      — prod transaction-pooler URL (:6543, sslmode=require)
-#   SCRAPE_PROXY_URL  — (optional) residential proxy, e.g. http://user:pass@host:port
+# Secret (Production environment):
+#   DATABASE_URL  — prod transaction-pooler URL (:6543, sslmode=require)
 
 on:
   schedule:
@@ -51,7 +44,6 @@ jobs:
     environment: Production
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      SCRAPE_PROXY_URL: ${{ secrets.SCRAPE_PROXY_URL }}
     steps:
       - uses: actions/checkout@v4
 
