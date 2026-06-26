@@ -2,10 +2,13 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { FilterableTrends } from '@/components/FilterableTrends';
+import { SourcedTrends } from '@/components/SourcedTrends';
 import { FreshnessNote } from '@/components/FreshnessNote';
 import { RelatedLinks } from '@/components/RelatedLinks';
 import { OffSeasonFallback } from '@/components/OffSeasonFallback';
-import { getTrendBoard, getDataFreshness, hasUpcomingGames } from '@/lib/server/players';
+import { getTrendBoard, getSourcedTrends, getDataFreshness, hasUpcomingGames } from '@/lib/server/players';
+import { getAvailableSources } from '@/lib/server/providedLines';
+import { DEFAULT_PROVIDED_SOURCE, sourceLabel } from '@/lib/providedSources';
 import { sportMeshLinks } from '@/lib/relatedLinks';
 import { JsonLd } from '@/components/JsonLd';
 import { breadcrumbList, datasetNode, graph } from '@/lib/jsonLd';
@@ -44,14 +47,28 @@ export default async function TrendsPage({ params }: PageProps) {
   // Off-season (no scheduled games) → last-10 "form" describes a finished season,
   // so we show a season-leaders fallback. Default to in-season on error.
   const upcoming = await hasUpcomingGames(sport).catch(() => true);
+  const sources = upcoming ? await getAvailableSources(sport).catch(() => []) : [];
+  const hasSources = sources.length > 0;
+  const initialSource = sources.includes(DEFAULT_PROVIDED_SOURCE)
+    ? DEFAULT_PROVIDED_SOURCE
+    : (sources[0] ?? DEFAULT_PROVIDED_SOURCE);
 
   let rows: TrendRow[] = [];
+  let bySource: Record<string, TrendRow[]> = {};
   let freshness: string | null = null;
   try {
-    [rows, freshness] = await Promise.all([
-      upcoming ? getTrendBoard(sport) : Promise.resolve([]),
-      getDataFreshness(sport),
-    ]);
+    if (!upcoming) {
+      freshness = await getDataFreshness(sport);
+    } else if (hasSources) {
+      // One pool load → a trends board per book (vs that book's real lines).
+      [bySource, freshness] = await Promise.all([
+        getSourcedTrends(sport, sources),
+        getDataFreshness(sport),
+      ]);
+      rows = bySource[initialSource] ?? [];
+    } else {
+      [rows, freshness] = await Promise.all([getTrendBoard(sport), getDataFreshness(sport)]);
+    }
   } catch {
     // DB unavailable — render the empty state.
   }
@@ -80,13 +97,24 @@ export default async function TrendsPage({ params }: PageProps) {
       <h1 className="text-3xl font-bold tracking-tight">{cfg.name} Player Trends</h1>
       <p className="mt-2 max-w-2xl text-sm text-muted">
         Players whose <span className="text-foreground">last-10 form</span> has swung hardest from their
-        season baseline — heating up or cooling off vs their typical line. Ranked by the lower bound of a
-        95% Wilson interval, so a tiny hot sample sits below a steadier swing.
+        season baseline — heating up or cooling off vs their{' '}
+        {hasSources ? `real ${sourceLabel(initialSource)} line` : 'typical line'}. Ranked by the lower
+        bound of a 95% Wilson interval, so a tiny hot sample sits below a steadier swing.
+        {hasSources ? ' Switch books with the selector below.' : ''}
       </p>
       <FreshnessNote date={freshness} className="mt-2" />
 
       {!upcoming ? (
         <OffSeasonFallback sport={sport} what="form trends" />
+      ) : hasSources ? (
+        <div className="mt-5">
+          <SourcedTrends
+            sport={sport}
+            bySource={bySource}
+            sources={sources}
+            defaultSource={initialSource}
+          />
+        </div>
       ) : rows.length === 0 ? (
         <p className="mt-6 rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
           No trends to show right now. Check back after the next nightly update.

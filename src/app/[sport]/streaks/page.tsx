@@ -2,10 +2,13 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { FilterableStreaks } from '@/components/FilterableStreaks';
+import { SourcedStreaks } from '@/components/SourcedStreaks';
 import { FreshnessNote } from '@/components/FreshnessNote';
 import { RelatedLinks } from '@/components/RelatedLinks';
 import { OffSeasonFallback } from '@/components/OffSeasonFallback';
-import { getStreakBoard, getDataFreshness, hasUpcomingGames } from '@/lib/server/players';
+import { getStreakBoard, getSourcedStreaks, getDataFreshness, hasUpcomingGames } from '@/lib/server/players';
+import { getAvailableSources } from '@/lib/server/providedLines';
+import { DEFAULT_PROVIDED_SOURCE, sourceLabel } from '@/lib/providedSources';
 import { sportMeshLinks } from '@/lib/relatedLinks';
 import { JsonLd } from '@/components/JsonLd';
 import { breadcrumbList, datasetNode, graph } from '@/lib/jsonLd';
@@ -44,14 +47,28 @@ export default async function StreaksPage({ params }: PageProps) {
   // Off-season (no scheduled games) → "current" streaks describe a finished
   // season, so we show a season-leaders fallback. Default to in-season on error.
   const upcoming = await hasUpcomingGames(sport).catch(() => true);
+  const sources = upcoming ? await getAvailableSources(sport).catch(() => []) : [];
+  const hasSources = sources.length > 0;
+  const initialSource = sources.includes(DEFAULT_PROVIDED_SOURCE)
+    ? DEFAULT_PROVIDED_SOURCE
+    : (sources[0] ?? DEFAULT_PROVIDED_SOURCE);
 
   let rows: StreakRow[] = [];
+  let bySource: Record<string, StreakRow[]> = {};
   let freshness: string | null = null;
   try {
-    [rows, freshness] = await Promise.all([
-      upcoming ? getStreakBoard(sport) : Promise.resolve([]),
-      getDataFreshness(sport),
-    ]);
+    if (!upcoming) {
+      freshness = await getDataFreshness(sport);
+    } else if (hasSources) {
+      // One pool load → a streaks board per book (vs that book's real lines).
+      [bySource, freshness] = await Promise.all([
+        getSourcedStreaks(sport, sources),
+        getDataFreshness(sport),
+      ]);
+      rows = bySource[initialSource] ?? [];
+    } else {
+      [rows, freshness] = await Promise.all([getStreakBoard(sport), getDataFreshness(sport)]);
+    }
   } catch {
     // DB unavailable — render the empty state.
   }
@@ -80,13 +97,25 @@ export default async function StreaksPage({ params }: PageProps) {
       <h1 className="text-3xl font-bold tracking-tight">{cfg.name} Prop Streaks</h1>
       <p className="mt-2 max-w-2xl text-sm text-muted">
         Players on the longest current run over (or under) their{' '}
-        <span className="text-foreground">typical-game (median) line</span> — a quick read on who&rsquo;s
-        hot or cold right now. Pushes (games exactly on the line) are skipped, not counted as a miss.
+        <span className="text-foreground">
+          {hasSources ? `real ${sourceLabel(initialSource)} line` : 'typical-game (median) line'}
+        </span>{' '}
+        — a quick read on who&rsquo;s hot or cold right now. Pushes (games exactly on the line) are
+        skipped, not counted as a miss.{hasSources ? ' Switch books with the selector below.' : ''}
       </p>
       <FreshnessNote date={freshness} className="mt-2" />
 
       {!upcoming ? (
         <OffSeasonFallback sport={sport} what="current streaks" />
+      ) : hasSources ? (
+        <div className="mt-5">
+          <SourcedStreaks
+            sport={sport}
+            bySource={bySource}
+            sources={sources}
+            defaultSource={initialSource}
+          />
+        </div>
       ) : rows.length === 0 ? (
         <p className="mt-6 rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
           No streaks to show right now. Check back after the next nightly update.

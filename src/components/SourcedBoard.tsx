@@ -17,23 +17,36 @@ export function SourcedBoard({
   boardsBySource,
   sources,
   defaultSource,
+  heading = 'Every prop on the board, ranked vs its real line',
+  initialVisible,
 }: {
   sport: Sport;
   boardsBySource: Record<string, BoardRow[]>;
   sources: string[];
   defaultSource: string;
+  /** Section heading next to the selector; pass null to omit (caller has its own). */
+  heading?: string | null;
+  initialVisible?: number;
 }) {
   const [source, setSource] = useState(defaultSource);
   const rows = boardsBySource[source] ?? [];
   return (
     <div>
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
-          Every prop on the board, ranked vs its real line
-        </h2>
+        {heading === null ? (
+          <span />
+        ) : (
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">{heading}</h2>
+        )}
         <SourceSelector sources={sources} value={source} onChange={setSource} />
       </div>
-      <FilterableBoard key={source} sport={sport} rows={rows} />
+      {rows.length === 0 ? (
+        <p className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
+          No props for this book right now.
+        </p>
+      ) : (
+        <FilterableBoard key={source} sport={sport} rows={rows} initialVisible={initialVisible} />
+      )}
     </div>
   );
 }

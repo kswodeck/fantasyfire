@@ -957,22 +957,7 @@ function computeBoardRows(
     if (games.length < FIRESCORE_MIN_GAMES) continue;
     const listItem = boardListItem(sport, p, games.length);
 
-    // The (stat, line) pairs to rank for this player. Pure-slate mode walks every
-    // market the chosen book actually offers this player (its real line); else the
-    // curated board stats vs the book line (when present) or our median line.
-    const statEntries: Array<{ stat: StatKey; line: number; provided: boolean }> = requireProvided
-      ? statKeysForSport(sport, p.posBucket).flatMap((stat) => {
-          const provided = providedLines.get(`${p.id}:${stat}`);
-          return provided != null ? [{ stat, line: provided, provided: true }] : [];
-        })
-      : boardStatsFor(sport, p.posBucket).map((stat) => {
-          const book = providedLines.get(`${p.id}:${stat}`);
-          return book != null
-            ? { stat, line: book, provided: true }
-            : { stat, line: defaultLine(games, stat), provided: false };
-        });
-
-    for (const { stat, line, provided } of statEntries) {
+    for (const { stat, line, provided } of statLinesFor(sport, p.posBucket, games, providedLines, p.id, requireProvided)) {
       // Skip degenerate low-volume props ONLY for our computed median line — a 0.5
       // median means the player typically records 0, so any "lean" is a trivial
       // under. A real book line of 0.5 (e.g. "over 0.5 HR") is a legitimate prop.
@@ -1138,21 +1123,53 @@ interface BoardScanOptions {
   scan?: number;
   perPlayerCap?: number;
   perStatCap?: number;
+  /** Which book's real line to use (when PROVIDED_LINES_ENABLED). */
+  source?: string;
+  /** Pure-slate: only props the chosen book lists (its real line), no median fallback. */
+  requireProvidedLine?: boolean;
+}
+
+/** The (stat, line) pairs to evaluate for a player — book props (pure-slate) or the
+ *  curated board stats vs the book line / our median. Shared by board/streaks/trends. */
+function statLinesFor(
+  sport: Sport,
+  posBucket: string | null,
+  games: PlayerGame[],
+  providedLines: Map<string, number>,
+  playerId: number,
+  requireProvided: boolean,
+): Array<{ stat: StatKey; line: number; provided: boolean }> {
+  if (requireProvided) {
+    return statKeysForSport(sport, posBucket).flatMap((stat) => {
+      const provided = providedLines.get(`${playerId}:${stat}`);
+      return provided != null ? [{ stat, line: provided, provided: true }] : [];
+    });
+  }
+  return boardStatsFor(sport, posBucket).map((stat) => {
+    const book = providedLines.get(`${playerId}:${stat}`);
+    return book != null
+      ? { stat, line: book, provided: true }
+      : { stat, line: defaultLine(games, stat), provided: false };
+  });
 }
 
 /** Minimum consecutive games to count as a streak worth surfacing. */
 const STREAK_MIN_LENGTH = 3;
+/** Minimum recent-vs-season swing (on the leaning side) to surface a trend. */
+const TREND_MIN_SWING = 0.18;
 
-/**
- * Streaks board: each player's CURRENT consecutive over/under run vs our default
- * line, longest first — the daily "who's hot/cold right now" hook.
- */
-export async function getStreakBoard(
+type ScanComputeOpts = { limit: number; perPlayerCap: number; perStatCap: number };
+
+/** Streaks from a loaded pool vs a line map (pure compute). Each player's CURRENT
+ *  consecutive over/under run, longest first. */
+function computeStreakRows(
   sport: Sport,
-  opts: BoardScanOptions = {},
-): Promise<StreakRow[]> {
-  const { limit = 80, scan = 140, perPlayerCap = 1, perStatCap = 25 } = opts;
-  const { players, gamesByPlayer } = await loadBoardPool(sport, scan);
+  players: BoardPlayer[],
+  gamesByPlayer: Map<number, PlayerGame[]>,
+  providedLines: Map<string, number>,
+  requireProvided: boolean,
+  opts: ScanComputeOpts,
+): StreakRow[] {
   const out: Omit<StreakRow, 'rank'>[] = [];
   for (const p of players) {
     const allGames = gamesByPlayer.get(p.id);
@@ -1160,14 +1177,11 @@ export async function getStreakBoard(
     const games = qualifyGames(sport, p.posBucket, allGames);
     if (games.length < FIRESCORE_MIN_GAMES) continue;
     const listItem = boardListItem(sport, p, games.length);
-    for (const stat of boardStatsFor(sport, p.posBucket)) {
-      const line = defaultLine(games, stat);
-      if (line <= 0.5) continue;
-      const streak = computeStreak(
-        games.map((g) => statValue(stat, g)),
-        line,
-      );
+    for (const { stat, line, provided } of statLinesFor(sport, p.posBucket, games, providedLines, p.id, requireProvided)) {
+      if (!provided && line <= 0.5) continue; // degenerate median line only
+      const streak = computeStreak(games.map((g) => statValue(stat, g)), line);
       if (streak.side === null || streak.length < STREAK_MIN_LENGTH) continue;
+      if (line <= 0.5 && streak.side === 'under') continue; // trivial "won't do it" run
       out.push({
         player: listItem,
         stat,
@@ -1181,23 +1195,50 @@ export async function getStreakBoard(
   }
   // Longest run first; tiebreak toward the larger game sample (more reliable).
   out.sort((a, b) => b.length - a.length || b.player.gamesPlayed - a.player.gamesPlayed);
-  return capBoardRows(out, limit, perPlayerCap, perStatCap);
+  return capBoardRows(out, opts.limit, opts.perPlayerCap, opts.perStatCap);
 }
 
-/** Minimum recent-vs-season swing (on the leaning side) to surface a trend. */
-const TREND_MIN_SWING = 0.18;
-
-/**
- * Trends board: players whose RECENT (last 10) form has swung hardest from their
- * season baseline, ranked by the Wilson lower bound of the recent rate — so a
- * tiny hot sample sits below a larger, steadier swing.
- */
-export async function getTrendBoard(
+export async function getStreakBoard(
   sport: Sport,
   opts: BoardScanOptions = {},
-): Promise<TrendRow[]> {
+): Promise<StreakRow[]> {
   const { limit = 80, scan = 140, perPlayerCap = 1, perStatCap = 25 } = opts;
   const { players, gamesByPlayer } = await loadBoardPool(sport, scan);
+  const providedLines = await getProvidedLineMap(sport, players.map((p) => p.id), opts.source);
+  return computeStreakRows(sport, players, gamesByPlayer, providedLines, opts.requireProvidedLine === true, {
+    limit,
+    perPlayerCap,
+    perStatCap,
+  });
+}
+
+/** One streaks board per book from a single pool load (vs the book's real lines). */
+export async function getSourcedStreaks(
+  sport: Sport,
+  sources: string[],
+  opts: BoardScanOptions = {},
+): Promise<Record<string, StreakRow[]>> {
+  const { limit = 80, scan = 140, perPlayerCap = 1, perStatCap = 25 } = opts;
+  const result: Record<string, StreakRow[]> = {};
+  const { players, gamesByPlayer } = await loadBoardPool(sport, scan);
+  const ids = players.map((p) => p.id);
+  for (const s of sources) {
+    const providedLines = await getProvidedLineMap(sport, ids, s);
+    result[s] = computeStreakRows(sport, players, gamesByPlayer, providedLines, true, { limit, perPlayerCap, perStatCap });
+  }
+  return result;
+}
+
+/** Trends from a loaded pool vs a line map (pure compute). Players whose RECENT
+ *  (L10) form has swung hardest from their season baseline, ranked by Wilson lower. */
+function computeTrendRows(
+  sport: Sport,
+  players: BoardPlayer[],
+  gamesByPlayer: Map<number, PlayerGame[]>,
+  providedLines: Map<string, number>,
+  requireProvided: boolean,
+  opts: ScanComputeOpts,
+): TrendRow[] {
   const out: Omit<TrendRow, 'rank'>[] = [];
   for (const p of players) {
     const allGames = gamesByPlayer.get(p.id);
@@ -1205,14 +1246,14 @@ export async function getTrendBoard(
     const games = qualifyGames(sport, p.posBucket, allGames);
     if (games.length < FIRESCORE_MIN_GAMES) continue;
     const listItem = boardListItem(sport, p, games.length);
-    for (const stat of boardStatsFor(sport, p.posBucket)) {
-      const line = defaultLine(games, stat);
-      if (line <= 0.5) continue;
+    for (const { stat, line, provided } of statLinesFor(sport, p.posBucket, games, providedLines, p.id, requireProvided)) {
+      if (!provided && line <= 0.5) continue;
       const recent = computeHitRate(games, stat, line, 10);
       const season = computeHitRate(games, stat, line, 'season');
       if (recent.decided < 4 || season.decided < FIRESCORE_MIN_GAMES) continue;
       const recentOver = recent.hitRateOver ?? 0.5;
       const side: 'over' | 'under' = recentOver >= 0.5 ? 'over' : 'under';
+      if (line <= 0.5 && side === 'under') continue; // trivial under on a 0.5 line
       const recentRate = side === 'over' ? recentOver : 1 - recentOver;
       const seasonOver = season.hitRateOver ?? 0.5;
       const seasonRate = side === 'over' ? seasonOver : 1 - seasonOver;
@@ -1234,7 +1275,38 @@ export async function getTrendBoard(
     }
   }
   out.sort((a, b) => b.recentLower - a.recentLower || b.delta - a.delta);
-  return capBoardRows(out, limit, perPlayerCap, perStatCap);
+  return capBoardRows(out, opts.limit, opts.perPlayerCap, opts.perStatCap);
+}
+
+export async function getTrendBoard(
+  sport: Sport,
+  opts: BoardScanOptions = {},
+): Promise<TrendRow[]> {
+  const { limit = 80, scan = 140, perPlayerCap = 1, perStatCap = 25 } = opts;
+  const { players, gamesByPlayer } = await loadBoardPool(sport, scan);
+  const providedLines = await getProvidedLineMap(sport, players.map((p) => p.id), opts.source);
+  return computeTrendRows(sport, players, gamesByPlayer, providedLines, opts.requireProvidedLine === true, {
+    limit,
+    perPlayerCap,
+    perStatCap,
+  });
+}
+
+/** One trends board per book from a single pool load (vs the book's real lines). */
+export async function getSourcedTrends(
+  sport: Sport,
+  sources: string[],
+  opts: BoardScanOptions = {},
+): Promise<Record<string, TrendRow[]>> {
+  const { limit = 80, scan = 140, perPlayerCap = 1, perStatCap = 25 } = opts;
+  const result: Record<string, TrendRow[]> = {};
+  const { players, gamesByPlayer } = await loadBoardPool(sport, scan);
+  const ids = players.map((p) => p.id);
+  for (const s of sources) {
+    const providedLines = await getProvidedLineMap(sport, ids, s);
+    result[s] = computeTrendRows(sport, players, gamesByPlayer, providedLines, true, { limit, perPlayerCap, perStatCap });
+  }
+  return result;
 }
 
 /**

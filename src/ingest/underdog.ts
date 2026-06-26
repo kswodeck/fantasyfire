@@ -15,7 +15,9 @@ import type { StatKey } from '../lib/stats';
 import type { ProvidedLineRow } from './providedTypes';
 import { scrapeFetch } from './scrapeFetch';
 
-const URL = 'https://api.underdogfantasy.com/beta/v5/over_under_lines';
+const BASE = 'https://api.underdogfantasy.com/beta/v5/over_under_lines';
+// One filtered request per sport (vs the full ~10 MB feed) — cheaper proxy bandwidth.
+const UD_SPORT_IDS = ['NBA', 'MLB', 'NFL'] as const;
 const HEADERS = {
   'User-Agent':
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
@@ -114,17 +116,13 @@ function todayUtc(): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 }
 
-export async function fetchUnderdogLines(): Promise<ProvidedLineRow[]> {
-  const res = await scrapeFetch(URL, { headers: HEADERS });
-  if (!res.ok) throw new Error(`Underdog HTTP ${res.status}`);
-  const body = (await res.json()) as UdResponse;
+function parseUdBody(body: UdResponse, out: ProvidedLineRow[]): void {
   const appearances = new Map<string, UdAppearance>();
   for (const a of body.appearances ?? []) appearances.set(a.id, a);
   const players = new Map<string, UdPlayer>();
   for (const p of body.players ?? []) players.set(p.id, p);
 
   const gameDate = todayUtc(); // current slate; the recent-window lookup keys on the day
-  const out: ProvidedLineRow[] = [];
   for (const l of body.over_under_lines ?? []) {
     const ou = l.over_under;
     if (ou?.category !== 'player_prop') continue;
@@ -154,6 +152,21 @@ export async function fetchUnderdogLines(): Promise<ProvidedLineRow[]> {
       underOdds: americanToInt(under?.american_price),
       gameDate,
     });
+  }
+}
+
+export async function fetchUnderdogLines(): Promise<ProvidedLineRow[]> {
+  const out: ProvidedLineRow[] = [];
+  for (let i = 0; i < UD_SPORT_IDS.length; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, 1500)); // space requests to be polite
+    const sportId = UD_SPORT_IDS[i];
+    try {
+      const res = await scrapeFetch(`${BASE}?sport_id=${sportId}`, { headers: HEADERS });
+      if (!res.ok) throw new Error(`Underdog HTTP ${res.status} (${sportId})`);
+      parseUdBody((await res.json()) as UdResponse, out);
+    } catch (e) {
+      console.warn(`[underdog] ${sportId} fetch failed: ${(e as Error).message}`);
+    }
   }
   return out;
 }

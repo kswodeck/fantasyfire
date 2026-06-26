@@ -14,7 +14,10 @@ import type { StatKey } from '../lib/stats';
 import type { ProvidedLineRow } from './providedTypes';
 import { scrapeFetch } from './scrapeFetch';
 
-const URL = 'https://partner-api.prizepicks.com/projections?per_page=25000';
+const BASE = 'https://partner-api.prizepicks.com/projections';
+// One filtered request per league shrinks the payload from ~15 MB (all leagues) to
+// just the three we use — cheaper proxy bandwidth + faster runs. IDs from /leagues.
+const PP_LEAGUE_IDS: Record<Sport, number> = { nba: 7, mlb: 2, nfl: 9 };
 const HEADERS = {
   'User-Agent':
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
@@ -92,14 +95,10 @@ function dateOnlyUtc(iso: unknown): Date {
   return new Date(Date.UTC(v.getUTCFullYear(), v.getUTCMonth(), v.getUTCDate()));
 }
 
-export async function fetchPrizePicksLines(): Promise<ProvidedLineRow[]> {
-  const res = await scrapeFetch(URL, { headers: HEADERS });
-  if (!res.ok) throw new Error(`PrizePicks HTTP ${res.status}`);
-  const body = (await res.json()) as PpResponse;
+function parsePpBody(body: PpResponse, out: ProvidedLineRow[]): void {
   const players = new Map<string, PpResource>();
   for (const inc of body.included ?? []) if (inc.type === 'new_player') players.set(inc.id, inc);
 
-  const out: ProvidedLineRow[] = [];
   for (const p of body.data ?? []) {
     const a = p.attributes;
     if (a.odds_type !== 'standard') continue; // skip demon/goblin alt lines
@@ -127,6 +126,22 @@ export async function fetchPrizePicksLines(): Promise<ProvidedLineRow[]> {
       underOdds: null,
       gameDate: dateOnlyUtc(a.start_time),
     });
+  }
+}
+
+export async function fetchPrizePicksLines(): Promise<ProvidedLineRow[]> {
+  const out: ProvidedLineRow[] = [];
+  const leagueIds = Object.values(PP_LEAGUE_IDS);
+  for (let i = 0; i < leagueIds.length; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, 1500)); // space requests — PP rate-limits bursts
+    const leagueId = leagueIds[i];
+    try {
+      const res = await scrapeFetch(`${BASE}?league_id=${leagueId}&per_page=25000`, { headers: HEADERS });
+      if (!res.ok) throw new Error(`PrizePicks HTTP ${res.status} (league ${leagueId})`);
+      parsePpBody((await res.json()) as PpResponse, out);
+    } catch (e) {
+      console.warn(`[prizepicks] league ${leagueId} fetch failed: ${(e as Error).message}`);
+    }
   }
   return out;
 }

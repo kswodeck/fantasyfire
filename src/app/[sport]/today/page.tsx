@@ -4,7 +4,10 @@ import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { TonightSlate } from '@/components/TonightSlate';
 import { FilterableBoard } from '@/components/FilterableBoard';
-import { getTonightSlate, getBoard } from '@/lib/server/players';
+import { SourcedBoard } from '@/components/SourcedBoard';
+import { getTonightSlate, getBoard, getSourcedBoards } from '@/lib/server/players';
+import { getAvailableSources } from '@/lib/server/providedLines';
+import { DEFAULT_PROVIDED_SOURCE, sourceLabel } from '@/lib/providedSources';
 import { formatIsoDate } from '@/lib/format';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
 import type { TonightGame, BoardRow } from '@/lib/types';
@@ -43,13 +46,27 @@ export default async function TodayPage({ params }: PageProps) {
   // NFL plays weekly (Thu–Mon), so the "today" slate is framed as the week.
   const slateWord = sport === 'nfl' ? 'This Week' : 'Today';
 
+  const sources = await getAvailableSources(sport).catch((): string[] => []);
+  const hasSources = sources.length > 0;
+  const initialSource = sources.includes(DEFAULT_PROVIDED_SOURCE)
+    ? DEFAULT_PROVIDED_SOURCE
+    : (sources[0] ?? DEFAULT_PROVIDED_SOURCE);
+
   let slate: { date: string | null; games: TonightGame[] } = { date: null, games: [] };
   let board: BoardRow[] = [];
+  let boardsBySource: Record<string, BoardRow[]> = {};
   try {
-    [slate, board] = await Promise.all([
-      getTonightSlate(sport),
-      getBoard(sport, { limit: 150, perStatCap: 30 }),
-    ]);
+    if (hasSources) {
+      [slate, boardsBySource] = await Promise.all([
+        getTonightSlate(sport),
+        getSourcedBoards(sport, sources, { limit: 150, perStatCap: 30 }),
+      ]);
+    } else {
+      [slate, board] = await Promise.all([
+        getTonightSlate(sport),
+        getBoard(sport, { limit: 150, perStatCap: 30 }),
+      ]);
+    }
   } catch {
     // DB unavailable — render the empty state.
   }
@@ -57,9 +74,13 @@ export default async function TodayPage({ params }: PageProps) {
   const tonightTeams = new Set(
     slate.games.flatMap((g) => [g.home.abbr, g.away.abbr]).filter((a): a is string => !!a),
   );
-  const leans = board.filter(
-    (r) => r.player.teamAbbreviation && tonightTeams.has(r.player.teamAbbreviation),
-  );
+  const onSlate = (r: BoardRow): boolean =>
+    !!r.player.teamAbbreviation && tonightTeams.has(r.player.teamAbbreviation);
+  // Leans on the slate, filtered per book (or the single fallback board).
+  const leansBySource: Record<string, BoardRow[]> = {};
+  for (const s of sources) leansBySource[s] = (boardsBySource[s] ?? []).filter(onSlate);
+  const leans = board.filter(onSlate);
+  const hasLeans = hasSources ? Object.values(leansBySource).some((r) => r.length > 0) : leans.length > 0;
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8">
@@ -102,7 +123,7 @@ export default async function TodayPage({ params }: PageProps) {
           </h2>
           <TonightSlate sport={sport} games={slate.games} />
 
-          {leans.length > 0 && (
+          {hasLeans && (
             <>
               <div className="mb-2 mt-8 flex items-center gap-2">
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
@@ -114,10 +135,26 @@ export default async function TodayPage({ params }: PageProps) {
               </div>
               <p className="mb-3 text-xs text-muted">
                 Strongest recent-form leans for players on{' '}
-                {sport === 'nfl' ? <>this week&rsquo;s</> : <>today&rsquo;s</>} teams, vs our typical
-                line (not a sportsbook line). Open a player to enter the real number.
+                {sport === 'nfl' ? <>this week&rsquo;s</> : <>today&rsquo;s</>} teams, vs{' '}
+                {hasSources ? (
+                  <>the real {sourceLabel(initialSource)} line (switch books below)</>
+                ) : (
+                  <>our typical line (not a sportsbook line)</>
+                )}
+                . Open a player to enter the real number.
               </p>
-              <FilterableBoard sport={sport} rows={leans} initialVisible={20} />
+              {hasSources ? (
+                <SourcedBoard
+                  sport={sport}
+                  boardsBySource={leansBySource}
+                  sources={sources}
+                  defaultSource={initialSource}
+                  heading={null}
+                  initialVisible={20}
+                />
+              ) : (
+                <FilterableBoard sport={sport} rows={leans} initialVisible={20} />
+              )}
             </>
           )}
         </>
