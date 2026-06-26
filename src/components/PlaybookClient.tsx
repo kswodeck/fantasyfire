@@ -15,6 +15,7 @@ import { LeanArrow } from './LeanArrow';
 import { SideArrow } from './SideArrow';
 import { BookLogo } from './BookLogo';
 import { orderSources, sourceLabel } from '@/lib/providedSources';
+import { normalizeName } from '@/lib/slate';
 
 /** One player as shown on the Playbook: favorited and/or carrying saved props. */
 interface PlayerEntry {
@@ -34,6 +35,8 @@ export function PlaybookClient() {
   const hydrated = favHydrated && propsHydrated;
   // Source filter ('all' or a specific book) — saved props are per-source.
   const [sourceFilter, setSourceFilter] = useState<string>('all');
+  // Player-name search over the saved list (accent/punctuation insensitive).
+  const [nameQuery, setNameQuery] = useState('');
 
   // Books that have at least one saved prop, with counts — drives the filter.
   const sourcesPresent = useMemo(() => {
@@ -49,11 +52,16 @@ export function PlaybookClient() {
     const byPlayer = new Map<string, PlayerEntry>();
     const keyOf = (sport: Sport, slug: string) => `${sport}:${slug}`;
     const favSet = new Set(favorites.map((f) => keyOf(f.sport, f.slug)));
-    const shown = sourceFilter === 'all' ? props : props.filter((p) => p.source === sourceFilter);
+    const nq = normalizeName(nameQuery);
+    const nameOk = (name: string) => nq === '' || normalizeName(name).includes(nq);
+    const shown = props.filter(
+      (p) => (sourceFilter === 'all' || p.source === sourceFilter) && nameOk(p.name),
+    );
 
     // Whole-player favorites aren't tied to a book, so only list them unfiltered.
     if (sourceFilter === 'all') {
       for (const f of favorites) {
+        if (!nameOk(f.name)) continue;
         byPlayer.set(keyOf(f.sport, f.slug), {
           sport: f.sport,
           slug: f.slug,
@@ -95,7 +103,7 @@ export function PlaybookClient() {
         .sort((a, b) => b.recency - a.recency);
       return { sport, players };
     }).filter((g) => g.players.length > 0);
-  }, [favorites, props, sourceFilter]);
+  }, [favorites, props, sourceFilter, nameQuery]);
 
   if (!hydrated) {
     return <p className="mt-6 text-sm text-muted">Loading your Playbook…</p>;
@@ -127,31 +135,44 @@ export function PlaybookClient() {
 
   return (
     <div className="mt-6 space-y-4">
-      {sourcesPresent.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="mr-1 text-xs font-medium text-muted">Book</span>
-          <FilterChip active={sourceFilter === 'all'} onClick={() => setSourceFilter('all')}>
-            All ({props.length})
-          </FilterChip>
-          {sourcesPresent.map(({ source, count }) => (
-            <FilterChip
-              key={source}
-              active={sourceFilter === source}
-              onClick={() => setSourceFilter(source)}
-            >
-              <BookLogo source={source} size={14} />
-              {sourceLabel(source)} ({count})
+      <div className="flex flex-wrap items-center gap-1.5">
+        {sourcesPresent.length > 0 && (
+          <>
+            <span className="mr-1 text-xs font-medium text-muted">Book</span>
+            <FilterChip active={sourceFilter === 'all'} onClick={() => setSourceFilter('all')}>
+              All ({props.length})
             </FilterChip>
-          ))}
-        </div>
-      )}
+            {sourcesPresent.map(({ source, count }) => (
+              <FilterChip
+                key={source}
+                active={sourceFilter === source}
+                onClick={() => setSourceFilter(source)}
+              >
+                <BookLogo source={source} size={14} />
+                {sourceLabel(source)} ({count})
+              </FilterChip>
+            ))}
+          </>
+        )}
+        <input
+          type="search"
+          value={nameQuery}
+          onChange={(e) => setNameQuery(e.target.value)}
+          placeholder="Search player…"
+          aria-label="Search saved players by name"
+          className="ml-auto w-40 rounded-full border border-line bg-surface px-3 py-1 text-xs text-foreground outline-none focus:border-brand"
+        />
+      </div>
 
       {groups.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface p-6 text-sm text-muted">
-          No saved props for {sourceLabel(sourceFilter)}.{' '}
+          No saved players match these filters.{' '}
           <button
             type="button"
-            onClick={() => setSourceFilter('all')}
+            onClick={() => {
+              setSourceFilter('all');
+              setNameQuery('');
+            }}
             className="font-medium text-brand hover:text-brand-strong"
           >
             Show all

@@ -34,6 +34,8 @@ export function FilterableBoard({
         resultCount={f.filtered.length}
         totalCount={rows.length}
         noun="reads"
+        query={f.query}
+        onQueryChange={f.setQuery}
       />
       {f.filtered.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">

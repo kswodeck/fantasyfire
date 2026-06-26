@@ -2,7 +2,11 @@
 
 import type { FilterOption } from '@/lib/filters';
 
-/** Shared team + position filter controls with a live result count. Controlled. */
+/**
+ * Shared team + position filter controls with a live result count. Controlled.
+ * Pass `onQueryChange` to also render a small player-name search on the same row
+ * (opt-in, so boards that don't want it — or have their own — stay unchanged).
+ */
 export function ListFilters({
   teamOptions,
   positionOptions,
@@ -13,6 +17,8 @@ export function ListFilters({
   resultCount,
   totalCount,
   noun = 'results',
+  query,
+  onQueryChange,
 }: {
   teamOptions: FilterOption[];
   positionOptions: FilterOption[];
@@ -23,13 +29,28 @@ export function ListFilters({
   resultCount: number;
   totalCount: number;
   noun?: string;
+  /** Current name-search text. Only used when `onQueryChange` is provided. */
+  query?: string;
+  /** When provided, a small name-search input renders first on the filter row. */
+  onQueryChange?: (value: string) => void;
 }) {
-  const hasFilters = team !== '' || position !== '';
+  const hasSearch = onQueryChange != null;
+  const hasFilters = team !== '' || position !== '' || (query ?? '') !== '';
   const selectCls =
     'rounded-lg border border-line bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-brand';
 
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2">
+      {hasSearch && (
+        <input
+          type="search"
+          aria-label="Search players by name"
+          value={query ?? ''}
+          onChange={(e) => onQueryChange(e.target.value)}
+          placeholder="Search players…"
+          className={`${selectCls} w-40 sm:w-44`}
+        />
+      )}
       <select
         aria-label="Filter by team"
         value={team}
@@ -64,6 +85,7 @@ export function ListFilters({
           onClick={() => {
             onTeamChange('');
             onPositionChange('');
+            onQueryChange?.('');
           }}
           className="rounded-lg px-3 py-2 text-sm font-medium text-brand transition-colors hover:text-brand-strong"
         >
