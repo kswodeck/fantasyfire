@@ -112,11 +112,20 @@ In the GitHub repo → **Settings → Secrets and variables → Actions** (the
 - **Variables** (optional): `NBA_SEASON` / `MLB_SEASON` / `NFL_SEASON` — only to
   force a specific season; otherwise seasons are computed from the date in code.
 
+**Database migrations run in their own workflows** (kept out of the ingest so a
+schema change can't block the data pull):
+- [`migrate.yml`](../.github/workflows/migrate.yml) → `prisma migrate deploy` to the
+  **prod** DB on push to `main` (uses the Production-environment `DIRECT_URL` secret).
+- [`migrate-dev.yml`](../.github/workflows/migrate-dev.yml) → to the **dev** DB on push
+  to `develop`. Add a **repository** secret **`DEV_DIRECT_URL`** = the dev project's
+  **session pooler** URL (`:5432`, `?sslmode=require`). A `:6543` URL is auto-corrected.
+  Use "Run workflow" to test it.
+
 The [`ingest.yml`](../.github/workflows/ingest.yml) workflow runs daily and on manual
-dispatch, in order: **NBA → MLB → NFL → schedule → grade → snapshot**, all writing to
+dispatch, in order: **NBA → MLB → NFL → schedule**, all writing to
 the prod DB. Each step is best-effort: if the **NBA** step fails with
-`NbaLikelyBlockedError` (stats.nba.com blocking the runner IP), the MLB/NFL/schedule/
-grade/snapshot steps still run. Re-run the job, or move the NBA pull to a small VPS /
+`NbaLikelyBlockedError` (stats.nba.com blocking the runner IP), the MLB/NFL/schedule
+steps still run. Re-run the job, or move the NBA pull to a small VPS /
 your machine on a cron.
 
 ---

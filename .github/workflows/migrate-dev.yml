@@ -1,0 +1,77 @@
+name: Apply DB migrations (dev)
+
+# Runs `prisma migrate deploy` against the DEVELOP / preview database (the free
+# Supabase org) whenever a schema/migration change lands on `develop`. This is the
+# dev counterpart of migrate.yml (which targets PROD on `main`) — the Supabase
+# GitHub integration only syncs `supabase/migrations`, not our Prisma migrations,
+# so this keeps the develop preview's schema in sync automatically.
+#
+# Uses a SEPARATE secret from prod (DEV_DIRECT_URL, not the Production-environment
+# DIRECT_URL) so a dev run can never hit the production database.
+#
+# REQUIRED repo secret (Settings → Secrets and variables → Actions → repository secret):
+#   DEV_DIRECT_URL — the DEV project's migration connection. Prefer the Supabase
+#                    SESSION pooler (:5432). `migrate deploy` needs session-level
+#                    advisory locks the TRANSACTION pooler (:6543) can't hold, so a
+#                    :6543 URL is auto-corrected to :5432 below (with a warning).
+#
+# The workflow file is intentionally NOT in the trigger paths, so adding it doesn't
+# fire a run before the secret exists — use "Run workflow" to test, or push a
+# migration. Adding the secret first is recommended.
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'prisma/schema.prisma'
+      - 'prisma/migrations/**'
+  workflow_dispatch: {}
+
+concurrency:
+  group: migrate-dev
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Resolve migration connection
+        env:
+          RAW_DIRECT_URL: ${{ secrets.DEV_DIRECT_URL }}
+        run: |
+          if [ -z "$RAW_DIRECT_URL" ]; then
+            echo "::error::DEV_DIRECT_URL secret is not set. Add it under Settings → Secrets and variables → Actions (the DEV project's session-pooler URL, :5432, with sslmode=require)."
+            exit 1
+          fi
+          # `migrate deploy` takes a session-level advisory lock that PgBouncer's
+          # TRANSACTION pooler (:6543) cannot hold, so it hangs until timeout.
+          # Supabase's SESSION pooler is the SAME url on :5432, so auto-correct a
+          # :6543 secret instead of failing. A password can't contain a literal
+          # ":6543" — the colon would be URL-encoded — so the only ":6543" is the port.
+          MIGRATE_URL="$RAW_DIRECT_URL"
+          if printf '%s' "$RAW_DIRECT_URL" | grep -q ':6543'; then
+            MIGRATE_URL="$(printf '%s' "$RAW_DIRECT_URL" | sed 's/:6543/:5432/')"
+            echo "::warning::DEV_DIRECT_URL points at the transaction pooler (:6543); using the :5432 session pooler for this run. Update the secret to the session pooler to silence this."
+          fi
+          # Never print the resolved URL; it carries the DB password.
+          echo "::add-mask::$MIGRATE_URL"
+          echo "DIRECT_URL=$MIGRATE_URL" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply migrations
+        # migrate deploy normally finishes in seconds; cap it so a hung/bad
+        # connection fails fast instead of running to the job timeout.
+        timeout-minutes: 5
+        run: pnpm db:deploy
