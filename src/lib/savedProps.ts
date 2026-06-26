@@ -8,6 +8,7 @@ import type { StatKey } from './stats/types';
 import { STAT_KEYS } from './stats/types';
 import type { Sport } from './sports';
 import { isSport } from './sports';
+import { DEFAULT_PROVIDED_SOURCE } from './providedSources';
 
 /** Which way the prop is being tracked. */
 export type PropSide = 'over' | 'under';
@@ -21,6 +22,9 @@ export interface SavedProp {
   stat: StatKey;
   line: number;
   side: PropSide;
+  /** The book/source this save is for (e.g. "prizepicks"). Saves are per-source: the
+   *  same (player, stat, line, side) at two books are two distinct saves. */
+  source: string;
   /** Epoch ms the prop was saved — for "saved 2d ago" + newest-first sorting. */
   savedAt: number;
   /**
@@ -45,15 +49,16 @@ export const SAVED_PROPS_EVENT = 'ff:savedprops-changed';
 /** Soft cap so a runaway never bloats localStorage. */
 export const MAX_SAVED_PROPS = 300;
 
-/** Stable identity for one saved prop. */
+/** Stable identity for one saved prop (source-scoped). */
 export function propKey(p: {
   sport: Sport;
   slug: string;
   stat: StatKey;
   line: number;
   side: PropSide;
+  source: string;
 }): string {
-  return `${p.sport}:${p.slug}:${p.stat}:${p.line}:${p.side}`;
+  return `${p.sport}:${p.slug}:${p.stat}:${p.line}:${p.side}:${p.source}`;
 }
 
 function isValid(x: unknown): x is SavedProp {
@@ -91,9 +96,14 @@ export function isPropExpired(p: SavedProp, now: number = Date.now()): boolean {
   return false;
 }
 
-/** Back-compat: older entries predate the game fields; default them to null. */
+/** Back-compat: older entries predate the game + source fields; default them. */
 function normalize(p: SavedProp): SavedProp {
-  return { ...p, gameDate: p.gameDate ?? null, gameStartTime: p.gameStartTime ?? null };
+  return {
+    ...p,
+    gameDate: p.gameDate ?? null,
+    gameStartTime: p.gameStartTime ?? null,
+    source: p.source ?? DEFAULT_PROVIDED_SOURCE,
+  };
 }
 
 export function getSavedProps(): SavedProp[] {
@@ -142,7 +152,7 @@ function persist(list: SavedProp[]): void {
 
 export function isPropSaved(
   list: SavedProp[],
-  p: { sport: Sport; slug: string; stat: StatKey; line: number; side: PropSide },
+  p: { sport: Sport; slug: string; stat: StatKey; line: number; side: PropSide; source: string },
 ): boolean {
   const k = propKey(p);
   return list.some((s) => propKey(s) === k);
@@ -154,6 +164,7 @@ export function removeSavedProp(p: {
   stat: StatKey;
   line: number;
   side: PropSide;
+  source: string;
 }): void {
   const k = propKey(p);
   persist(getSavedProps().filter((s) => propKey(s) !== k));
@@ -168,9 +179,10 @@ export function removePlayerProps(sport: Sport, slug: string): void {
  * Toggle a prop's saved state. Returns the NEW state (true = now saved). `savedAt`
  * is stamped here so callers stay pure.
  *
- * Over/Under are mutually exclusive for a given (player, stat, line): saving one
- * side drops the other, so the Playbook only ever tracks a single direction per
- * line. Clicking the already-saved side just removes it.
+ * Over/Under are mutually exclusive for a given (player, stat, line, source): saving
+ * one side drops the other at that book, so the Playbook tracks a single direction per
+ * line per source (the same line at another book is independent). Clicking the
+ * already-saved side just removes it.
  */
 export function toggleSavedProp(prop: Omit<SavedProp, 'savedAt'>): boolean {
   const list = getSavedProps();
@@ -179,14 +191,15 @@ export function toggleSavedProp(prop: Omit<SavedProp, 'savedAt'>): boolean {
     persist(list.filter((s) => propKey(s) !== k));
     return false;
   }
-  // Drop any existing side for this (player, stat, line), then add this one (newest first).
+  // Drop any existing side for this (player, stat, line, source), then add this one.
   const others = list.filter(
     (s) =>
       !(
         s.sport === prop.sport &&
         s.slug === prop.slug &&
         s.stat === prop.stat &&
-        s.line === prop.line
+        s.line === prop.line &&
+        s.source === prop.source
       ),
   );
   persist([{ ...prop, team: prop.team ?? null, savedAt: Date.now() }, ...others]);

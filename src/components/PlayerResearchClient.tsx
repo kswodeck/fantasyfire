@@ -213,6 +213,7 @@ export function PlayerResearchClient({
           team={data.player.teamAbbreviation}
           stat={stat}
           line={effectiveLine}
+          source={source}
           // Stamp the upcoming game so the pick auto-expires once it's over.
           // The fallback (off-season "last game") isn't a future game — leave null.
           gameDate={data.matchupOpponent?.isUpcoming ? data.matchupOpponent.date : null}

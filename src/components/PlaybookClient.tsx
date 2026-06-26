@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useFavorites } from '@/hooks/useFavorites';
 import { useSavedProps } from '@/hooks/useSavedProps';
@@ -13,6 +13,8 @@ import { pct } from '@/lib/format';
 import { tierTextClass, heatLabel } from '@/lib/tierStyle';
 import { LeanArrow } from './LeanArrow';
 import { SideArrow } from './SideArrow';
+import { BookLogo } from './BookLogo';
+import { orderSources, sourceLabel } from '@/lib/providedSources';
 
 /** One player as shown on the Playbook: favorited and/or carrying saved props. */
 interface PlayerEntry {
@@ -30,24 +32,40 @@ export function PlaybookClient() {
   const { favorites, hydrated: favHydrated } = useFavorites();
   const { props, hydrated: propsHydrated } = useSavedProps();
   const hydrated = favHydrated && propsHydrated;
+  // Source filter ('all' or a specific book) — saved props are per-source.
+  const [sourceFilter, setSourceFilter] = useState<string>('all');
+
+  // Books that have at least one saved prop, with counts — drives the filter.
+  const sourcesPresent = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of props) counts.set(p.source, (counts.get(p.source) ?? 0) + 1);
+    return orderSources([...counts.keys()]).map((source) => ({
+      source,
+      count: counts.get(source) as number,
+    }));
+  }, [props]);
 
   const groups = useMemo(() => {
     const byPlayer = new Map<string, PlayerEntry>();
     const keyOf = (sport: Sport, slug: string) => `${sport}:${slug}`;
+    const favSet = new Set(favorites.map((f) => keyOf(f.sport, f.slug)));
+    const shown = sourceFilter === 'all' ? props : props.filter((p) => p.source === sourceFilter);
 
-    // Favorites first so favorite-only players keep their newest-first order.
-    for (const f of favorites) {
-      byPlayer.set(keyOf(f.sport, f.slug), {
-        sport: f.sport,
-        slug: f.slug,
-        name: f.name,
-        team: f.team ?? null,
-        isFavorite: true,
-        props: [],
-        recency: 0,
-      });
+    // Whole-player favorites aren't tied to a book, so only list them unfiltered.
+    if (sourceFilter === 'all') {
+      for (const f of favorites) {
+        byPlayer.set(keyOf(f.sport, f.slug), {
+          sport: f.sport,
+          slug: f.slug,
+          name: f.name,
+          team: f.team ?? null,
+          isFavorite: true,
+          props: [],
+          recency: 0,
+        });
+      }
     }
-    for (const p of props) {
+    for (const p of shown) {
       const k = keyOf(p.sport, p.slug);
       const existing = byPlayer.get(k);
       if (existing) {
@@ -61,7 +79,7 @@ export function PlaybookClient() {
           slug: p.slug,
           name: p.name,
           team: p.team ?? null,
-          isFavorite: false,
+          isFavorite: favSet.has(k),
           props: [p],
           recency: p.savedAt,
         });
@@ -77,13 +95,13 @@ export function PlaybookClient() {
         .sort((a, b) => b.recency - a.recency);
       return { sport, players };
     }).filter((g) => g.players.length > 0);
-  }, [favorites, props]);
+  }, [favorites, props, sourceFilter]);
 
   if (!hydrated) {
     return <p className="mt-6 text-sm text-muted">Loading your Playbook…</p>;
   }
 
-  if (groups.length === 0) {
+  if (favorites.length === 0 && props.length === 0) {
     return (
       <div className="mt-6 rounded-xl border border-line bg-surface p-6 text-sm text-muted">
         <p>
@@ -108,25 +126,86 @@ export function PlaybookClient() {
   }
 
   return (
-    <div className="mt-6 space-y-6">
-      {groups.map(({ sport, players }) => (
-        <section key={sport}>
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-            {SPORTS[sport].name}
-          </h2>
-          <ul className="space-y-3">
-            {players.map((e) => (
-              <PlayerCard key={`${e.sport}:${e.slug}`} entry={e} />
-            ))}
-          </ul>
-        </section>
-      ))}
+    <div className="mt-6 space-y-4">
+      {sourcesPresent.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-xs font-medium text-muted">Book</span>
+          <FilterChip active={sourceFilter === 'all'} onClick={() => setSourceFilter('all')}>
+            All ({props.length})
+          </FilterChip>
+          {sourcesPresent.map(({ source, count }) => (
+            <FilterChip
+              key={source}
+              active={sourceFilter === source}
+              onClick={() => setSourceFilter(source)}
+            >
+              <BookLogo source={source} size={14} />
+              {sourceLabel(source)} ({count})
+            </FilterChip>
+          ))}
+        </div>
+      )}
+
+      {groups.length === 0 ? (
+        <p className="rounded-xl border border-line bg-surface p-6 text-sm text-muted">
+          No saved props for {sourceLabel(sourceFilter)}.{' '}
+          <button
+            type="button"
+            onClick={() => setSourceFilter('all')}
+            className="font-medium text-brand hover:text-brand-strong"
+          >
+            Show all
+          </button>
+        </p>
+      ) : (
+        <div className="space-y-6">
+          {groups.map(({ sport, players }) => (
+            <section key={sport}>
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+                {SPORTS[sport].name}
+              </h2>
+              <ul className="space-y-3">
+                {players.map((e) => (
+                  <PlayerCard key={`${e.sport}:${e.slug}`} entry={e} />
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
 
       <p className="text-xs leading-relaxed text-muted">
         Saved on this device only (browser storage) — they don&rsquo;t sync across devices and
         clear if you clear site data. No account, no tracking.
       </p>
     </div>
+  );
+}
+
+/** A source filter pill on My Playbook. */
+function FilterChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={
+        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ' +
+        (active
+          ? 'border-brand bg-brand/10 text-brand'
+          : 'border-line bg-surface text-muted hover:text-foreground')
+      }
+    >
+      {children}
+    </button>
   );
 }
 
@@ -189,7 +268,7 @@ function PlayerCard({ entry }: { entry: PlayerEntry }) {
           <div className="mt-2 flex flex-wrap gap-1.5">
             {props.slice(0, 4).map((p) => (
               <span
-                key={`${p.stat}:${p.line}:${p.side}`}
+                key={`${p.stat}:${p.line}:${p.side}:${p.source}`}
                 className="inline-flex items-center gap-1 rounded border border-line bg-surface-2 px-1.5 py-0.5 text-[11px] text-muted"
               >
                 <span className="font-medium text-foreground">{STAT_DEFS[p.stat].short}</span>
@@ -215,7 +294,7 @@ function PlayerCard({ entry }: { entry: PlayerEntry }) {
         <div className="border-t border-line">
           <ul>
             {props.map((p) => (
-              <PropRow key={`${p.stat}:${p.line}:${p.side}`} prop={p} />
+              <PropRow key={`${p.stat}:${p.line}:${p.side}:${p.source}`} prop={p} />
             ))}
           </ul>
         </div>
@@ -244,7 +323,7 @@ function PlayerCard({ entry }: { entry: PlayerEntry }) {
 
 /** A single saved prop with a live read fetched on demand (only while expanded). */
 function PropRow({ prop }: { prop: SavedProp }) {
-  const { sport, slug, stat, line, side, savedAt } = prop;
+  const { sport, slug, stat, line, side, source, savedAt } = prop;
   const def = STAT_DEFS[stat];
   const query = useHitRate({ sport, slug, stat, line });
   const research = query.data;
@@ -264,7 +343,11 @@ function PropRow({ prop }: { prop: SavedProp }) {
             {side === 'over' ? 'Over' : 'Under'} {line}
           </span>
         </div>
-        <div className="mt-0.5 text-[11px] text-muted">Saved {relativeTime(savedAt)}</div>
+        <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted">
+          <BookLogo source={source} size={13} />
+          <span>{sourceLabel(source)}</span>
+          <span>· Saved {relativeTime(savedAt)}</span>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:flex-nowrap">
@@ -305,8 +388,8 @@ function PropRow({ prop }: { prop: SavedProp }) {
         </Link>
         <button
           type="button"
-          onClick={() => removeSavedProp({ sport, slug, stat, line, side })}
-          aria-label={`Remove ${def.label} ${side} ${line}`}
+          onClick={() => removeSavedProp({ sport, slug, stat, line, side, source })}
+          aria-label={`Remove ${def.label} ${side} ${line} (${sourceLabel(source)})`}
           className="text-muted transition-colors hover:text-under"
         >
           ✕
