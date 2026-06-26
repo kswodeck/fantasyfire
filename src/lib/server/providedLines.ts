@@ -75,6 +75,32 @@ export async function getProvidedLine(
 }
 
 /**
+ * Every book's latest line for ONE player + stat, display-ordered — the raw input
+ * for the cross-book line-value comparison on the player page. Empty when the feature
+ * is off or fewer than one book has a recent line. Newest line per source wins.
+ */
+export async function getProvidedLinesBySource(
+  sport: Sport,
+  playerId: number,
+  stat: StatKey,
+): Promise<{ source: string; line: number }[]> {
+  if (!providedLinesEnabled()) return [];
+  try {
+    const rows = await db.providedLine.findMany({
+      where: { sport, playerId, stat, gameDate: { gte: recentCutoff(RESEARCH_WINDOW_DAYS) } },
+      orderBy: [{ gameDate: 'desc' }, { fetchedAt: 'desc' }],
+      select: { source: true, line: true },
+    });
+    const latest = new Map<string, number>();
+    for (const r of rows) if (!latest.has(r.source)) latest.set(r.source, r.line); // newest-first
+    return orderSources([...latest.keys()]).map((source) => ({ source, line: latest.get(source) as number }));
+  } catch (e) {
+    console.warn('[providedLines] getProvidedLinesBySource failed:', e instanceof Error ? e.message : e);
+    return [];
+  }
+}
+
+/**
  * Batched provided lines for a set of players from a SPECIFIC source, keyed
  * `${playerId}:${stat}` → line. One query for the whole board scan; empty map when
  * the feature is off. Newest line per key wins.

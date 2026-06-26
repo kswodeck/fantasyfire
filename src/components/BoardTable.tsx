@@ -5,6 +5,7 @@ import { PlayerAvatar } from './PlayerAvatar';
 import { LeanArrow } from './LeanArrow';
 import { getTeam } from '@/lib/teams';
 import { tierTextClass, heatLabel } from '@/lib/tierStyle';
+import { sourceLabel } from '@/lib/providedSources';
 
 /**
  * Ranked cross-player board (presentational). Each row links to the player page
@@ -46,6 +47,12 @@ export function BoardTable({ sport, rows }: { sport: Sport; rows: BoardRow[] }) 
                 <div className="text-[11px] tabular-nums text-muted">
                   FireFactor {r.fireScore.score}
                 </div>
+                {r.lineValue?.best && r.lineValue.best.edge >= 0.05 && (
+                  <div className="text-[10px] tabular-nums text-muted">
+                    best: {sourceLabel(r.lineValue.best.source)} +
+                    {Math.round(r.lineValue.best.edge * 100)}
+                  </div>
+                )}
               </div>
             </Link>
           </li>

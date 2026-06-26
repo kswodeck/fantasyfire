@@ -87,6 +87,26 @@ export interface PlayerVerdict {
   fireScore: FireFactorResult;
 }
 
+/** One book's number for a player + stat, scored against the market consensus. */
+export interface LineValueBook {
+  source: string;
+  line: number;
+  /** Leaning-side hit rate at this book's line (season window), 0..1. */
+  sideHitRate: number;
+  /** sideHitRate − the consensus line's side hit rate: positive = a softer/better number. */
+  edge: number;
+}
+
+/** Cross-book "where's the best number" comparison for a player + stat. */
+export interface LineValueComparison {
+  side: 'over' | 'under';
+  /** Median line across the books. */
+  consensusLine: number;
+  books: LineValueBook[];
+  /** The book with the clearly-best number (positive edge), or null. */
+  best: { source: string; line: number; edge: number } | null;
+}
+
 export interface PlayerResearch {
   player: PlayerSummary;
   bio: PlayerBio;
@@ -95,6 +115,8 @@ export interface PlayerResearch {
   /** The book this line came from (e.g. "prizepicks"); null when it's our computed
    * line (no provided line for the chosen source, or the feature is off). */
   lineSource: string | null;
+  /** Cross-book line-value comparison for this stat (null when <2 books / feature off). */
+  lineValue: LineValueComparison | null;
   seasonAverage: number | null;
   gamesPlayed: number;
   /** ISO date (YYYY-MM-DD) of this player's most recent game; null if none. */
@@ -139,6 +161,8 @@ export interface BoardRow {
   /** Stabilized recent-form estimate (for the "recent X vs line Y" read). */
   projection: number | null;
   fireScore: FireFactorResult;
+  /** Cross-book line value vs the consensus for THIS row's book; null when <2 books. */
+  lineValue?: { edge: number; best: { source: string; line: number; edge: number } | null } | null;
 }
 
 /** One row on the trends board: how recent form has swung from the season baseline,

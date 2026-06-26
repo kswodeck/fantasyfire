@@ -44,6 +44,7 @@ import type {
   WindowResult,
   PlayerResearch,
   BoardRow,
+  LineValueComparison,
   TrendRow,
   DvpTableRow,
   LeaderRow,
@@ -51,7 +52,11 @@ import type {
   TonightGame,
 } from '@/lib/types';
 import { PROP_STATS } from '@/lib/propStats';
-import { getProvidedLine, getProvidedLineMap } from '@/lib/server/providedLines';
+import {
+  getProvidedLine,
+  getProvidedLineMap,
+  getProvidedLinesBySource,
+} from '@/lib/server/providedLines';
 import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 
 /**
@@ -692,6 +697,33 @@ async function getNflDvp(
  * stat + line. `stat` defaults to the sport/role default; `line` to the season
  * median rounded to 0.5. An out-of-sport stat falls back to the default.
  */
+/** Compare every book's number for a player + stat against the consensus (median),
+ *  scoring each by the leaning side's season hit rate. Returns null with < 2 books. */
+function lineValueComparison(
+  games: PlayerGame[],
+  stat: StatKey,
+  side: 'over' | 'under',
+  linesBySource: { source: string; line: number }[],
+): LineValueComparison | null {
+  if (linesBySource.length < 2) return null;
+  const sorted = linesBySource.map((x) => x.line).sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const consensusLine = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  const sideRate = (ln: number) => {
+    const o = computeHitRate(games, stat, ln, 'season').hitRateOver ?? 0.5;
+    return side === 'over' ? o : 1 - o;
+  };
+  const consRate = sideRate(consensusLine);
+  const books = linesBySource.map((x) => {
+    const r = sideRate(x.line);
+    return { source: x.source, line: x.line, sideHitRate: r, edge: r - consRate };
+  });
+  books.sort((a, b) => b.edge - a.edge || b.sideHitRate - a.sideHitRate);
+  const top = books[0];
+  const best = top && top.edge > 0.005 ? { source: top.source, line: top.line, edge: top.edge } : null;
+  return { side, consensusLine, books, best };
+}
+
 export async function getPlayerResearch(
   sport: Sport,
   slug: string,
@@ -815,7 +847,7 @@ export async function getPlayerResearch(
     line,
   );
   const grade = dvp ? matchupGrade(dvp) : null;
-  const fireScore = computeFireFactor({
+  const ffInput = {
     line,
     windows: windows.map((w) => ({
       window: w.window,
@@ -827,7 +859,19 @@ export async function getPlayerResearch(
     cv: consistency.cv,
     matchup: grade ?? undefined,
     gamesPlayed: games.length,
-  });
+  };
+  const prelim = computeFireFactor(ffInput);
+  // Cross-book line value: every book's number for this stat, scored vs the consensus
+  // median. When the displayed line is a real book line, fold its discount into the read.
+  const linesBySource = await getProvidedLinesBySource(sport, record.id, stat);
+  const lineValue = lineValueComparison(games, stat, prelim.side, linesBySource);
+  const heldBook =
+    lineValue && lineSource != null
+      ? lineValue.books.find((b) => Math.abs(b.line - line) < 1e-9)
+      : undefined;
+  const fireScore = heldBook
+    ? computeFireFactor({ ...ffInput, lineValueEdge: heldBook.edge })
+    : prelim;
   const splits = computeSplits(games, stat, line);
 
   return {
@@ -836,6 +880,7 @@ export async function getPlayerResearch(
     stat,
     line,
     lineSource,
+    lineValue,
     seasonAverage: seasonResult.mean,
     gamesPlayed: games.length,
     // Freshness: the most recent game in the DB for this player (unfiltered by
@@ -927,16 +972,41 @@ export async function getSourcedBoards(
     return result;
   }
   const ids = players.map((p) => p.id);
+  // Load every book's lines once, then a consensus (median per key) so each row can be
+  // scored against the market for the line-value boost + "best price" badge.
+  const allMaps: Record<string, Map<string, number>> = {};
+  for (const s of sources) allMaps[s] = await getProvidedLineMap(sport, ids, s);
+  const consensus = consensusLineMap(allMaps);
   for (const s of sources) {
-    const providedLines = await getProvidedLineMap(sport, ids, s);
-    result[s] = computeBoardRows(sport, players, gamesByPlayer, providedLines, {
+    result[s] = computeBoardRows(sport, players, gamesByPlayer, allMaps[s], {
       limit,
       perPlayerCap,
       perStatCap,
       requireProvided: true,
+      lineValue: { allMaps, consensus },
     });
   }
   return result;
+}
+
+/** Median line per `${playerId}:${stat}` key across every book's line map — the market
+ *  consensus the line-value boost + "best price" badge are scored against. */
+function consensusLineMap(allMaps: Record<string, Map<string, number>>): Map<string, number> {
+  const byKey = new Map<string, number[]>();
+  for (const m of Object.values(allMaps)) {
+    for (const [k, v] of m) {
+      const arr = byKey.get(k);
+      if (arr) arr.push(v);
+      else byKey.set(k, [v]);
+    }
+  }
+  const out = new Map<string, number>();
+  for (const [k, arr] of byKey) {
+    arr.sort((a, b) => a - b);
+    const mid = Math.floor(arr.length / 2);
+    out.set(k, arr.length % 2 ? arr[mid] : (arr[mid - 1] + arr[mid]) / 2);
+  }
+  return out;
 }
 
 /** Rank a loaded player pool into board rows against a given line map (pure compute). */
@@ -945,7 +1015,15 @@ function computeBoardRows(
   players: BoardPlayer[],
   gamesByPlayer: Map<number, PlayerGame[]>,
   providedLines: Map<string, number>,
-  opts: { limit: number; perPlayerCap: number; perStatCap: number; requireProvided: boolean },
+  opts: {
+    limit: number;
+    perPlayerCap: number;
+    perStatCap: number;
+    requireProvided: boolean;
+    /** Present only for the multi-book sourced boards: every book's line map + the
+     *  consensus (median per key), so each row can score its book vs the market. */
+    lineValue?: { allMaps: Record<string, Map<string, number>>; consensus: Map<string, number> };
+  },
 ): BoardRow[] {
   const { limit, perPlayerCap, perStatCap, requireProvided } = opts;
   const out: Omit<BoardRow, 'rank'>[] = [];
@@ -970,17 +1048,52 @@ function computeBoardRows(
       const consistency = computeConsistency(seasonHr.values, seasonHr.mean, seasonHr.stdev, line);
       // No matchup component here (avoids a per-player DvP query); FireFactor
       // degrades gracefully. The full read (with matchup) is on the player page.
-      const fireScore = computeFireFactor({
+      const ffInput = {
         line,
         windows,
         projection: projection.stabilized,
         stdev: seasonHr.stdev,
         cv: consistency.cv,
         gamesPlayed: games.length,
-      });
+      };
+      const prelim = computeFireFactor(ffInput);
       // A 0.5 book line's only meaningful lean is the OVER ("will it happen"). The
       // under ("it won't") is trivial/obvious — never feature it as a top lean.
-      if (line <= 0.5 && fireScore.side === 'under') continue;
+      if (line <= 0.5 && prelim.side === 'under') continue;
+
+      // Cross-book line value: boost the read for a softer-than-market number and flag
+      // the best price across books (sourced boards only).
+      let fireScore = prelim;
+      let rowLineValue: BoardRow['lineValue'] = null;
+      if (opts.lineValue) {
+        const key = `${p.id}:${stat}`;
+        const consensusLine = opts.lineValue.consensus.get(key);
+        const allLines: { source: string; line: number }[] = [];
+        for (const [src, m] of Object.entries(opts.lineValue.allMaps)) {
+          const ln = m.get(key);
+          if (ln != null) allLines.push({ source: src, line: ln });
+        }
+        if (consensusLine != null && allLines.length >= 2) {
+          const rate = (ln: number) => {
+            const o =
+              ln === line
+                ? (seasonHr.hitRateOver ?? 0.5)
+                : (computeHitRate(games, stat, ln, 'season').hitRateOver ?? 0.5);
+            return prelim.side === 'over' ? o : 1 - o;
+          };
+          const consRate = rate(consensusLine);
+          const edge = rate(line) - consRate;
+          let best: { source: string; line: number; edge: number } | null = null;
+          for (const b of allLines) {
+            const e = rate(b.line) - consRate;
+            if (!best || e > best.edge) best = { source: b.source, line: b.line, edge: e };
+          }
+          if (best && best.edge <= 0.005) best = null;
+          if (edge !== 0) fireScore = computeFireFactor({ ...ffInput, lineValueEdge: edge });
+          rowLineValue = { edge, best };
+        }
+      }
+
       out.push({
         player: listItem,
         stat,
@@ -988,6 +1101,7 @@ function computeBoardRows(
         line,
         projection: projection.stabilized,
         fireScore,
+        lineValue: rowLineValue,
       });
     }
   }
