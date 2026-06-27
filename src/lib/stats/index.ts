@@ -7,6 +7,7 @@ export * from './qualify';
 export * from './projection';
 export * from './pace';
 export * from './environment';
+export * from './volume';
 export * from './distribution';
 export * from './consistency';
 export * from './fireScore';

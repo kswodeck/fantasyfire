@@ -1,10 +1,13 @@
-name: Ingest provided lines (PrizePicks + Underdog + RotoWire)
+name: Ingest provided lines + injuries (PrizePicks + Underdog + RotoWire + ESPN)
 
 # Scrapes player-prop lines into the PROD `ProvidedLine` table on a schedule, so the
 # real lines stay fresh WITHOUT a local machine being on (the old Windows task is
 # retired). Sources: PrizePicks + Underdog (direct) and RotoWire's public picks
 # aggregator (adds Sleeper, DraftKings Pick6, RT Sports + sportsbooks). All reach
 # GitHub's runners directly — NO proxy, no residential dependency.
+#
+# Also refreshes player injury / availability (`PlayerInjury`) from the public ESPN
+# feed on the same cadence — both are fast, slate-relevant reads that change intraday.
 #
 # NOTE: scheduled + manual runs only fire from the DEFAULT branch (main), so this
 # only starts running once it's on main (it lands there when you merge develop -> main).
@@ -66,3 +69,8 @@ jobs:
 
       - name: Ingest provided lines
         run: pnpm ingest:providedlines
+
+      # Runs even if the lines step failed — injuries are independent (ESPN feed).
+      - name: Ingest injuries
+        if: always()
+        run: pnpm ingest:injuries

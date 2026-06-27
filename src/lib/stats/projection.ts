@@ -25,6 +25,8 @@ export interface ProjectionAdjustments {
   pace?: number | null;
   /** Game environment (Vegas total / implied team total). */
   environment?: number | null;
+  /** Recent opportunity/usage trend vs the season baseline (minutes, targets, …). */
+  volume?: number | null;
 }
 
 export interface RecentFormEstimate {
@@ -54,7 +56,7 @@ const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x
  * single game's context can dominate the recent-form base.
  */
 export function combineAdjustments(adj: ProjectionAdjustments = {}): number {
-  const factors = [adj.opponent, adj.pace, adj.environment];
+  const factors = [adj.opponent, adj.pace, adj.environment, adj.volume];
   let product = 1;
   for (const f of factors) {
     if (f != null && Number.isFinite(f) && f > 0) product *= f;

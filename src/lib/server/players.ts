@@ -27,6 +27,7 @@ import {
   paceMultiplier,
   impliedTeamTotal,
   environmentMultiplier,
+  volumeMultiplier,
   lineProbabilities,
   computeFireFactor,
   computeSplits,
@@ -742,20 +743,95 @@ const getNbaPaceTable = cache(
   },
 );
 
-/** The player's implied team total for their NEXT scheduled game (idea #4), from the
- *  game's Vegas total + spread. Null off-season / when the game has no posted odds. */
-async function getNextGameImpliedTotal(sport: Sport, teamId: number): Promise<number | null> {
+/** Context for the player's NEXT scheduled game: the Vegas-implied team total
+ *  (idea #4) and the OPPOSING probable starter (idea #6, MLB). One query. */
+async function getNextGameContext(
+  sport: Sport,
+  teamId: number,
+): Promise<{ impliedTotal: number | null; opposingPitcher: string | null }> {
   const todayUtc = new Date();
   todayUtc.setUTCHours(0, 0, 0, 0);
   const game = await db.scheduledGame.findFirst({
     where: { sport, date: { gte: todayUtc }, OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }] },
     orderBy: { date: 'asc' },
-    select: { homeTeamId: true, gameTotal: true, homeSpread: true },
+    select: {
+      homeTeamId: true,
+      gameTotal: true,
+      homeSpread: true,
+      homeProbablePitcher: true,
+      awayProbablePitcher: true,
+    },
   });
-  if (!game || game.gameTotal == null) return null;
+  if (!game) return { impliedTotal: null, opposingPitcher: null };
   const isHome = game.homeTeamId === teamId;
   const teamSpread = game.homeSpread == null ? 0 : isHome ? game.homeSpread : -game.homeSpread;
-  return impliedTeamTotal(game.gameTotal, teamSpread);
+  return {
+    impliedTotal: game.gameTotal == null ? null : impliedTeamTotal(game.gameTotal, teamSpread),
+    opposingPitcher: isHome ? game.awayProbablePitcher : game.homeProbablePitcher,
+  };
+}
+
+/** MLB pitchers by normalized name → player id (null = ambiguous duplicate). Memoized. */
+const getMlbPitcherIdByName = cache(async (): Promise<Map<string, number | null>> => {
+  const pitchers = await db.player.findMany({
+    where: { sport: 'mlb', posBucket: 'P' },
+    select: { id: true, firstName: true, lastName: true },
+  });
+  const m = new Map<string, number | null>();
+  for (const p of pitchers) {
+    const key = normalizeName(`${p.firstName} ${p.lastName}`);
+    m.set(key, m.has(key) ? null : p.id);
+  }
+  return m;
+});
+
+/** League-average pitcher rates per batter faced (K rate, hits-allowed rate) — the
+ *  baseline a specific starter is measured against (idea #6). Memoized per request.
+ *  Hitters' null pitching columns sum to 0, so this is effectively pitchers-only. */
+const getMlbLeaguePitcherRates = cache(
+  async (season: string): Promise<{ kRate: number; hitsRate: number } | null> => {
+    const agg = await db.playerGameStat.aggregate({
+      where: { sport: 'mlb', season },
+      _sum: { outs: true, hitsAllowed: true, walksAllowed: true, strikeoutsPitched: true },
+    });
+    const bf =
+      (agg._sum.outs ?? 0) + (agg._sum.hitsAllowed ?? 0) + (agg._sum.walksAllowed ?? 0);
+    if (bf < 1000) return null;
+    return {
+      kRate: (agg._sum.strikeoutsPitched ?? 0) / bf,
+      hitsRate: (agg._sum.hitsAllowed ?? 0) / bf,
+    };
+  },
+);
+
+/**
+ * Opponent multiplier for an MLB HITTER from the specific probable starter (idea #6):
+ * a high-strikeout starter boosts a batter-strikeout projection and suppresses hitting
+ * props; a hittable starter does the reverse. Stat-aware, clamped ±10%. Null when the
+ * pitcher can't be resolved or has too few innings — caller falls back to staff DvP.
+ */
+async function getMlbPitcherMatchupMultiplier(
+  stat: StatKey,
+  pitcherName: string,
+  season: string,
+): Promise<number | null> {
+  const pid = (await getMlbPitcherIdByName()).get(normalizeName(pitcherName));
+  if (!pid) return null;
+  const [agg, league] = await Promise.all([
+    db.playerGameStat.aggregate({
+      where: { playerId: pid, season },
+      _sum: { outs: true, hitsAllowed: true, walksAllowed: true, strikeoutsPitched: true },
+    }),
+    getMlbLeaguePitcherRates(season),
+  ]);
+  if (!league) return null;
+  const bf = (agg._sum.outs ?? 0) + (agg._sum.hitsAllowed ?? 0) + (agg._sum.walksAllowed ?? 0);
+  if (bf < 100) return null; // too few batters faced to trust the rate
+  // Batter-strikeout prop keys off the pitcher's K rate; hitting props off hits allowed.
+  const rate = stat === 'so' ? (agg._sum.strikeoutsPitched ?? 0) / bf : (agg._sum.hitsAllowed ?? 0) / bf;
+  const leagueRate = stat === 'so' ? league.kRate : league.hitsRate;
+  if (leagueRate <= 0) return null;
+  return Math.min(1.1, Math.max(0.9, rate / leagueRate));
 }
 
 /** League-average implied team total (≈ avg upcoming game total / 2) — the baseline
@@ -925,7 +1001,7 @@ export async function getPlayerResearch(
   // Matchup-adjust the projection in place (idea #3): a soft/tough opponent and the
   // projected game pace (NBA, from box-score totals) nudge the recent-form base. Each
   // factor defaults to neutral, so the projection degrades to pure recent form.
-  const opponentMult = dvp ? opponentMultiplierFromCell(dvp) : 1;
+  let opponentMult = dvp ? opponentMultiplierFromCell(dvp) : 1;
   let paceMult = 1;
   if (sport === 'nba' && record.team && matchupOpponent) {
     const paceTable = await getNbaPaceTable(season);
@@ -937,20 +1013,28 @@ export async function getPlayerResearch(
       );
     }
   }
-  // Game environment (idea #4): the player's implied team total vs the league average,
-  // from the next game's Vegas total + spread. Only for a real upcoming game.
+  // Game environment (idea #4) + opposing probable starter (idea #6) for the next game.
   let environmentMult = 1;
   if (record.team && matchupOpponent?.isUpcoming) {
-    const [implied, leagueAvg] = await Promise.all([
-      getNextGameImpliedTotal(sport, record.team.id),
+    const [ctx, leagueAvg] = await Promise.all([
+      getNextGameContext(sport, record.team.id),
       getLeagueAvgTeamTotal(sport),
     ]);
-    environmentMult = environmentMultiplier(implied, leagueAvg);
+    environmentMult = environmentMultiplier(ctx.impliedTotal, leagueAvg);
+    // MLB: prefer the specific probable starter's quality over the staff-wide DvP.
+    if (sport === 'mlb' && record.posBucket === 'H' && ctx.opposingPitcher) {
+      const pitcherMult = await getMlbPitcherMatchupMultiplier(stat, ctx.opposingPitcher, season);
+      if (pitcherMult != null) opponentMult = pitcherMult;
+    }
   }
+  // Volume / usage trend (ideas #7/#8): recent opportunity (minutes, targets, …) vs
+  // the season baseline — catches role changes the shrunk stat estimate lags.
+  const volumeMult = volumeMultiplier(games.map((g) => opportunityFor(sport, record.posBucket, g)));
   const projection = recentFormEstimate(seasonResult.values, seasonResult.mean, {
     opponent: opponentMult,
     pace: paceMult,
     environment: environmentMult,
+    volume: volumeMult,
   });
   const consistency = computeConsistency(
     seasonResult.values,
@@ -1317,6 +1401,8 @@ function computeBoardRows(
     const games = qualifyGames(sport, p.posBucket, allGames);
     if (games.length < FIREFACTOR_MIN_GAMES) continue;
     const listItem = boardListItem(sport, p, games.length);
+    // Volume/usage trend is per-player (same for all of their stats).
+    const volumeMult = volumeMultiplier(games.map((g) => opportunityFor(sport, p.posBucket, g)));
 
     for (const { stat, line, provided } of statLinesFor(sport, p.posBucket, games, providedLines, p.id, requireProvided)) {
       // Skip degenerate low-volume props ONLY for our computed median line — a 0.5
@@ -1334,6 +1420,7 @@ function computeBoardRows(
         opponent: opts.opponentMults?.get(`${p.id}:${stat}`) ?? 1,
         pace: opts.paceMultByPlayer?.get(p.id) ?? 1,
         environment: opts.envMultByPlayer?.get(p.id) ?? 1,
+        volume: volumeMult,
       });
       const modelProb = lineProbabilities(stat, projection.projection, seasonHr.stdev, line);
       const consistency = computeConsistency(seasonHr.values, seasonHr.mean, seasonHr.stdev, line);

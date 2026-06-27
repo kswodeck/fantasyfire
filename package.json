@@ -29,6 +29,8 @@
     "schedule:prod": "dotenv -e .env.prod.local -- tsx src/ingest/run-schedule.ts",
     "ingest:providedlines": "tsx src/ingest/run-ingest-providedlines.ts",
     "ingest:providedlines:prod": "dotenv -e .env.prod.local -- tsx src/ingest/run-ingest-providedlines.ts",
+    "ingest:injuries": "tsx src/ingest/run-injuries.ts",
+    "ingest:injuries:prod": "dotenv -e .env.prod.local -- tsx src/ingest/run-injuries.ts",
     "indexnow": "tsx src/ingest/run-indexnow.ts",
     "indexnow:prod": "dotenv -e .env.prod.local -- tsx src/ingest/run-indexnow.ts",
     "push": "tsx src/ingest/run-push.ts",
