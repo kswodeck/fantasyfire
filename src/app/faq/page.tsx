@@ -33,7 +33,7 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: 'Do you account for injuries?',
-    a: "Yes — each page carries the player's current injury status from the public feed. An Out / IL flag gates the read (the numbers describe past games, not a player who isn't playing), and Questionable shows as a caution. We surface status; confirm the final call yourself.",
+    a: "Yes, several ways. An Out / IL player is forced to No read and dropped from the board; game-time tiers (doubtful / questionable / GTD) discount FireFactor and add a caution — the same gate on the board and player page. Each page also shows the injury, estimated return, and news (see the injury report), plus how the player's line shifts when an impactful teammate is out. We surface status; confirm the final call yourself.",
   },
   {
     q: 'What does the confidence badge mean?',
@@ -88,7 +88,7 @@ const TERMS: { term: string; def: string }[] = [
   },
   {
     term: 'FireFactor',
-    def: 'Our 0–100 research signal for a line, shown as a heat read: an over runs warm — Warm, Hot, or Blazing (a flame, amber → red) — and an under runs cool — Cool, Cold, or Frozen (a snowflake, sky → indigo); a balanced line is No read. Deeper color means a stronger edge. It blends the hit rate, the projection’s probability vs the line, consistency, and matchup (plus +EV when a price is known), and is research, never a pick.',
+    def: 'Our 0–100 read of the model’s estimated chance the side hits, shown as a heat read: an over runs warm — Warm, Hot, or Blazing (a flame, amber → red) — and an under runs cool — Cool, Cold, or Frozen (a snowflake, sky → indigo); a balanced line is No read. A coin flip sits near 0 (a Pass), a clear edge reads Slight or Normal, and only a near-certain (~90%+) read nears 100 (rare — there’s no sure bet). It blends the hit rate, the projection’s probability vs the line, consistency, and matchup, discounted for small samples — the pure directional signal, identical on the board and a player’s page for the same line. (Price reads like +EV live in their own panel.) It is research, never a pick.',
   },
   {
     term: 'No-vig consensus / +EV',
@@ -100,7 +100,7 @@ const TERMS: { term: string; def: string }[] = [
   },
   {
     term: 'Line value (discount)',
-    def: 'How a book’s number compares to the market consensus (the median line across books). A softer number you’d clear more often is a discount, and FireFactor folds a small, capped boost into the heat for it. Each player’s page shows the full book-by-book comparison.',
+    def: 'How a book’s number compares to the market consensus (the median line across books). A softer number you’d clear more often is a discount. Shown as its own read on each player’s page (the full book-by-book comparison), separate from the FireFactor score.',
   },
   {
     term: 'Push',

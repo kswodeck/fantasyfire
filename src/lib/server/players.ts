@@ -30,6 +30,8 @@ import {
   volumeMultiplier,
   lineProbabilities,
   computeFireFactor,
+  gateAvailability,
+  type AvailabilityStatus,
   computeSplits,
   wilsonInterval,
   STAT_DEFS,
@@ -51,6 +53,8 @@ import type {
   WindowResult,
   PlayerResearch,
   PlayerAvailability,
+  TeammateSplit,
+  InjuryReportRow,
   BoardRow,
   LineValueComparison,
   TrendRow,
@@ -426,6 +430,44 @@ async function getNextOpponent(sport: Sport, teamId: number): Promise<MatchupOpp
     startTime: game.startTime ? game.startTime.toISOString() : null,
     gameExternalId: game.externalId,
   };
+}
+
+/** Every injured player in a sport, severity-sorted — the injury-report page. */
+const INJURY_SEVERITY: Record<string, number> = { out: 0, doubtful: 1, questionable: 2, 'day-to-day': 3 };
+export async function getInjuryReport(sport: Sport): Promise<InjuryReportRow[]> {
+  const rows = await db.playerInjury
+    .findMany({
+      where: { sport },
+      select: {
+        status: true,
+        fantasyStatus: true,
+        detail: true,
+        returnDate: true,
+        comment: true,
+        player: {
+          select: { slug: true, firstName: true, lastName: true, position: true, team: { select: { abbreviation: true } } },
+        },
+      },
+    })
+    .catch(() => []);
+  return rows
+    .map((r) => ({
+      slug: r.player.slug,
+      name: `${r.player.firstName} ${r.player.lastName}`,
+      team: r.player.team?.abbreviation ?? null,
+      position: r.player.position,
+      status: r.status as PlayerAvailability['status'],
+      fantasyStatus: r.fantasyStatus,
+      detail: r.detail,
+      returnDate: r.returnDate ? r.returnDate.toISOString().slice(0, 10) : null,
+      comment: r.comment,
+    }))
+    .sort(
+      (a, b) =>
+        (INJURY_SEVERITY[a.status] ?? 9) - (INJURY_SEVERITY[b.status] ?? 9) ||
+        (a.team ?? '').localeCompare(b.team ?? '') ||
+        a.name.localeCompare(b.name),
+    );
 }
 
 /** All slugs for a sport (sitemap — every player stays crawlable). */
@@ -849,6 +891,97 @@ const getLeagueAvgTeamTotal = cache(async (sport: Sport): Promise<number | null>
 });
 
 /**
+ * Injury cascade — how a player's line shifts when an impactful teammate is OUT. Ties
+ * the live injury feed to our box scores: split the player's games by whether each out
+ * teammate actually played (matched by date), and compare. Page-only and purely
+ * INFORMATIONAL — it never touches FireFactor, so board/page consistency is unaffected.
+ */
+async function getTeammateOutSplits(
+  sport: Sport,
+  playerId: number,
+  teamId: number | null,
+  playerGames: PlayerGame[],
+  stat: StatKey,
+  line: number,
+  season: string,
+): Promise<TeammateSplit[]> {
+  if (teamId == null || playerGames.length < 6) return [];
+  // Out teammates on the same team.
+  const teammates = await db.player
+    .findMany({
+      where: { sport, teamId, id: { not: playerId }, injury: { is: { status: 'out' } } },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        posBucket: true,
+        injury: { select: { fantasyStatus: true, detail: true } },
+      },
+    })
+    .catch(() => []);
+  if (teammates.length === 0) return [];
+
+  // Their season logs → per-teammate appearance dates + avg opportunity (for impact).
+  const logs = await db.playerGameStat.findMany({
+    where: { sport, playerId: { in: teammates.map((t) => t.id) }, season },
+    select: {
+      playerId: true,
+      gameDate: true,
+      minutes: true,
+      atBats: true,
+      walks: true,
+      hbp: true,
+      passAttempts: true,
+      rushAttempts: true,
+      receptions: true,
+      targets: true,
+    },
+  });
+  type Agg = { dates: Set<string>; oppSum: number; oppN: number; bucket: string | null };
+  const byId = new Map<number, Agg>();
+  for (const t of teammates) byId.set(t.id, { dates: new Set(), oppSum: 0, oppN: 0, bucket: t.posBucket });
+  for (const g of logs) {
+    const a = byId.get(g.playerId);
+    if (!a) continue;
+    const opp = opportunityFor(sport, a.bucket, g as unknown as PlayerGame);
+    if (opp == null) continue; // role not opportunity-tracked (MLB pitcher) — skip
+    a.oppN += 1;
+    a.oppSum += opp;
+    if (opp > 0) a.dates.add(g.gameDate.toISOString().slice(0, 10));
+  }
+
+  // Keep impactful out teammates (a real rotation role), strongest first.
+  const ranked = teammates
+    .map((t) => ({ t, a: byId.get(t.id)! }))
+    .filter(({ a }) => a.oppN >= 8 && a.dates.size >= 5)
+    .sort((x, y) => y.a.oppSum / y.a.oppN - x.a.oppSum / x.a.oppN)
+    .slice(0, 2);
+
+  const splitOf = (subset: PlayerGame[]) => {
+    if (subset.length === 0) return { games: 0, mean: null, hitRateOver: null };
+    const hr = computeHitRate(subset, stat, line, 'season');
+    return { games: subset.length, mean: hr.mean, hitRateOver: hr.hitRateOver };
+  };
+
+  const out: TeammateSplit[] = [];
+  for (const { t, a } of ranked) {
+    const without = playerGames.filter((g) => !a.dates.has(g.gameDate.slice(0, 10)));
+    const withT = playerGames.filter((g) => a.dates.has(g.gameDate.slice(0, 10)));
+    // Need a usable sample on BOTH sides for a real contrast (drops mid-season-trade
+    // cases where the player never shared the floor with the teammate).
+    if (without.length < 3 || withT.length < 3) continue;
+    out.push({
+      name: `${t.firstName} ${t.lastName}`,
+      fantasyStatus: t.injury?.fantasyStatus ?? null,
+      detail: t.injury?.detail ?? null,
+      without: splitOf(without),
+      withTeammate: splitOf(withT),
+    });
+  }
+  return out;
+}
+
+/**
  * The full research payload for a player page / API response, computed for a
  * stat + line. `stat` defaults to the sport/role default; `line` to the season
  * median rounded to 0.5. An out-of-sport stat falls back to the default.
@@ -1001,23 +1134,28 @@ export async function getPlayerResearch(
   // Matchup-adjust the projection in place (idea #3): a soft/tough opponent and the
   // projected game pace (NBA, from box-score totals) nudge the recent-form base. Each
   // factor defaults to neutral, so the projection degrades to pure recent form.
-  let opponentMult = dvp ? opponentMultiplierFromCell(dvp) : 1;
+  // Matchup adjustments + grade feed FireFactor ONLY for a real upcoming game — exactly
+  // as the board does — so the board and player page produce an IDENTICAL read for the
+  // same line/stat/matchup. Off-slate, the projection carries no matchup adjustment.
+  const team = record.team;
+  const applyMatchup = team != null && matchupOpponent?.isUpcoming === true;
+  let opponentMult = 1;
   let paceMult = 1;
-  if (sport === 'nba' && record.team && matchupOpponent) {
-    const paceTable = await getNbaPaceTable(season);
-    if (paceTable) {
-      paceMult = paceMultiplier(
-        paceTable.byTeam.get(record.team.id) ?? null,
-        paceTable.byTeam.get(matchupOpponent.teamId) ?? null,
-        paceTable.leagueAvg,
-      );
-    }
-  }
-  // Game environment (idea #4) + opposing probable starter (idea #6) for the next game.
   let environmentMult = 1;
-  if (record.team && matchupOpponent?.isUpcoming) {
+  if (applyMatchup && team) {
+    opponentMult = dvp ? opponentMultiplierFromCell(dvp) : 1;
+    if (sport === 'nba') {
+      const paceTable = await getNbaPaceTable(season);
+      if (paceTable) {
+        paceMult = paceMultiplier(
+          paceTable.byTeam.get(team.id) ?? null,
+          paceTable.byTeam.get(matchupOpponent!.teamId) ?? null,
+          paceTable.leagueAvg,
+        );
+      }
+    }
     const [ctx, leagueAvg] = await Promise.all([
-      getNextGameContext(sport, record.team.id),
+      getNextGameContext(sport, team.id),
       getLeagueAvgTeamTotal(sport),
     ]);
     environmentMult = environmentMultiplier(ctx.impliedTotal, leagueAvg);
@@ -1048,11 +1186,10 @@ export async function getPlayerResearch(
   const modelProb = lineProbabilities(stat, projection.projection, seasonResult.stdev, line);
 
   // Cross-book market consensus + best price / +EV (idea #1) from the scraped book
-  // odds. The auto +EV only folds into FireFactor when the market line matches the
-  // line we're showing — otherwise the EV is about a different number.
+  // odds — shown in the market-edge panel. NOT folded into FireFactor: the score must
+  // be identical to the board's for the same line, and the board can't price per row.
   const quotes = await getProvidedQuotesBySource(sport, record.id, stat);
   const consensus = quotes.length > 0 ? marketConsensus(quotes, line) : null;
-  const consensusAtLine = consensus && Math.abs(consensus.line - line) < 1e-9 ? consensus : null;
 
   const ffInput = {
     line,
@@ -1065,45 +1202,56 @@ export async function getPlayerResearch(
     stdev: seasonResult.stdev,
     modelProbOver: modelProb?.over ?? null,
     cv: consistency.cv,
-    matchup: grade ?? undefined,
-    evPerDollar: consensusAtLine
-      ? {
-          over: consensusAtLine.bestOver?.evPerDollar ?? null,
-          under: consensusAtLine.bestUnder?.evPerDollar ?? null,
-        }
-      : undefined,
+    matchup: applyMatchup ? (grade ?? undefined) : undefined,
     gamesPlayed: games.length,
   };
-  const prelim = computeFireFactor(ffInput);
-  // Cross-book line value: every book's number for this stat, scored vs the consensus
-  // median. When the displayed line is a real book line, fold its discount into the read.
+  // FireFactor is the pure directional signal (hit · projection · consistency · matchup)
+  // so it's IDENTICAL on the board and the player page. Price/line-value info (best book,
+  // +EV, cross-book discount) is shown in its own panels, never folded into the score.
+  const fireScore = computeFireFactor(ffInput);
   const linesBySource = await getProvidedLinesBySource(sport, record.id, stat);
-  const lineValue = lineValueComparison(games, stat, prelim.side, linesBySource);
-  // Apply the line-value boost whenever the shown line matches a book's number — so an
-  // explicit ?line= that equals a book line reads the same as selecting that book, and
-  // matches the board (whose lines are book lines). The edge depends only on the line
-  // vs the consensus, not on which book posted it.
-  const heldBook = lineValue?.books.find((b) => Math.abs(b.line - line) < 1e-9);
-  const fireScore = heldBook
-    ? computeFireFactor({ ...ffInput, lineValueEdge: heldBook.edge })
-    : prelim;
+  const lineValue = lineValueComparison(games, stat, fireScore.side, linesBySource);
   const splits = computeSplits(games, stat, line);
+  // Injury cascade — this player's line when an impactful teammate is out (informational).
+  const teammateSplits = await getTeammateOutSplits(
+    sport,
+    record.id,
+    record.team?.id ?? null,
+    games,
+    stat,
+    line,
+    season,
+  );
 
   // Current injury / availability (idea #5) — surfaced as a banner + read gate.
   const injuryRow = await db.playerInjury
     .findUnique({
       where: { playerId: record.id },
-      select: { status: true, rawStatus: true, detail: true, comment: true },
+      select: {
+        status: true,
+        rawStatus: true,
+        fantasyStatus: true,
+        detail: true,
+        returnDate: true,
+        comment: true,
+        news: true,
+      },
     })
     .catch(() => null);
   const availability: PlayerAvailability | null = injuryRow
     ? {
         status: injuryRow.status as PlayerAvailability['status'],
         rawStatus: injuryRow.rawStatus,
+        fantasyStatus: injuryRow.fantasyStatus,
         detail: injuryRow.detail,
+        returnDate: injuryRow.returnDate ? injuryRow.returnDate.toISOString().slice(0, 10) : null,
         comment: injuryRow.comment,
+        news: injuryRow.news,
       }
     : null;
+  // Gate the read on availability — Out → no read, game-time tiers discount. Applied
+  // identically on the board, so the verdict stays consistent for the same player/line.
+  const gatedFireScore = gateAvailability(fireScore, availability?.status);
 
   return {
     player,
@@ -1121,7 +1269,7 @@ export async function getPlayerResearch(
       projection,
       consistency,
       matchupGrade: grade,
-      fireScore,
+      fireScore: gatedFireScore,
       modelProbOver: modelProb?.over ?? null,
       marketConsensus: consensus,
     },
@@ -1131,6 +1279,7 @@ export async function getPlayerResearch(
     matchupOpponent,
     dvp,
     availability,
+    teammateSplits,
     why,
   };
 }
@@ -1177,6 +1326,20 @@ export interface BoardOptions {
   requireProvidedLine?: boolean;
 }
 
+/** Current availability bucket per player id for the board (batched). */
+async function getBoardAvailability(
+  sport: Sport,
+  playerIds: number[],
+): Promise<Map<number, AvailabilityStatus>> {
+  const m = new Map<number, AvailabilityStatus>();
+  if (playerIds.length === 0) return m;
+  const rows = await db.playerInjury
+    .findMany({ where: { sport, playerId: { in: playerIds } }, select: { playerId: true, status: true } })
+    .catch(() => []);
+  for (const r of rows) m.set(r.playerId, r.status as AvailabilityStatus);
+  return m;
+}
+
 export async function getBoard(sport: Sport, opts: BoardOptions = {}): Promise<BoardRow[]> {
   const { limit = 40, scan = 120, perPlayerCap = 2, perStatCap = 10 } = opts;
   const { players, gamesByPlayer } = await loadBoardPool(sport, scan);
@@ -1186,6 +1349,7 @@ export async function getBoard(sport: Sport, opts: BoardOptions = {}): Promise<B
   const providedLines = await getProvidedLineMap(sport, players.map((p) => p.id), opts.source);
   const season = await getActiveSeason(sport);
   const ctx = await boardMatchupContext(sport, players, season);
+  const availability = await getBoardAvailability(sport, players.map((p) => p.id));
   return computeBoardRows(sport, players, gamesByPlayer, providedLines, {
     limit,
     perPlayerCap,
@@ -1195,6 +1359,7 @@ export async function getBoard(sport: Sport, opts: BoardOptions = {}): Promise<B
     opponentMults: ctx.opponentMults,
     paceMultByPlayer: ctx.paceMultByPlayer,
     envMultByPlayer: ctx.envMultByPlayer,
+    availability,
   });
 }
 
@@ -1224,6 +1389,7 @@ export async function getSourcedBoards(
   const consensus = consensusLineMap(allMaps);
   const season = await getActiveSeason(sport);
   const ctx = await boardMatchupContext(sport, players, season);
+  const availability = await getBoardAvailability(sport, ids);
   for (const s of sources) {
     result[s] = computeBoardRows(sport, players, gamesByPlayer, allMaps[s], {
       limit,
@@ -1235,6 +1401,7 @@ export async function getSourcedBoards(
       opponentMults: ctx.opponentMults,
       paceMultByPlayer: ctx.paceMultByPlayer,
       envMultByPlayer: ctx.envMultByPlayer,
+      availability,
     });
   }
   return result;
@@ -1293,16 +1460,29 @@ async function boardMatchupContext(
       OR: [{ homeTeamId: { in: teamIds } }, { awayTeamId: { in: teamIds } }],
     },
     orderBy: { date: 'asc' },
-    select: { homeTeamId: true, awayTeamId: true, gameTotal: true, homeSpread: true },
+    select: {
+      homeTeamId: true,
+      awayTeamId: true,
+      gameTotal: true,
+      homeSpread: true,
+      homeProbablePitcher: true,
+      awayProbablePitcher: true,
+    },
   });
   const oppByTeam = new Map<number, number>();
   const impliedByTeam = new Map<number, number>();
-  const totals: number[] = [];
+  // The probable starter a team's HITTERS face (the opposing team's pitcher).
+  const oppPitcherByTeam = new Map<number, string>();
   for (const g of games) {
     if (!oppByTeam.has(g.homeTeamId)) oppByTeam.set(g.homeTeamId, g.awayTeamId);
     if (!oppByTeam.has(g.awayTeamId)) oppByTeam.set(g.awayTeamId, g.homeTeamId);
+    if (g.awayProbablePitcher && !oppPitcherByTeam.has(g.homeTeamId)) {
+      oppPitcherByTeam.set(g.homeTeamId, g.awayProbablePitcher);
+    }
+    if (g.homeProbablePitcher && !oppPitcherByTeam.has(g.awayTeamId)) {
+      oppPitcherByTeam.set(g.awayTeamId, g.homeProbablePitcher);
+    }
     if (g.gameTotal != null) {
-      totals.push(g.gameTotal);
       const hs = g.homeSpread ?? 0;
       if (!impliedByTeam.has(g.homeTeamId)) {
         impliedByTeam.set(g.homeTeamId, impliedTeamTotal(g.gameTotal, hs)!);
@@ -1312,10 +1492,9 @@ async function boardMatchupContext(
       }
     }
   }
-  const leagueAvgTeamTotal = totals.length
-    ? totals.reduce((a, b) => a + b, 0) / totals.length / 2
-    : null;
   if (oppByTeam.size === 0) return empty;
+  // Same league baseline the player page uses (all upcoming games), so env matches exactly.
+  const leagueAvgTeamTotal = await getLeagueAvgTeamTotal(sport);
 
   // DvP cell tables, memoized per (posBucket, stat): opponentTeamId -> cell (the cell
   // feeds both the grade and the opponent multiplier, so they stay in lock-step).
@@ -1338,6 +1517,18 @@ async function boardMatchupContext(
   // of a player's stats, so it's keyed by player.
   const paceTable = sport === 'nba' ? await getNbaPaceTable(season) : null;
 
+  // MLB probable-starter quality (idea #6), memoized per (pitcher, hits-vs-K rate) so it's
+  // computed once and EXACTLY matches getMlbPitcherMatchupMultiplier(stat, …) on the page.
+  const pitcherMultCache = new Map<string, number | null>();
+  const pitcherMultFor = async (name: string, stat: StatKey): Promise<number | null> => {
+    const key = `${name}:${stat === 'so' ? 'k' : 'h'}`;
+    const cached = pitcherMultCache.get(key);
+    if (cached !== undefined) return cached;
+    const m = await getMlbPitcherMatchupMultiplier(stat, name, season);
+    pitcherMultCache.set(key, m);
+    return m;
+  };
+
   for (const p of players) {
     if (p.teamId == null || !p.posBucket) continue;
     const opp = oppByTeam.get(p.teamId);
@@ -1357,12 +1548,15 @@ async function boardMatchupContext(
       p.id,
       environmentMultiplier(impliedByTeam.get(p.teamId) ?? null, leagueAvgTeamTotal),
     );
+    const pitcherName = sport === 'mlb' && bucket === 'H' ? oppPitcherByTeam.get(p.teamId) : undefined;
     for (const stat of statKeysForSport(sport, bucket)) {
       const cell = (await cellTable(bucket, stat)).get(opp);
-      if (cell) {
-        grades.set(`${p.id}:${stat}`, matchupGrade(cell));
-        opponentMults.set(`${p.id}:${stat}`, opponentMultiplierFromCell(cell));
-      }
+      if (cell) grades.set(`${p.id}:${stat}`, matchupGrade(cell));
+      // Opponent factor: the probable starter's quality (MLB hitter) overrides the staff
+      // DvP cell — same precedence as the player page.
+      const pitcherMult = pitcherName ? await pitcherMultFor(pitcherName, stat) : null;
+      const oppMult = pitcherMult != null ? pitcherMult : cell ? opponentMultiplierFromCell(cell) : null;
+      if (oppMult != null) opponentMults.set(`${p.id}:${stat}`, oppMult);
     }
   }
   return { grades, opponentMults, paceMultByPlayer, envMultByPlayer };
@@ -1391,11 +1585,17 @@ function computeBoardRows(
     paceMultByPlayer?: Map<number, number>;
     /** Vegas game-environment multiplier per player (matches the page). */
     envMultByPlayer?: Map<number, number>;
+    /** Current availability bucket per player — Out players are dropped; game-time tiers
+     *  discount the read (same gate the player page applies). */
+    availability?: Map<number, AvailabilityStatus>;
   },
 ): BoardRow[] {
   const { limit, perPlayerCap, perStatCap, requireProvided } = opts;
   const out: Omit<BoardRow, 'rank'>[] = [];
   for (const p of players) {
+    // Never surface a benched player as a board lean.
+    const avail = opts.availability?.get(p.id);
+    if (avail === 'out') continue;
     const allGames = gamesByPlayer.get(p.id);
     if (!allGames || allGames.length < FIREFACTOR_MIN_GAMES) continue;
     const games = qualifyGames(sport, p.posBucket, allGames);
@@ -1436,14 +1636,16 @@ function computeBoardRows(
         matchup: opts.matchupGrades?.get(`${p.id}:${stat}`),
         gamesPlayed: games.length,
       };
-      const prelim = computeFireFactor(ffInput);
+      // FireFactor is the pure directional signal — IDENTICAL to the player page for the
+      // same line/stat/matchup. Line-value (best price, cross-book discount) is a separate
+      // badge, never folded into the score. The availability gate (game-time discount; Out
+      // already dropped above) is the SAME one the page applies, so the read stays consistent.
+      const fireScore = gateAvailability(computeFireFactor(ffInput), avail);
       // A 0.5 book line's only meaningful lean is the OVER ("will it happen"). The
       // under ("it won't") is trivial/obvious — never feature it as a top lean.
-      if (line <= 0.5 && prelim.side === 'under') continue;
+      if (line <= 0.5 && fireScore.side === 'under') continue;
 
-      // Cross-book line value: boost the read for a softer-than-market number and flag
-      // the best price across books (sourced boards only).
-      let fireScore = prelim;
+      // Cross-book line value badge (best price across books) — display only.
       let rowLineValue: BoardRow['lineValue'] = null;
       if (opts.lineValue) {
         const key = `${p.id}:${stat}`;
@@ -1459,7 +1661,7 @@ function computeBoardRows(
               ln === line
                 ? (seasonHr.hitRateOver ?? 0.5)
                 : (computeHitRate(games, stat, ln, 'season').hitRateOver ?? 0.5);
-            return prelim.side === 'over' ? o : 1 - o;
+            return fireScore.side === 'over' ? o : 1 - o;
           };
           const consRate = rate(consensusLine);
           const edge = rate(line) - consRate;
@@ -1469,7 +1671,6 @@ function computeBoardRows(
             if (!best || e > best.edge) best = { source: b.source, line: b.line, edge: e };
           }
           if (best && best.edge <= 0.005) best = null;
-          if (edge !== 0) fireScore = computeFireFactor({ ...ffInput, lineValueEdge: edge });
           rowLineValue = { edge, best };
         }
       }

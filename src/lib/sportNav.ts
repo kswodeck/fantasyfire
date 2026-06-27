@@ -24,6 +24,7 @@ export function sportSections(sport: Sport): SportSection[] {
       seg: 'matchups',
       desc: sport === 'mlb' ? 'Pitching allowed by team' : 'Defense vs position',
     },
+    { label: 'Injuries', seg: 'injuries', desc: "Who's out, GTD + on the IL" },
     { label: 'Players', seg: 'players', desc: 'Browse + filter every player' },
   ];
 }

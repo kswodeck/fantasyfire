@@ -157,6 +157,8 @@ export interface PlayerResearch {
   dvp: DvpCell | null;
   /** Current injury / availability status (idea #5); null when the player is clear. */
   availability: PlayerAvailability | null;
+  /** How this player's line shifts when an impactful teammate is OUT (injury cascade). */
+  teammateSplits: TeammateSplit[];
   why: string;
 }
 
@@ -166,9 +168,43 @@ export interface PlayerAvailability {
   status: 'out' | 'doubtful' | 'questionable' | 'day-to-day';
   /** ESPN's original status string (e.g. "15-Day-IL"). */
   rawStatus: string;
-  /** Body part / injury type, when given. */
+  /** Finer fantasy designation — "GTD", "Probable", "15-Day IL" — when given. */
+  fantasyStatus: string | null;
+  /** Assembled injury, e.g. "Right Ankle Sprain", when given. */
   detail: string | null;
+  /** Estimated return date (ISO YYYY-MM-DD), when given. */
+  returnDate: string | null;
   /** ESPN's short comment, when given. */
+  comment: string | null;
+  /** ESPN's longer beat-writer note, when given. */
+  news: string | null;
+}
+
+/** A player's stat line split by whether an OUT teammate was playing — the injury
+ *  "cascade" read (live injuries × our box scores). */
+export interface TeammateSplit {
+  /** The out teammate's name. */
+  name: string;
+  /** Their status designation (GTD / Out / IL tier), when given. */
+  fantasyStatus: string | null;
+  /** Their injury, e.g. "Left Knee Soreness", when given. */
+  detail: string | null;
+  /** This player's line in games the teammate was OUT. */
+  without: { games: number; mean: number | null; hitRateOver: number | null };
+  /** This player's line in games the teammate PLAYED. */
+  withTeammate: { games: number; mean: number | null; hitRateOver: number | null };
+}
+
+/** One row on the per-sport injury report page. */
+export interface InjuryReportRow {
+  slug: string;
+  name: string;
+  team: string | null;
+  position: string | null;
+  status: PlayerAvailability['status'];
+  fantasyStatus: string | null;
+  detail: string | null;
+  returnDate: string | null;
   comment: string | null;
 }
 

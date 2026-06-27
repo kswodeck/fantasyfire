@@ -24,6 +24,7 @@ import { AvailabilityBanner } from './AvailabilityBanner';
 import { MarketEdgePanel } from './MarketEdgePanel';
 import { SavePropControl } from './SavePropControl';
 import { SplitsPanel } from './SplitsPanel';
+import { TeammateSplitsPanel } from './TeammateSplitsPanel';
 import { LineValueTable } from './LineValueTable';
 import { SourceSelector } from './SourceSelector';
 import { useSelectedSource } from './SelectedSourceProvider';
@@ -248,6 +249,9 @@ export function PlayerResearchClient({
 
       {/* Situational splits */}
       <SplitsPanel splits={data.splits} statShort={statDef.short} line={data.line} />
+
+      {/* Injury cascade — line shift when an impactful teammate is out */}
+      <TeammateSplitsPanel splits={data.teammateSplits} statShort={statDef.short} line={data.line} />
 
       {/* Matchup + read */}
       <section className="mb-6 grid gap-4 md:grid-cols-2">

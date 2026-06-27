@@ -13,8 +13,14 @@ export interface InjuryRow {
   externalName: string; // athlete displayName, matched to our Player by name
   rawStatus: string; // ESPN's original status string
   status: InjuryStatus;
-  detail: string | null; // body part / injury type
-  comment: string | null;
+  /** Finer status from details.fantasyStatus (GTD / Probable / IL tier); else rawStatus. */
+  fantasyStatus: string | null;
+  /** Assembled injury, e.g. "Right Ankle Sprain". */
+  detail: string | null;
+  /** Estimated return date (ISO), when ESPN gives one. */
+  returnDate: string | null;
+  comment: string | null; // shortComment
+  news: string | null; // longComment
   reportedAt: string | null; // ISO timestamp
 }
 
@@ -43,15 +49,31 @@ async function getJson(url: string): Promise<unknown> {
   return res.json();
 }
 
+interface EspnInjuryDetails {
+  fantasyStatus?: { description?: string; abbreviation?: string };
+  type?: string; // body area, e.g. "Ankle" / "Lower Body"
+  location?: string; // e.g. "Leg"
+  detail?: string; // e.g. "Sprain"
+  side?: string; // e.g. "Right"
+  returnDate?: string; // ISO date
+}
 interface EspnInjuryItem {
   status?: string;
   date?: string;
   athlete?: { displayName?: string };
-  type?: { description?: string };
   shortComment?: string;
+  longComment?: string;
+  details?: EspnInjuryDetails;
 }
 interface EspnInjuriesResponse {
   injuries?: { injuries?: EspnInjuryItem[] }[];
+}
+
+/** Assemble a human injury string from the structured parts, e.g. "Right Ankle Sprain". */
+function assembleInjury(d: EspnInjuryDetails | undefined): string | null {
+  if (!d) return null;
+  const s = [d.side, d.type ?? d.location, d.detail].filter(Boolean).join(' ').trim();
+  return s || null;
 }
 
 export async function fetchEspnInjuries(sport: Sport): Promise<InjuryRow[]> {
@@ -68,8 +90,13 @@ export async function fetchEspnInjuries(sport: Sport): Promise<InjuryRow[]> {
         externalName: name,
         rawStatus: it.status,
         status: normalizeInjuryStatus(it.status),
-        detail: it.type?.description ?? null,
+        // The finer fantasy designation (GTD / Probable / IL tier); for NFL (no details)
+        // ESPN's top-level status (Questionable / Out) IS the fantasy-relevant one.
+        fantasyStatus: it.details?.fantasyStatus?.description ?? it.status ?? null,
+        detail: assembleInjury(it.details),
+        returnDate: it.details?.returnDate ?? null,
         comment: it.shortComment ?? null,
+        news: it.longComment ?? null,
         reportedAt: it.date ?? null,
       });
     }

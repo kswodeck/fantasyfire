@@ -183,12 +183,19 @@ export default function HowItWorksPage() {
 
         <h2>Availability</h2>
         <p>
-          A great-looking number is moot if the player isn&rsquo;t taking the field, so each page
-          carries the player&rsquo;s current <strong>injury status</strong> from the public feed. An{' '}
-          <strong>Out</strong> (or IL) flag <strong>gates the read</strong> — the numbers still
-          describe past games, but the page tells you plainly that they don&rsquo;t describe today.
-          Questionable / day-to-day shows as a caution to confirm before the game. We surface status;
+          A great-looking number is moot if the player isn&rsquo;t taking the field, so we read the
+          public <strong>injury feed</strong> — status, the actual injury, an estimated return, and
+          the latest note (see the per-sport injury report). An <strong>Out</strong> (or IL) player
+          is forced to <strong>No read</strong> and dropped from the board entirely, so a lean is
+          never shown for someone who isn&rsquo;t playing. The game-time tiers (doubtful / questionable
+          / GTD) <strong>discount FireFactor</strong> toward a coin flip and add a caution. The same
+          gate runs on the board and the player page, so the read stays consistent. We surface status;
           we don&rsquo;t pretend to know a coach&rsquo;s final call.
+        </p>
+        <p>
+          We also tie the feed to the box scores: when an impactful teammate is out, each player page
+          shows how that player&rsquo;s line has historically shifted <strong>with that teammate out
+          vs. in</strong> — usage often rises when a starter sits. Descriptive splits, not a forecast.
         </p>
 
         <h2>Market edge &amp; +EV</h2>
@@ -255,7 +262,12 @@ export default function HowItWorksPage() {
           under read runs cool — <span className="font-medium text-ice-1">Cool</span>,{' '}
           <span className="font-medium text-ice-2">Cold</span>, or{' '}
           <span className="font-medium text-ice-3">Frozen</span> snowflake — and a balanced line
-          is <em>No read</em>. Deeper color means a stronger edge. It is a{' '}
+          is <em>No read</em>. The 0–100 number tracks the model&rsquo;s estimated{' '}
+          <strong>chance the side hits</strong>, on a deliberately steep curve: a coin-flip line
+          sits near <strong>0</strong> (a Pass), a clear edge reads as a <strong>Slight</strong> or{' '}
+          <strong>Normal</strong> lean, and only a near-certain (~90%+) read approaches{' '}
+          <strong>100</strong> — rare by design, because there&rsquo;s no such thing as a sure bet.
+          A thin sample pulls the number back toward a coin flip until the games back it up. It is a{' '}
           <strong>research signal, not a pick, prediction, or guarantee</strong>. Three things
           keep it honest:
         </p>
@@ -277,10 +289,11 @@ export default function HowItWorksPage() {
             an automatic No read.
           </li>
           <li>
-            When the line carries real odds, FireFactor folds in the <strong>+EV versus the
-            no-vig market</strong> and a small, capped <strong>line-value</strong> boost for a
-            softer-than-market number — value the price actually offers, never an edge conjured
-            from nothing.
+            FireFactor is the <strong>directional signal only</strong> — the same number on the
+            board and on a player&rsquo;s page for an identical line, stat, and matchup, never
+            shifted by whether odds happen to be posted. Price questions are kept{' '}
+            <strong>separate</strong>: the <strong>+EV versus the no-vig market</strong>, the best
+            book, and the cross-book line value each live in their own panel.
           </li>
         </ul>
 

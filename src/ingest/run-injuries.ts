@@ -43,21 +43,28 @@ async function ingestSport(sport: Sport): Promise<number> {
     playerId: number;
     status: string;
     rawStatus: string;
+    fantasyStatus: string | null;
     detail: string | null;
+    returnDate: Date | null;
     comment: string | null;
+    news: string | null;
     reportedAt: Date | null;
   }[];
   for (const r of rows) {
     const pid = byName.get(normalizeName(r.externalName));
     if (!pid || seen.has(pid)) continue;
     seen.add(pid);
+    const returnDate = r.returnDate ? new Date(r.returnDate) : null;
     records.push({
       sport,
       playerId: pid,
       status: r.status,
       rawStatus: r.rawStatus,
+      fantasyStatus: r.fantasyStatus,
       detail: r.detail,
+      returnDate: returnDate && !Number.isNaN(returnDate.getTime()) ? returnDate : null,
       comment: r.comment,
+      news: r.news,
       reportedAt: r.reportedAt ? new Date(r.reportedAt) : null,
     });
   }

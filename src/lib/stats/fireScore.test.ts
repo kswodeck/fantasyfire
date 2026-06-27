@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
   computeFireFactor,
+  fireFactorFromProb,
+  gateAvailability,
+  AVAILABILITY_DISCOUNT,
   FIREFACTOR_HIT_SPAN,
+  FIREFACTOR_TIER_CUTOFFS,
+  FIREFACTOR_CURVE,
   type FireFactorInput,
   type WindowHits,
 } from './fireScore';
@@ -139,16 +144,20 @@ describe('computeFireFactor', () => {
     expect(proj.score).toBeGreaterThan(0.5); // projection above the line ⇒ leans over
   });
 
-  it('hit sub-score uses the Wilson CENTER vs 0.5 (not the lower bound)', () => {
-    const overs = 70;
+  it('hit sub-score is 0.5-centered on the Wilson CENTER (50% rate ⇒ neutral)', () => {
+    const overs = 58; // ~58% rate — chosen so the sub-score does NOT clamp to 1.0
     const decided = 100;
     const r = computeFireFactor({ ...base, windows: [win(overs, decided, 'season')], gamesPlayed: decided });
     const center = wilsonInterval(overs, decided).center;
     const hit = r.components.find((c) => c.key === 'hit')!.score;
-    expect(hit).toBeCloseTo(Math.max(0, Math.min(1, (center - 0.5) / FIREFACTOR_HIT_SPAN)), 5);
+    expect(hit).toBeCloseTo(
+      Math.max(0, Math.min(1, 0.5 + (center - 0.5) / (2 * FIREFACTOR_HIT_SPAN))),
+      5,
+    );
+    expect(hit).toBeGreaterThan(0.5); // a real over-lean reads above neutral
   });
 
-  it('a ~50/50 history gives a near-zero hit sub-score and no real lean', () => {
+  it('a ~50/50 history gives a NEUTRAL hit sub-score and no real lean', () => {
     const r = computeFireFactor({
       line: 20,
       windows: [win(50, 100, 'season')],
@@ -159,8 +168,9 @@ describe('computeFireFactor', () => {
       gamesPlayed: 100,
     });
     const hit = r.components.find((c) => c.key === 'hit')!.score;
-    expect(hit).toBeLessThan(0.1);
+    expect(hit).toBeCloseTo(0.5, 1); // a coin-flip rate is neutral, not bearish
     expect(['No lean', 'Pass']).toContain(r.tier);
+    expect(r.score).toBeLessThan(FIREFACTOR_TIER_CUTOFFS.slight); // no read on a coin flip
   });
 
   it('a strong, well-sampled over maps to Strong lean under the current cutoffs', () => {
@@ -175,5 +185,75 @@ describe('computeFireFactor', () => {
     });
     expect(r.side).toBe('over');
     expect(r.tier).toBe('Strong lean');
+  });
+});
+
+describe('gateAvailability', () => {
+  const baseInput: FireFactorInput = {
+    line: 20,
+    windows: [win(72, 100, '5'), win(72, 100, '10'), win(72, 100, '20'), win(72, 100, 'season')],
+    projection: 26,
+    stdev: 4,
+    cv: 0.2,
+    matchup: 'A',
+    gamesPlayed: 100,
+  };
+  const base = computeFireFactor(baseInput);
+
+  it('is a no-op for a clear (null) status', () => {
+    expect(gateAvailability(base, null)).toEqual(base);
+  });
+
+  it('forces a no-read when the player is Out', () => {
+    const g = gateAvailability(base, 'out');
+    expect(g.score).toBe(0);
+    expect(g.tier).toBe('Pass');
+    expect(g.note).toMatch(/out/i);
+  });
+
+  it('discounts the score for game-time tiers and re-tiers', () => {
+    const q = gateAvailability(base, 'questionable');
+    expect(q.score).toBe(Math.round(base.score * AVAILABILITY_DISCOUNT.questionable));
+    expect(q.score).toBeLessThan(base.score);
+    expect(q.note).toMatch(/confirm status/i);
+    // doubtful discounts harder than day-to-day
+    const d = gateAvailability(base, 'doubtful');
+    const dtd = gateAvailability(base, 'day-to-day');
+    expect(d.score).toBeLessThan(dtd.score);
+  });
+
+  it('keeps an already-unreadable Pass as Pass', () => {
+    const pass = computeFireFactor({ ...baseInput, windows: [win(0, 0, '5')], gamesPlayed: 0 });
+    expect(pass.tier).toBe('Pass');
+    expect(gateAvailability(pass, 'questionable').tier).toBe('Pass');
+  });
+});
+
+describe('fireFactorFromProb (concave probability curve)', () => {
+  it('a coin flip (or worse) maps to 0', () => {
+    expect(fireFactorFromProb(0.5)).toBe(0);
+    expect(fireFactorFromProb(0.42)).toBe(0);
+  });
+  it('hits exactly the anchor points', () => {
+    for (const [p, ff] of FIREFACTOR_CURVE) {
+      expect(fireFactorFromProb(p)).toBeCloseTo(ff, 6);
+    }
+  });
+  it('is monotonic increasing', () => {
+    let prev = -1;
+    for (let p = 0.5; p <= 0.95; p += 0.01) {
+      const ff = fireFactorFromProb(p);
+      expect(ff).toBeGreaterThanOrEqual(prev);
+      prev = ff;
+    }
+  });
+  it('is concave — a small edge moves more than an equal edge near the top', () => {
+    const low = fireFactorFromProb(0.6) - fireFactorFromProb(0.55); // +5pp at the bottom
+    const high = fireFactorFromProb(0.9) - fireFactorFromProb(0.85); // +5pp near the top
+    expect(low).toBeGreaterThan(high);
+  });
+  it('only a near-certain read tops out at 100', () => {
+    expect(fireFactorFromProb(0.92)).toBe(100);
+    expect(fireFactorFromProb(0.8)).toBeLessThan(90); // a strong-but-not-certain read
   });
 });

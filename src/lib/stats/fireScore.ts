@@ -34,10 +34,36 @@ export type FireTier = 'Strong lean' | 'Lean' | 'Slight lean' | 'No lean' | 'Pas
 export const FIREFACTOR_WEIGHTS = { hit: 0.34, proj: 0.24, consistency: 0.16, matchup: 0.14 } as const;
 /** In VALUE mode, how the signal blend and the price-value split the score. */
 export const FIREFACTOR_VALUE_SPLIT = { signal: 0.7, value: 0.3 } as const;
-/** 0-100 cutoffs for the tier label. The read floor (`slight`) is set just below the
- *  dense middle of the score distribution, so a borderline edge surfaces as an honest
- *  "Slight lean" rather than collapsing to "No read"; Lean/Strong stay scarce. */
-export const FIREFACTOR_TIER_CUTOFFS = { strong: 66, lean: 56, slight: 40, none: 28 } as const;
+/** FireFactor maps the (trust-adjusted) directional probability for the chosen side
+ *  through this CONCAVE curve — [probability, FireFactor] pairs, ascending. Concave by
+ *  design: a small edge quickly becomes a Slight read (the wide 20-50 band), while the
+ *  climb to 100 is steep, so only a ~92% read tops the scale (essentially never — there
+ *  is no 100% bet). Tuned against the live board distribution. */
+export const FIREFACTOR_CURVE: ReadonlyArray<readonly [number, number]> = [
+  [0.5, 0],
+  [0.54, 20],
+  [0.62, 50],
+  [0.73, 75],
+  [0.85, 90],
+  [0.92, 100],
+];
+/** 0-100 tier cutoffs on the FireFactor scale: <20 = no read · 20-50 = Slight · 51-75 =
+ *  Normal (Lean) · 76-100 = Strong. `none` splits a true coin-flip Pass from a faint
+ *  No-lean inside the no-read zone (both display as "No read"). */
+export const FIREFACTOR_TIER_CUTOFFS = { strong: 76, lean: 51, slight: 20, none: 10 } as const;
+export type AvailabilityStatus = 'out' | 'doubtful' | 'questionable' | 'day-to-day';
+/** Score multiplier applied when a player's availability is uncertain (pulls the read
+ *  toward a coin flip). 'out' is handled separately (forced no-read). */
+export const AVAILABILITY_DISCOUNT: Record<Exclude<AvailabilityStatus, 'out'>, number> = {
+  doubtful: 0.45,
+  questionable: 0.7,
+  'day-to-day': 0.85,
+};
+const AVAILABILITY_CAUTION: Record<Exclude<AvailabilityStatus, 'out'>, string> = {
+  doubtful: 'Doubtful — likely sidelined; confirm status first.',
+  questionable: 'Questionable — confirm status before acting.',
+  'day-to-day': 'Game-time decision — confirm status before acting.',
+};
 /** Below this many games we never grade above "Pass". */
 export const FIREFACTOR_MIN_GAMES = 5;
 /** The hit sub-score reaches 1.0 this far above a 50% rate — at 0.17, a 60% over rate
@@ -73,6 +99,22 @@ const logit = (s: number) => {
   const c = Math.max(LOGIT_CLAMP, Math.min(1 - LOGIT_CLAMP, s));
   return Math.log(c / (1 - c));
 };
+
+/** Map a directional probability (0.5 = a coin flip) to a 0-100 FireFactor via the
+ *  concave FIREFACTOR_CURVE. Piecewise-linear; ≤ 0.5 → 0, ≥ the top anchor → 100. */
+export function fireFactorFromProb(p: number): number {
+  const c = FIREFACTOR_CURVE;
+  if (p <= c[0][0]) return 0;
+  if (p >= c[c.length - 1][0]) return 100;
+  for (let i = 1; i < c.length; i++) {
+    if (p <= c[i][0]) {
+      const [p0, f0] = c[i - 1];
+      const [p1, f1] = c[i];
+      return f0 + ((p - p0) / (p1 - p0)) * (f1 - f0);
+    }
+  }
+  return 100;
+}
 const GRADE_SCORE: Record<MatchupGrade, number | null> = {
   A: 1,
   B: 0.75,
@@ -219,7 +261,10 @@ export function computeFireFactor(input: FireFactorInput): FireFactorResult {
     comps.push({
       key: 'hit',
       label: 'Hit rate (confidence-adjusted)',
-      score: clamp01((blended.center - 0.5) / FIREFACTOR_HIT_SPAN),
+      // Probability-style sub-score: a 50% rate is NEUTRAL (0.5), rising to 1.0 at
+      // (50% + HIT_SPAN). Feeding a "strength" value (0 at 50%) into logit would wrongly
+      // treat a coin-flip rate as strong evidence against the side.
+      score: clamp01(0.5 + (blended.center - 0.5) / (2 * FIREFACTOR_HIT_SPAN)),
       weight: FIREFACTOR_WEIGHTS.hit,
     });
   }
@@ -263,19 +308,24 @@ export function computeFireFactor(input: FireFactorInput): FireFactorResult {
   // [0,1]. A neutral 0.5 component has log-odds 0 → it abstains instead of pulling
   // the read toward the middle; a missing component is simply absent (also 0).
   const logOdds = comps.reduce((a, c) => a + c.weight * logit(c.score), 0);
-  const raw = comps.length === 0 ? 0 : sigmoid(logOdds);
+  // Directional probability for the chosen side (0.5 = a coin flip). No components ⇒ 0.5.
+  const p = comps.length === 0 ? 0.5 : sigmoid(logOdds);
 
-  // VALUE mode: only when the user entered a real price for the chosen side.
+  // VALUE mode: only when the user entered a real price for the chosen side. Blend the
+  // price's value-probability into the directional probability (a fair price is neutral).
   const evForSide = side === 'over' ? evPerDollar?.over : evPerDollar?.under;
   const valueMode = evForSide !== null && evForSide !== undefined;
-  let score: number;
+  let blendedP = p;
   if (valueMode) {
     const sValue = clamp01(0.5 + (evForSide as number) * 2);
     comps.push({ key: 'value', label: 'Value vs your price', score: sValue, weight: 0 });
-    score = 100 * (FIREFACTOR_VALUE_SPLIT.signal * raw + FIREFACTOR_VALUE_SPLIT.value * sValue) * trustFactor;
-  } else {
-    score = 100 * raw * trustFactor;
+    blendedP = FIREFACTOR_VALUE_SPLIT.signal * p + FIREFACTOR_VALUE_SPLIT.value * sValue;
   }
+
+  // Fold sample trust into the probability — a thin sample shrinks the edge toward a coin
+  // flip — then map through the concave curve to a 0-100 FireFactor.
+  const pAdj = 0.5 + (blendedP - 0.5) * trustFactor;
+  let score = fireFactorFromProb(pAdj);
 
   // Cross-book line value: a softer number than the market lifts the score (capped), so a
   // genuine discount can nudge the read up a tier — but never conjures one from nothing.
@@ -310,4 +360,29 @@ export function computeFireFactor(input: FireFactorInput): FireFactorResult {
       }. Descriptive research from past games — not betting advice.`;
 
   return { side, score, tier, trustFactor, components: comps, valueMode, note };
+}
+
+/** Tier for a 0-100 score, assuming the read is otherwise valid (no insufficiency gate). */
+export function tierForScore(score: number): FireTier {
+  return tierFor(score, score >= FIREFACTOR_TIER_CUTOFFS.none);
+}
+
+/**
+ * Gate a FireFactor by the player's current availability — applied AFTER computeFireFactor,
+ * IDENTICALLY on the board and the player page, so the read stays consistent. An "Out"
+ * player is a no-read; the game-time tiers (doubtful / questionable / GTD) discount the
+ * score toward a coin flip and append a caution. A clear status (null) is a no-op.
+ */
+export function gateAvailability(
+  fs: FireFactorResult,
+  status: AvailabilityStatus | null | undefined,
+): FireFactorResult {
+  if (!status) return fs;
+  if (status === 'out') {
+    return { ...fs, score: 0, tier: 'Pass', note: 'Player is Out — no read on this line.' };
+  }
+  const score = Math.round(fs.score * AVAILABILITY_DISCOUNT[status]);
+  // Keep an already-unreadable Pass as Pass; otherwise re-tier the discounted score.
+  const tier = fs.tier === 'Pass' ? 'Pass' : tierForScore(score);
+  return { ...fs, score, tier, note: `${fs.note} ${AVAILABILITY_CAUTION[status]}` };
 }

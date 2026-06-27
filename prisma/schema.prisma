@@ -198,15 +198,20 @@ model ScheduledGame {
 // "Questionable" and a FireFactor read can be gated when the player isn't playing.
 // Players not in our DB (no game logs) are simply skipped at ingest.
 model PlayerInjury {
-  id         Int       @id @default(autoincrement())
-  sport      String
-  playerId   Int       @unique
-  status     String // normalized: out | doubtful | questionable | day-to-day
-  rawStatus  String // ESPN's original status (e.g. "15-Day-IL", "Day-To-Day")
-  detail     String? // body part / type (e.g. "elbow")
-  comment    String? // ESPN's short comment
-  reportedAt DateTime?
-  fetchedAt  DateTime  @default(now())
+  id            Int       @id @default(autoincrement())
+  sport         String
+  playerId      Int       @unique
+  status        String // normalized bucket: out | doubtful | questionable | day-to-day
+  rawStatus     String // ESPN's original status (e.g. "15-Day-IL", "Day-To-Day")
+  // Finer, fantasy-relevant status from details.fantasyStatus — e.g. "GTD", "Probable",
+  // "15-Day IL". Falls back to rawStatus when ESPN omits it (e.g. NFL).
+  fantasyStatus String?
+  detail        String? // assembled injury, e.g. "Right Ankle Sprain"
+  returnDate    DateTime? // estimated return, when ESPN gives one
+  comment       String? // ESPN's short comment
+  news          String? // ESPN's longer comment / beat-writer note
+  reportedAt    DateTime?
+  fetchedAt     DateTime  @default(now())
 
   player Player @relation(fields: [playerId], references: [id])
 
