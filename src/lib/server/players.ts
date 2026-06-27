@@ -23,6 +23,11 @@ import {
   computeConsistency,
   matchupGrade,
   type MatchupGrade,
+  opponentMultiplierFromCell,
+  paceMultiplier,
+  impliedTeamTotal,
+  environmentMultiplier,
+  lineProbabilities,
   computeFireFactor,
   computeSplits,
   wilsonInterval,
@@ -31,7 +36,7 @@ import {
   defaultLine,
   defaultPropLine,
 } from '@/lib/stats';
-import { fairPriceReadout } from '@/lib/odds';
+import { fairPriceReadout, marketConsensus, type MarketConsensus } from '@/lib/odds';
 import { parseSlate, normalizeName } from '@/lib/slate';
 import { currentSeason, previousSeason } from '@/lib/season';
 import { getTeam } from '@/lib/teams';
@@ -44,6 +49,7 @@ import type {
   ChartPoint,
   WindowResult,
   PlayerResearch,
+  PlayerAvailability,
   BoardRow,
   LineValueComparison,
   TrendRow,
@@ -57,6 +63,7 @@ import {
   getProvidedLine,
   getProvidedLineMap,
   getProvidedLinesBySource,
+  getProvidedQuotesBySource,
 } from '@/lib/server/providedLines';
 import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 
@@ -698,6 +705,74 @@ async function getNflDvp(
 }
 
 /**
+ * NBA game pace (idea #3) — each team's season pace + the league average. Possessions
+ * per team-game ≈ FGA + 0.44·FTA − OREB + TOV (the box-score estimate single-sourced
+ * in lib/stats/pace.ts), aggregated to a per-game average per team. Memoized per
+ * request; null off-NBA / on error so the projection just stays pace-neutral.
+ */
+const getNbaPaceTable = cache(
+  async (season: string): Promise<{ byTeam: Map<number, number>; leagueAvg: number } | null> => {
+    try {
+      const rows = await db.$queryRawUnsafe<{ teamId: number; pace: number }[]>(
+        `SELECT "teamId", AVG(poss)::float8 AS pace FROM (
+           SELECT s."teamId" AS "teamId", s."gameId" AS gid,
+                  SUM(COALESCE(s.fga,0)) + 0.44 * SUM(COALESCE(s.fta,0))
+                    - SUM(COALESCE(s.oreb,0)) + SUM(COALESCE(s.turnovers,0)) AS poss
+           FROM "PlayerGameStat" s
+           JOIN "Player" p ON p.id = s."playerId"
+           WHERE p.sport = 'nba' AND s.season = $1
+           GROUP BY s."teamId", s."gameId"
+         ) t
+         GROUP BY "teamId"`,
+        season,
+      );
+      if (rows.length === 0) return null;
+      const byTeam = new Map<number, number>();
+      let sum = 0;
+      for (const r of rows) {
+        const pace = Number(r.pace);
+        byTeam.set(Number(r.teamId), pace);
+        sum += pace;
+      }
+      return { byTeam, leagueAvg: sum / rows.length };
+    } catch (e) {
+      console.warn('[pace] getNbaPaceTable failed:', e instanceof Error ? e.message : e);
+      return null;
+    }
+  },
+);
+
+/** The player's implied team total for their NEXT scheduled game (idea #4), from the
+ *  game's Vegas total + spread. Null off-season / when the game has no posted odds. */
+async function getNextGameImpliedTotal(sport: Sport, teamId: number): Promise<number | null> {
+  const todayUtc = new Date();
+  todayUtc.setUTCHours(0, 0, 0, 0);
+  const game = await db.scheduledGame.findFirst({
+    where: { sport, date: { gte: todayUtc }, OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }] },
+    orderBy: { date: 'asc' },
+    select: { homeTeamId: true, gameTotal: true, homeSpread: true },
+  });
+  if (!game || game.gameTotal == null) return null;
+  const isHome = game.homeTeamId === teamId;
+  const teamSpread = game.homeSpread == null ? 0 : isHome ? game.homeSpread : -game.homeSpread;
+  return impliedTeamTotal(game.gameTotal, teamSpread);
+}
+
+/** League-average implied team total (≈ avg upcoming game total / 2) — the baseline
+ *  the environment multiplier is measured against. Memoized per request. */
+const getLeagueAvgTeamTotal = cache(async (sport: Sport): Promise<number | null> => {
+  const todayUtc = new Date();
+  todayUtc.setUTCHours(0, 0, 0, 0);
+  const rows = await db.scheduledGame.findMany({
+    where: { sport, date: { gte: todayUtc }, gameTotal: { not: null } },
+    select: { gameTotal: true },
+  });
+  if (rows.length === 0) return null;
+  const avgGameTotal = rows.reduce((s, r) => s + (r.gameTotal as number), 0) / rows.length;
+  return avgGameTotal / 2;
+});
+
+/**
  * The full research payload for a player page / API response, computed for a
  * stat + line. `stat` defaults to the sport/role default; `line` to the season
  * median rounded to 0.5. An out-of-sport stat falls back to the default.
@@ -845,14 +920,56 @@ export async function getPlayerResearch(
   // Verdict: the FireFactor "good prop" read + its sub-signals, computed on the
   // qualified games already loaded (no extra query). LEAN mode — VALUE/EV is an
   // opt-in, per-price client read in the fair-price section.
-  const projection = recentFormEstimate(seasonResult.values, seasonResult.mean);
+  const grade = dvp ? matchupGrade(dvp) : null;
+
+  // Matchup-adjust the projection in place (idea #3): a soft/tough opponent and the
+  // projected game pace (NBA, from box-score totals) nudge the recent-form base. Each
+  // factor defaults to neutral, so the projection degrades to pure recent form.
+  const opponentMult = dvp ? opponentMultiplierFromCell(dvp) : 1;
+  let paceMult = 1;
+  if (sport === 'nba' && record.team && matchupOpponent) {
+    const paceTable = await getNbaPaceTable(season);
+    if (paceTable) {
+      paceMult = paceMultiplier(
+        paceTable.byTeam.get(record.team.id) ?? null,
+        paceTable.byTeam.get(matchupOpponent.teamId) ?? null,
+        paceTable.leagueAvg,
+      );
+    }
+  }
+  // Game environment (idea #4): the player's implied team total vs the league average,
+  // from the next game's Vegas total + spread. Only for a real upcoming game.
+  let environmentMult = 1;
+  if (record.team && matchupOpponent?.isUpcoming) {
+    const [implied, leagueAvg] = await Promise.all([
+      getNextGameImpliedTotal(sport, record.team.id),
+      getLeagueAvgTeamTotal(sport),
+    ]);
+    environmentMult = environmentMultiplier(implied, leagueAvg);
+  }
+  const projection = recentFormEstimate(seasonResult.values, seasonResult.mean, {
+    opponent: opponentMult,
+    pace: paceMult,
+    environment: environmentMult,
+  });
   const consistency = computeConsistency(
     seasonResult.values,
     seasonResult.mean,
     seasonResult.stdev,
     line,
   );
-  const grade = dvp ? matchupGrade(dvp) : null;
+
+  // Model P(over) from the adjusted projection's distribution (idea #2) — the
+  // principled "projection vs line" probability FireFactor leans on.
+  const modelProb = lineProbabilities(stat, projection.projection, seasonResult.stdev, line);
+
+  // Cross-book market consensus + best price / +EV (idea #1) from the scraped book
+  // odds. The auto +EV only folds into FireFactor when the market line matches the
+  // line we're showing — otherwise the EV is about a different number.
+  const quotes = await getProvidedQuotesBySource(sport, record.id, stat);
+  const consensus = quotes.length > 0 ? marketConsensus(quotes, line) : null;
+  const consensusAtLine = consensus && Math.abs(consensus.line - line) < 1e-9 ? consensus : null;
+
   const ffInput = {
     line,
     windows: windows.map((w) => ({
@@ -860,10 +977,17 @@ export async function getPlayerResearch(
       overs: w.hitRate.overs,
       decided: w.hitRate.decided,
     })),
-    projection: projection.stabilized,
+    projection: projection.projection,
     stdev: seasonResult.stdev,
+    modelProbOver: modelProb?.over ?? null,
     cv: consistency.cv,
     matchup: grade ?? undefined,
+    evPerDollar: consensusAtLine
+      ? {
+          over: consensusAtLine.bestOver?.evPerDollar ?? null,
+          under: consensusAtLine.bestUnder?.evPerDollar ?? null,
+        }
+      : undefined,
     gamesPlayed: games.length,
   };
   const prelim = computeFireFactor(ffInput);
@@ -881,6 +1005,22 @@ export async function getPlayerResearch(
     : prelim;
   const splits = computeSplits(games, stat, line);
 
+  // Current injury / availability (idea #5) — surfaced as a banner + read gate.
+  const injuryRow = await db.playerInjury
+    .findUnique({
+      where: { playerId: record.id },
+      select: { status: true, rawStatus: true, detail: true, comment: true },
+    })
+    .catch(() => null);
+  const availability: PlayerAvailability | null = injuryRow
+    ? {
+        status: injuryRow.status as PlayerAvailability['status'],
+        rawStatus: injuryRow.rawStatus,
+        detail: injuryRow.detail,
+        comment: injuryRow.comment,
+      }
+    : null;
+
   return {
     player,
     bio: toBio(record),
@@ -893,12 +1033,20 @@ export async function getPlayerResearch(
     // Freshness: the most recent game in the DB for this player (unfiltered by
     // the qualify cutoff), so the "updated through" stamp reflects real data age.
     lastGameDate: allGames[0]?.gameDate ?? null,
-    verdict: { projection, consistency, matchupGrade: grade, fireScore },
+    verdict: {
+      projection,
+      consistency,
+      matchupGrade: grade,
+      fireScore,
+      modelProbOver: modelProb?.over ?? null,
+      marketConsensus: consensus,
+    },
     splits,
     chart,
     windows,
     matchupOpponent,
     dvp,
+    availability,
     why,
   };
 }
@@ -953,13 +1101,16 @@ export async function getBoard(sport: Sport, opts: BoardOptions = {}): Promise<B
   // so the board falls back to the computed default line and behaves as before.
   const providedLines = await getProvidedLineMap(sport, players.map((p) => p.id), opts.source);
   const season = await getActiveSeason(sport);
-  const matchupGrades = await boardMatchupGrades(sport, players, season);
+  const ctx = await boardMatchupContext(sport, players, season);
   return computeBoardRows(sport, players, gamesByPlayer, providedLines, {
     limit,
     perPlayerCap,
     perStatCap,
     requireProvided: opts.requireProvidedLine === true,
-    matchupGrades,
+    matchupGrades: ctx.grades,
+    opponentMults: ctx.opponentMults,
+    paceMultByPlayer: ctx.paceMultByPlayer,
+    envMultByPlayer: ctx.envMultByPlayer,
   });
 }
 
@@ -988,7 +1139,7 @@ export async function getSourcedBoards(
   for (const s of sources) allMaps[s] = await getProvidedLineMap(sport, ids, s);
   const consensus = consensusLineMap(allMaps);
   const season = await getActiveSeason(sport);
-  const matchupGrades = await boardMatchupGrades(sport, players, season);
+  const ctx = await boardMatchupContext(sport, players, season);
   for (const s of sources) {
     result[s] = computeBoardRows(sport, players, gamesByPlayer, allMaps[s], {
       limit,
@@ -996,7 +1147,10 @@ export async function getSourcedBoards(
       perStatCap,
       requireProvided: true,
       lineValue: { allMaps, consensus },
-      matchupGrades,
+      matchupGrades: ctx.grades,
+      opponentMults: ctx.opponentMults,
+      paceMultByPlayer: ctx.paceMultByPlayer,
+      envMultByPlayer: ctx.envMultByPlayer,
     });
   }
   return result;
@@ -1022,20 +1176,29 @@ function consensusLineMap(allMaps: Record<string, Map<string, number>>): Map<str
   return out;
 }
 
-/** Matchup grade per `${playerId}:${stat}` for the board: each player's next opponent's
- *  DvP cell, graded the SAME way as the player page — so a board FireFactor matches the
- *  player-page FireFactor for the same line/stat/matchup. DvP tables load once per
- *  (posBucket, stat) and are indexed by opponent (bounded, not per-row). */
-async function boardMatchupGrades(
+/** Batched matchup CONTEXT for the board: per `${playerId}:${stat}` the next opponent's
+ *  DvP grade + opponent multiplier, plus the NBA game-pace multiplier per player — so a
+ *  board FireFactor (and its adjusted projection) matches the player page for the same
+ *  line/stat/matchup. DvP tables + the pace table load once and are indexed by opponent. */
+async function boardMatchupContext(
   sport: Sport,
   players: BoardPlayer[],
   season: string,
-): Promise<Map<string, MatchupGrade>> {
-  const out = new Map<string, MatchupGrade>();
+): Promise<{
+  grades: Map<string, MatchupGrade>;
+  opponentMults: Map<string, number>;
+  paceMultByPlayer: Map<number, number>;
+  envMultByPlayer: Map<number, number>;
+}> {
+  const grades = new Map<string, MatchupGrade>();
+  const opponentMults = new Map<string, number>();
+  const paceMultByPlayer = new Map<number, number>();
+  const envMultByPlayer = new Map<number, number>();
+  const empty = { grades, opponentMults, paceMultByPlayer, envMultByPlayer };
   const teamIds = [...new Set(players.map((p) => p.teamId).filter((x): x is number => x != null))];
-  if (teamIds.length === 0) return out;
+  if (teamIds.length === 0) return empty;
 
-  // Next opponent (DB team id) per board team — one query over upcoming games, earliest
+  // Next opponent + game odds per board team — one query over upcoming games, earliest
   // per team (same "next game" the player page resolves via getNextOpponent).
   const todayUtc = new Date();
   todayUtc.setUTCHours(0, 0, 0, 0);
@@ -1046,18 +1209,34 @@ async function boardMatchupGrades(
       OR: [{ homeTeamId: { in: teamIds } }, { awayTeamId: { in: teamIds } }],
     },
     orderBy: { date: 'asc' },
-    select: { homeTeamId: true, awayTeamId: true },
+    select: { homeTeamId: true, awayTeamId: true, gameTotal: true, homeSpread: true },
   });
   const oppByTeam = new Map<number, number>();
+  const impliedByTeam = new Map<number, number>();
+  const totals: number[] = [];
   for (const g of games) {
     if (!oppByTeam.has(g.homeTeamId)) oppByTeam.set(g.homeTeamId, g.awayTeamId);
     if (!oppByTeam.has(g.awayTeamId)) oppByTeam.set(g.awayTeamId, g.homeTeamId);
+    if (g.gameTotal != null) {
+      totals.push(g.gameTotal);
+      const hs = g.homeSpread ?? 0;
+      if (!impliedByTeam.has(g.homeTeamId)) {
+        impliedByTeam.set(g.homeTeamId, impliedTeamTotal(g.gameTotal, hs)!);
+      }
+      if (!impliedByTeam.has(g.awayTeamId)) {
+        impliedByTeam.set(g.awayTeamId, impliedTeamTotal(g.gameTotal, -hs)!);
+      }
+    }
   }
-  if (oppByTeam.size === 0) return out;
+  const leagueAvgTeamTotal = totals.length
+    ? totals.reduce((a, b) => a + b, 0) / totals.length / 2
+    : null;
+  if (oppByTeam.size === 0) return empty;
 
-  // DvP grade tables, memoized per (posBucket, stat): opponentTeamId -> grade.
-  const tableCache = new Map<string, Map<number, MatchupGrade>>();
-  const gradeTable = async (bucket: PosBucket, stat: StatKey): Promise<Map<number, MatchupGrade>> => {
+  // DvP cell tables, memoized per (posBucket, stat): opponentTeamId -> cell (the cell
+  // feeds both the grade and the opponent multiplier, so they stay in lock-step).
+  const tableCache = new Map<string, Map<number, DvpCell>>();
+  const cellTable = async (bucket: PosBucket, stat: StatKey): Promise<Map<number, DvpCell>> => {
     const key = `${bucket}:${stat}`;
     const cached = tableCache.get(key);
     if (cached) return cached;
@@ -1065,23 +1244,44 @@ async function boardMatchupGrades(
     if (sport === 'nba') cells = await getNbaDvpTable(bucket, stat, season);
     else if (sport === 'mlb' && bucket === 'H') cells = await getMlbHitterMatchupTable(stat, season);
     else if (sport === 'nfl') cells = await getNflDvpTable(bucket, stat, season);
-    const m = new Map<number, MatchupGrade>();
-    for (const c of cells) m.set(c.opponentTeamId, matchupGrade(c));
+    const m = new Map<number, DvpCell>();
+    for (const c of cells) m.set(c.opponentTeamId, c);
     tableCache.set(key, m);
     return m;
   };
+
+  // NBA game pace (one league-wide table) — the same projected-game pace applies to all
+  // of a player's stats, so it's keyed by player.
+  const paceTable = sport === 'nba' ? await getNbaPaceTable(season) : null;
 
   for (const p of players) {
     if (p.teamId == null || !p.posBucket) continue;
     const opp = oppByTeam.get(p.teamId);
     if (opp == null) continue;
     const bucket = p.posBucket as PosBucket;
+    if (paceTable) {
+      paceMultByPlayer.set(
+        p.id,
+        paceMultiplier(
+          paceTable.byTeam.get(p.teamId) ?? null,
+          paceTable.byTeam.get(opp) ?? null,
+          paceTable.leagueAvg,
+        ),
+      );
+    }
+    envMultByPlayer.set(
+      p.id,
+      environmentMultiplier(impliedByTeam.get(p.teamId) ?? null, leagueAvgTeamTotal),
+    );
     for (const stat of statKeysForSport(sport, bucket)) {
-      const grade = (await gradeTable(bucket, stat)).get(opp);
-      if (grade) out.set(`${p.id}:${stat}`, grade);
+      const cell = (await cellTable(bucket, stat)).get(opp);
+      if (cell) {
+        grades.set(`${p.id}:${stat}`, matchupGrade(cell));
+        opponentMults.set(`${p.id}:${stat}`, opponentMultiplierFromCell(cell));
+      }
     }
   }
-  return out;
+  return { grades, opponentMults, paceMultByPlayer, envMultByPlayer };
 }
 
 /** Rank a loaded player pool into board rows against a given line map (pure compute). */
@@ -1101,6 +1301,12 @@ function computeBoardRows(
     /** Next-opponent DvP grade per `${playerId}:${stat}`, so the board's FireFactor
      *  includes the same matchup component as the player page. */
     matchupGrades?: Map<string, MatchupGrade>;
+    /** Opponent projection multiplier per `${playerId}:${stat}` (matches the page). */
+    opponentMults?: Map<string, number>;
+    /** NBA game-pace multiplier per player (matches the page). */
+    paceMultByPlayer?: Map<number, number>;
+    /** Vegas game-environment multiplier per player (matches the page). */
+    envMultByPlayer?: Map<number, number>;
   },
 ): BoardRow[] {
   const { limit, perPlayerCap, perStatCap, requireProvided } = opts;
@@ -1122,15 +1328,23 @@ function computeBoardRows(
         return { window: String(w), overs: hr.overs, decided: hr.decided };
       });
       const seasonHr = computeHitRate(games, stat, line, 'season');
-      const projection = recentFormEstimate(seasonHr.values, seasonHr.mean);
+      // Matchup-adjust the projection (opponent + pace) from the batched context maps,
+      // then derive the model P(over) — the SAME path as the player page.
+      const projection = recentFormEstimate(seasonHr.values, seasonHr.mean, {
+        opponent: opts.opponentMults?.get(`${p.id}:${stat}`) ?? 1,
+        pace: opts.paceMultByPlayer?.get(p.id) ?? 1,
+        environment: opts.envMultByPlayer?.get(p.id) ?? 1,
+      });
+      const modelProb = lineProbabilities(stat, projection.projection, seasonHr.stdev, line);
       const consistency = computeConsistency(seasonHr.values, seasonHr.mean, seasonHr.stdev, line);
       // Matchup grade (next opponent's DvP) comes from the batched `matchupGrades` map
       // so the board's FireFactor matches the player page; absent → degrades gracefully.
       const ffInput = {
         line,
         windows,
-        projection: projection.stabilized,
+        projection: projection.projection,
         stdev: seasonHr.stdev,
+        modelProbOver: modelProb?.over ?? null,
         cv: consistency.cv,
         matchup: opts.matchupGrades?.get(`${p.id}:${stat}`),
         gamesPlayed: games.length,
@@ -1178,7 +1392,7 @@ function computeBoardRows(
         stat,
         statShort: STAT_DEFS[stat].short,
         line,
-        projection: projection.stabilized,
+        projection: projection.projection,
         fireScore,
         lineValue: rowLineValue,
       });

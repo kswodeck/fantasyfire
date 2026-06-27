@@ -17,7 +17,7 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: 'Where does the data come from?',
-    a: 'Everything is computed from publicly available NBA, MLB, and NFL game logs, refreshed nightly. FantasyFire is independent and is not affiliated with the NBA, MLB, NFL, or any team.',
+    a: 'Everything is computed from publicly available game logs, refreshed nightly. FantasyFire is independent and is not affiliated with any league or team.',
   },
   {
     q: 'Do you sell picks or give betting advice?',
@@ -29,7 +29,7 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: 'What is Defense vs. Position (DvP)?',
-    a: "It's how much of a stat each opponent gives up to a player's position (guard, forward, or center), ranked 1 to 30 where rank 1 allows the most. A quick read on whether today's matchup is soft or tough for that role.",
+    a: "It's how much of a stat each opponent gives up to a player's position, ranked across the league where rank 1 allows the most (the softest matchup). In MLB the equivalent is opposing pitching — how much a team's staff gives up to hitters. A quick read on whether today's matchup is soft or tough for that role.",
   },
   {
     q: 'Why does the line default to a half-point like 24.5?',
@@ -37,15 +37,15 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: "Why aren't all of a player's games counted?",
-    a: 'By default we exclude games under ten minutes — garbage-time cameos and injury exits are not representative of a player’s output. The game count shown reflects the qualifying games.',
+    a: 'We drop games where a player was barely involved — a garbage-time cameo or an early injury exit isn’t representative. The bar adapts per player (minutes in the NBA, plate appearances for MLB hitters), so part-time players aren’t zeroed out. The game count shown reflects the qualifying games.',
   },
   {
     q: 'How current is the data?',
-    a: "It's refreshed nightly, and the season is detected automatically from the calendar (it rolls over to the new season in mid-October).",
+    a: "It's refreshed nightly, and each sport's current season is detected automatically from the calendar.",
   },
   {
     q: 'Can I change the stat and line?',
-    a: 'Yes. Pick any stat (points, rebounds, assists, PRA, threes, fouls, and more) and type any line — the hit-rate cards, chart, and matchup update instantly, and the URL is shareable.',
+    a: 'Yes. Pick any stat we offer for that sport and type any line — the hit-rate cards, chart, and matchup update instantly, and the URL is shareable.',
   },
   {
     q: 'How does the fair-price calculator work?',
@@ -53,7 +53,7 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: 'Which sports do you cover?',
-    a: 'FantasyFire currently covers the NBA, MLB, and NFL, each with its own home, player pages, and stat markets. More sports may follow.',
+    a: 'The NBA, MLB, and NFL — each with its own home page, player pages, and stat markets. More sports may follow.',
   },
 ];
 
@@ -92,31 +92,31 @@ const TERMS: { term: string; def: string }[] = [
   },
   {
     term: 'Defense vs. Position (DvP)',
-    def: 'The average of a stat an opponent allows to a position bucket, ranked 1–30 where rank 1 allows the most (the softest matchup).',
+    def: 'The average of a stat an opponent allows to a position group, ranked across the league where rank 1 allows the most (the softest matchup).',
   },
   {
     term: 'Position bucket',
-    def: 'A coarse role grouping — Guard, Forward, or Center — used to keep DvP samples dense.',
+    def: 'A coarse role grouping used to keep matchup samples dense — Guard/Forward/Center in the NBA, QB/RB/WR/TE in the NFL.',
   },
   {
     term: 'Sample size / low sample',
     def: 'The number of games behind a number. Small samples are flagged because they are less reliable.',
   },
   {
-    term: 'Minutes filter',
-    def: 'Games under ten minutes are excluded so garbage-time and injury games do not skew the rates.',
+    term: 'Opportunity filter',
+    def: 'Games where a player was barely involved are excluded so garbage-time and injury exits do not skew the rates. The bar adapts per player — minutes in the NBA, plate appearances for MLB hitters.',
   },
   {
-    term: 'PRA / PR / PA / RA',
+    term: 'PRA / PR / PA / RA (NBA)',
     def: 'Combined stats: Points+Rebounds+Assists, Points+Rebounds, Points+Assists, and Rebounds+Assists.',
   },
-  { term: 'Stocks', def: 'Steals + Blocks combined.' },
+  { term: 'Stocks (NBA)', def: 'Steals + Blocks combined.' },
   {
-    term: 'OREB / DREB / PF',
+    term: 'OREB / DREB / PF (NBA)',
     def: 'Offensive rebounds, defensive rebounds, and personal fouls.',
   },
   {
-    term: 'Plus/minus',
+    term: 'Plus/minus (NBA)',
     def: "The team's point differential while the player was on the floor.",
   },
   {

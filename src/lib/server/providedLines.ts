@@ -101,6 +101,37 @@ export async function getProvidedLinesBySource(
 }
 
 /**
+ * Every book's latest QUOTE (line + two-sided American odds) for ONE player + stat —
+ * the input for the cross-book market consensus / +EV read (idea #1). Same windowing
+ * and newest-per-source rule as getProvidedLinesBySource, but it also carries the odds
+ * (null for DFS pick'em books, present for sportsbooks). Empty when the feature is off.
+ */
+export async function getProvidedQuotesBySource(
+  sport: Sport,
+  playerId: number,
+  stat: StatKey,
+): Promise<{ source: string; line: number; overOdds: number | null; underOdds: number | null }[]> {
+  if (!providedLinesEnabled()) return [];
+  try {
+    const rows = await db.providedLine.findMany({
+      where: { sport, playerId, stat, gameDate: { gte: recentCutoff(RESEARCH_WINDOW_DAYS) } },
+      orderBy: [{ gameDate: 'desc' }, { fetchedAt: 'desc' }],
+      select: { source: true, line: true, overOdds: true, underOdds: true },
+    });
+    const latest = new Map<string, { line: number; overOdds: number | null; underOdds: number | null }>();
+    for (const r of rows) {
+      if (!latest.has(r.source)) {
+        latest.set(r.source, { line: r.line, overOdds: r.overOdds, underOdds: r.underOdds });
+      }
+    }
+    return orderSources([...latest.keys()]).map((source) => ({ source, ...latest.get(source)! }));
+  } catch (e) {
+    console.warn('[providedLines] getProvidedQuotesBySource failed:', e instanceof Error ? e.message : e);
+    return [];
+  }
+}
+
+/**
  * Batched provided lines for a set of players from a SPECIFIC source, keyed
  * `${playerId}:${stat}` → line. One query for the whole board scan; empty map when
  * the feature is off. Newest line per key wins.

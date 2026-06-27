@@ -13,6 +13,7 @@ import type {
   FireFactorResult,
   PlayerSplits,
 } from '@/lib/stats';
+import type { MarketConsensus } from '@/lib/odds';
 import type { Sport } from '@/lib/sports';
 
 export interface PlayerSummary {
@@ -78,13 +79,17 @@ export interface WindowResult {
 
 /** The "good prop" read for a player + stat + line (all on free data). */
 export interface PlayerVerdict {
-  /** Recent-form estimate range (raw L5/L10, EWMA, median, stabilized). */
+  /** Matchup-adjusted projection (raw L5/L10, EWMA, median, base + adjusted). */
   projection: RecentFormEstimate;
   consistency: Consistency;
   /** A-F matchup grade from DvP; null when there is no matchup. */
   matchupGrade: MatchupGrade | null;
-  /** The composite FireFactor signal (LEAN mode — no user price). */
+  /** The composite FireFactor signal. */
   fireScore: FireFactorResult;
+  /** Model P(stat > line) from the projection's distribution; null when no projection. */
+  modelProbOver: number | null;
+  /** Cross-book no-vig consensus + best price / +EV; null when <1 two-sided book. */
+  marketConsensus: MarketConsensus | null;
 }
 
 /** One book's number for a player + stat, scored against the market consensus. */
@@ -150,7 +155,21 @@ export interface PlayerResearch {
     isUpcoming: boolean;
   } | null;
   dvp: DvpCell | null;
+  /** Current injury / availability status (idea #5); null when the player is clear. */
+  availability: PlayerAvailability | null;
   why: string;
+}
+
+/** Current injury / availability for a player, from the ESPN injuries feed. */
+export interface PlayerAvailability {
+  /** Normalized bucket: out | doubtful | questionable | day-to-day. */
+  status: 'out' | 'doubtful' | 'questionable' | 'day-to-day';
+  /** ESPN's original status string (e.g. "15-Day-IL"). */
+  rawStatus: string;
+  /** Body part / injury type, when given. */
+  detail: string | null;
+  /** ESPN's short comment, when given. */
+  comment: string | null;
 }
 
 /** One ranked row on the cross-player board. */
@@ -161,7 +180,7 @@ export interface BoardRow {
   stat: StatKey;
   statShort: string;
   line: number;
-  /** Stabilized recent-form estimate (for the "recent X vs line Y" read). */
+  /** Matchup-adjusted projection (for the "recent X vs line Y" read). */
   projection: number | null;
   fireScore: FireFactorResult;
   /** Cross-book line value vs the consensus for THIS row's book; null when <2 books. */

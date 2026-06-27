@@ -49,7 +49,7 @@ export default function HowItWorksPage() {
         <p>
           Everything is computed from publicly available NBA, MLB, and NFL box-score game logs,
           ingested nightly into our database. The web app only reads that data — it never
-          invents it. Each player page shows a <strong>&ldquo;Stats updated through&rdquo;
+          invents it. Each player page shows a <strong>&ldquo;Stats updated through &rdquo;
           date</strong>: these are completed-game box scores refreshed once a day, not a
           live feed. If a game just finished, it may not appear until the next nightly
           update, and late official stat corrections are re-pulled for recent games.
@@ -127,19 +127,13 @@ export default function HowItWorksPage() {
 
         <h2>Matchup context</h2>
         <p>
-          <strong>NBA — Defense vs. Position.</strong> For each opponent and position
-          bucket (guards / forwards / centers) we average the stat that opponent allows,
-          then rank all teams: <strong>rank 1 = allows the most</strong> (the softest
-          matchup). Positions are coarse on purpose — three buckets give denser samples —
-          and any cell built on fewer than {DVP_LOW_SAMPLE}{' '}player-games is flagged as low
-          sample. Don&rsquo;t read precision into a noisy cell.
-        </p>
-        <p>
-          <strong>NFL — Defense vs. Position.</strong> For each opponent and position
-          bucket (QB / RB / WR / TE) we average the stat that opponent allows, then rank
-          all 32 teams: <strong>rank 1 = allows the most</strong> (the softest matchup).
-          As with the NBA, the buckets are coarse on purpose, and any cell built on fewer
-          than {DVP_LOW_SAMPLE}{' '}player-games is flagged as low sample.
+          <strong>NBA &amp; NFL — Defense vs. Position.</strong> For each opponent and
+          position bucket — guards / forwards / centers in the NBA, QB / RB / WR / TE in
+          the NFL — we average the stat that opponent allows, then rank every team:{' '}
+          <strong>rank 1 = allows the most</strong> (the softest matchup). The buckets are
+          coarse on purpose — fewer groups give denser samples — and any cell built on
+          fewer than {DVP_LOW_SAMPLE}{' '}player-games is flagged as low sample. Don&rsquo;t
+          read precision into a noisy cell.
         </p>
         <p>
           <strong>MLB — opposing pitching.</strong> For a hitter we show how much of the

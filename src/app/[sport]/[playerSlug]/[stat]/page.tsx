@@ -171,8 +171,7 @@ export default async function PlayerStatPage({ params }: PageProps) {
             </h1>
             {research.lastGameDate && (
               <p className="mt-1 text-xs text-muted">
-                Stats updated through {formatIsoDate(research.lastGameDate)} — nightly box scores, not
-                live.
+                Stats updated: {formatIsoDate(research.lastGameDate)} — nightly box scores, not live.
               </p>
             )}
           </div>

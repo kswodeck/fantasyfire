@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { ewma, shrinkToBaseline, recentFormEstimate } from './projection';
+import {
+  ewma,
+  shrinkToBaseline,
+  recentFormEstimate,
+  combineAdjustments,
+  PROJECTION_ADJ_BOUNDS,
+} from './projection';
 
 describe('ewma', () => {
   it('a single value returns that value', () => {
@@ -44,5 +50,36 @@ describe('recentFormEstimate', () => {
     const r = recentFormEstimate([], 10);
     expect(r.rawL5).toBeNull();
     expect(r.stabilized).toBeNull();
+    expect(r.projection).toBeNull();
+  });
+  it('projection equals the base when no adjustment is given', () => {
+    const r = recentFormEstimate([20, 22, 18, 21, 19], 20);
+    expect(r.adjustment).toBe(1);
+    expect(r.projection).toBeCloseTo(r.stabilized!, 9);
+  });
+  it('a soft matchup + fast pace nudges the projection up', () => {
+    const base = recentFormEstimate([20, 22, 18, 21, 19], 20);
+    const adj = recentFormEstimate([20, 22, 18, 21, 19], 20, { opponent: 1.08, pace: 1.05 });
+    expect(adj.projection!).toBeGreaterThan(base.projection!);
+    expect(adj.adjustment).toBeCloseTo(1.08 * 1.05, 9);
+  });
+});
+
+describe('combineAdjustments', () => {
+  it('is neutral with no factors', () => {
+    expect(combineAdjustments()).toBe(1);
+    expect(combineAdjustments({ opponent: null, pace: undefined })).toBe(1);
+  });
+  it('multiplies the present factors', () => {
+    expect(combineAdjustments({ opponent: 1.1, pace: 0.95 })).toBeCloseTo(1.1 * 0.95, 9);
+  });
+  it('clamps an extreme product to the bounds', () => {
+    expect(combineAdjustments({ opponent: 2, pace: 2, environment: 2 })).toBe(
+      PROJECTION_ADJ_BOUNDS.max,
+    );
+    expect(combineAdjustments({ opponent: 0.1, pace: 0.1 })).toBe(PROJECTION_ADJ_BOUNDS.min);
+  });
+  it('ignores non-positive / non-finite factors', () => {
+    expect(combineAdjustments({ opponent: 0, pace: NaN, environment: 1.1 })).toBeCloseTo(1.1, 9);
   });
 });

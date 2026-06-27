@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { matchupGrade, opponentMultiplier, type DvpCell } from './dvp';
+import {
+  matchupGrade,
+  opponentMultiplier,
+  opponentMultiplierFromCell,
+  type DvpCell,
+} from './dvp';
 
 function cell(rank: number, totalRanked: number, lowSample = false, avgAllowed = 25): DvpCell {
   return {
@@ -35,5 +40,21 @@ describe('opponentMultiplier', () => {
   });
   it('is neutral (1.0) on a low-sample cell', () => {
     expect(opponentMultiplier(cell(1, 30, true, 30), 25)).toBe(1);
+  });
+});
+
+describe('opponentMultiplierFromCell', () => {
+  it('softest matchup (rank 1) boosts to +10%', () => {
+    expect(opponentMultiplierFromCell(cell(1, 30))).toBeCloseTo(1.1, 6);
+  });
+  it('toughest matchup cuts to -10%', () => {
+    expect(opponentMultiplierFromCell(cell(30, 30))).toBeCloseTo(0.9, 6);
+  });
+  it('a middle matchup is ~neutral', () => {
+    expect(opponentMultiplierFromCell(cell(15, 30))).toBeCloseTo(1.0, 1);
+  });
+  it('low-sample / unranked cells are neutral', () => {
+    expect(opponentMultiplierFromCell(cell(1, 30, true))).toBe(1);
+    expect(opponentMultiplierFromCell(cell(1, 1))).toBe(1);
   });
 });

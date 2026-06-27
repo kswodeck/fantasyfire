@@ -101,6 +101,20 @@ describe('computeFireFactor', () => {
     expect(worse.score).toBe(baseRead.score);
   });
 
+  it('uses the model P(over) for the projection component when supplied', () => {
+    const withModel = computeFireFactor({ ...base, modelProbOver: 0.7 });
+    const proj = withModel.components.find((c) => c.key === 'proj')!;
+    expect(proj.label).toBe('Projection vs line');
+    // side is over, so the proj sub-score should equal the supplied P(over).
+    expect(proj.score).toBeCloseTo(0.7, 9);
+  });
+
+  it('falls back to the z-score projection component when no model prob is given', () => {
+    const r = computeFireFactor(base); // projection 22 vs line 20, stdev 5
+    const proj = r.components.find((c) => c.key === 'proj')!;
+    expect(proj.score).toBeGreaterThan(0.5); // projection above the line ⇒ leans over
+  });
+
   it('hit sub-score uses the Wilson CENTER vs 0.5 (not the lower bound)', () => {
     const overs = 70;
     const decided = 100;

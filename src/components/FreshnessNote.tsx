@@ -5,7 +5,7 @@ export function FreshnessNote({ date, className = '' }: { date: string | null; c
   if (!date) return null;
   return (
     <p className={`text-xs text-muted ${className}`}>
-      Stats updated through {formatIsoDate(date)} — nightly box scores, not live.
+      Stats updated: {formatIsoDate(date)} — nightly box scores, not live.
     </p>
   );
 }

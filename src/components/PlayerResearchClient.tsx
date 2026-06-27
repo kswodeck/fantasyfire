@@ -20,6 +20,8 @@ import { DvpBlock } from './DvpBlock';
 import { WhyReadout } from './WhyReadout';
 import { ParkFactorNote } from './ParkFactorNote';
 import { VerdictPanel } from './VerdictPanel';
+import { AvailabilityBanner } from './AvailabilityBanner';
+import { MarketEdgePanel } from './MarketEdgePanel';
 import { SavePropControl } from './SavePropControl';
 import { SplitsPanel } from './SplitsPanel';
 import { LineValueTable } from './LineValueTable';
@@ -221,6 +223,11 @@ export function PlayerResearchClient({
         />
       </div>
 
+      {/* Injury / availability — gates the read when the player is Out */}
+      {data.availability && (
+        <AvailabilityBanner availability={data.availability} playerName={data.player.fullName} />
+      )}
+
       {/* Verdict — the FireFactor "good prop" read + sub-signals */}
       <VerdictPanel verdict={data.verdict} statShort={statDef.short} line={data.line} />
 
@@ -267,6 +274,18 @@ export function PlayerResearchClient({
           />
         )}
       </section>
+
+      {/* Market edge — automated no-vig consensus + best price / +EV from the books we
+          track (only when a sportsbook posted two-sided odds for this prop). */}
+      {data.verdict.marketConsensus && (
+        <div className="mb-6">
+          <MarketEdgePanel
+            consensus={data.verdict.marketConsensus}
+            statShort={statDef.short}
+            modelProbOver={data.verdict.modelProbOver}
+          />
+        </div>
+      )}
 
       {/* Line shopping — best number across books (sits above the fair-price calculator;
           updates live with the stat/book since it reads the current research). */}

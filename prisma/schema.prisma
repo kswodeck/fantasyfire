@@ -59,6 +59,7 @@ model Player {
 
   gameStats     PlayerGameStat[]
   providedLines ProvidedLine[]
+  injury        PlayerInjury?
 
   @@unique([sport, externalId])
   @@unique([sport, slug])
@@ -177,11 +178,39 @@ model ScheduledGame {
   homeProbablePitcher String?
   awayProbablePitcher String?
 
+  // Pre-game Vegas odds (idea #4), from the ESPN scoreboard's odds[] — the game
+  // total + spread drive the projection's "game environment" multiplier. Nullable:
+  // a game without posted odds just stays environment-neutral.
+  oddsProvider String?
+  gameTotal    Float? // over/under (combined score)
+  homeSpread   Float? // home-team perspective; negative = home favored
+  homeFavorite Boolean?
+
   homeTeam Team @relation("scheduledHome", fields: [homeTeamId], references: [id])
   awayTeam Team @relation("scheduledAway", fields: [awayTeamId], references: [id])
 
   @@unique([sport, externalId])
   @@index([sport, date])
+}
+
+// Current injury / availability status per player (idea #5), from the public ESPN
+// injuries feed. One row per player (upserted), so a player page can flag "Out" /
+// "Questionable" and a FireFactor read can be gated when the player isn't playing.
+// Players not in our DB (no game logs) are simply skipped at ingest.
+model PlayerInjury {
+  id         Int       @id @default(autoincrement())
+  sport      String
+  playerId   Int       @unique
+  status     String // normalized: out | doubtful | questionable | day-to-day
+  rawStatus  String // ESPN's original status (e.g. "15-Day-IL", "Day-To-Day")
+  detail     String? // body part / type (e.g. "elbow")
+  comment    String? // ESPN's short comment
+  reportedAt DateTime?
+  fetchedAt  DateTime  @default(now())
+
+  player Player @relation(fields: [playerId], references: [id])
+
+  @@index([sport])
 }
 
 // OPTIONAL real prop lines scraped from public DFS/sportsbook feeds,

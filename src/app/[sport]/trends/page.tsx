@@ -98,7 +98,7 @@ export default async function TrendsPage({ params }: PageProps) {
       <p className="mt-2 max-w-2xl text-sm text-muted">
         Players whose <span className="text-foreground">last-10 form</span> has swung hardest from their
         season baseline — heating up or cooling off vs their{' '}
-        {hasSources ? `real ${sourceLabel(initialSource)} line` : 'typical line'} — with each
+        {hasSources ? `real line` : 'typical line'} — with each
         player&rsquo;s <span className="text-foreground">current streak</span> shown alongside. Ranked
         by the lower bound of a 95% Wilson interval, so a tiny hot sample sits below a steadier swing.
         {hasSources ? ' Switch books with the selector below.' : ''}

@@ -1,5 +1,5 @@
 import type { PlayerVerdict } from '@/lib/types';
-import { num1 } from '@/lib/format';
+import { num1, pct } from '@/lib/format';
 import { LeanArrow } from './LeanArrow';
 import { tierTextClass, tierBoxClass, gradeTextClass, heatLabel } from '@/lib/tierStyle';
 
@@ -18,7 +18,11 @@ export function VerdictPanel({
   statShort: string;
   line: number;
 }) {
-  const { fireScore, projection, consistency, matchupGrade } = verdict;
+  const { fireScore, projection, consistency, matchupGrade, modelProbOver } = verdict;
+  // Probability the leaning side hits, from the projection's distribution.
+  const modelProbSide =
+    modelProbOver == null ? null : fireScore.side === 'over' ? modelProbOver : 1 - modelProbOver;
+  const adjusted = projection.adjustment !== 1 && projection.projection != null;
   const tierText = tierTextClass(fireScore.tier, fireScore.side);
   const tierBox = tierBoxClass(fireScore.tier, fireScore.side);
   const headline =
@@ -48,6 +52,11 @@ export function VerdictPanel({
           {headline}
         </span>
         <span className="text-sm tabular-nums text-muted">FireFactor {fireScore.score}/100</span>
+        {modelProbSide != null && (
+          <span className="text-sm tabular-nums text-muted">
+            · model {pct(modelProbSide)} {fireScore.side}
+          </span>
+        )}
       </div>
 
       {/* Component breakdown — the number is never shown without this. */}
@@ -72,10 +81,15 @@ export function VerdictPanel({
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">
-            Recent-form est.
+            Projection
           </div>
           <div className="text-sm font-semibold tabular-nums">
-            {num1(projection.stabilized)} {statShort}
+            {num1(projection.projection)} {statShort}
+            {adjusted && (
+              <span className="ml-1 font-normal text-[11px] text-muted">
+                (×{projection.adjustment.toFixed(2)} matchup)
+              </span>
+            )}
           </div>
           <div className="text-[11px] text-muted">
             L5 {num1(projection.rawL5)} · L10 {num1(projection.rawL10)} · med{' '}

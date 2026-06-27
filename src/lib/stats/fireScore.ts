@@ -86,10 +86,14 @@ export interface FireFactorInput {
   line: number;
   /** Per-window over/decided — drives the Wilson hit component + trust gate. */
   windows: WindowHits[];
-  /** Stabilized recent-form estimate; null drops the projection component. */
+  /** Adjusted projection (matchup-aware); null drops the projection component. */
   projection: number | null;
-  /** Population stdev of the window (for the projection z-score). */
+  /** Population stdev of the window (for the projection z-score fallback). */
   stdev: number | null;
+  /** Model P(stat > line) from the projection's distribution (distribution.ts). When
+   *  present it drives the projection component directly; else we fall back to the
+   *  stdev z-score. This is the principled "projection vs line" probability. */
+  modelProbOver?: number | null;
   /** Coefficient of variation; null drops the consistency component. */
   cv: number | null;
   /** A-F matchup grade; 'NR'/undefined drops the matchup component. */
@@ -189,7 +193,8 @@ function tierFor(score: number, ok: boolean): FireTier {
 }
 
 export function computeFireFactor(input: FireFactorInput): FireFactorResult {
-  const { line, windows, projection, stdev, cv, matchup, evPerDollar, lineValueEdge } = input;
+  const { line, windows, projection, stdev, cv, matchup, evPerDollar, lineValueEdge, modelProbOver } =
+    input;
 
   // Side = the side recent history leans (blended Wilson CENTER of the over).
   const overBlend = blendWilson(windows, 'over');
@@ -212,11 +217,20 @@ export function computeFireFactor(input: FireFactorInput): FireFactorResult {
       weight: FIREFACTOR_WEIGHTS.hit,
     });
   }
-  if (projection !== null && stdev !== null) {
+  if (modelProbOver != null) {
+    // Principled path: the projection's distribution gives P(over) directly.
+    comps.push({
+      key: 'proj',
+      label: 'Projection vs line',
+      score: clamp01(side === 'over' ? modelProbOver : 1 - modelProbOver),
+      weight: FIREFACTOR_WEIGHTS.proj,
+    });
+  } else if (projection !== null && stdev !== null) {
+    // Fallback when no distribution prob was supplied: a z-score sigmoid.
     const z = (projection - line) / Math.max(stdev, 0.5);
     comps.push({
       key: 'proj',
-      label: 'Recent-form estimate vs line',
+      label: 'Projection vs line',
       score: side === 'over' ? sigmoid(1.1 * z) : sigmoid(-1.1 * z),
       weight: FIREFACTOR_WEIGHTS.proj,
     });

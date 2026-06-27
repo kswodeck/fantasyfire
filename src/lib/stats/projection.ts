@@ -1,14 +1,31 @@
-// Recent-form ESTIMATE (descriptive) — the base for the FireFactor "good prop"
-// signal. Pure (no React/Next/db). This is NOT a forecast of a specific game:
-// it is a recency-weighted, sample-stabilized read of a player's recent values,
-// always surfaced as a small RANGE (raw L5/L10 + median + stabilized), never one
-// hero number. Honest framing lives in the UI + /methodology.
+// Player PROJECTION. Pure (no React/Next/db). A recency-weighted, sample-stabilized
+// read of a player's recent values, then ADJUSTED for the specific matchup it faces:
+// opponent strength, game pace, and game environment. The raw L5/L10/median are kept
+// alongside as the descriptive context the projection is built from.
+//
+// The base = EWMA of recent games regressed toward the season baseline (damps
+// small-sample streaks). The headline `projection` = base × a gentle, clamped
+// adjustment multiplier, so a soft matchup or fast-paced game nudges the number
+// without ever letting context swing it wildly.
 import { median } from '../format';
 
 /** EWMA decay. α=0.28 ⇒ the last ~2 games carry roughly half the weight. */
 export const EWMA_ALPHA = 0.28;
 /** Pseudo-games of regression toward the season baseline (shrinkage strength). */
 export const SHRINKAGE_K = 5;
+/** Overall clamp on the combined matchup adjustment — context nudges, never swings. */
+export const PROJECTION_ADJ_BOUNDS = { min: 0.82, max: 1.22 } as const;
+
+/** Per-factor matchup multipliers (1 = neutral). Each defaults to neutral when its
+ *  data is unavailable, so the projection degrades to the pure recent-form base. */
+export interface ProjectionAdjustments {
+  /** Opponent strength (DvP / opposing-pitcher derived). */
+  opponent?: number | null;
+  /** Game pace — more possessions ⇒ more counting-stat opportunity. */
+  pace?: number | null;
+  /** Game environment (Vegas total / implied team total). */
+  environment?: number | null;
+}
 
 export interface RecentFormEstimate {
   /** Simple mean of the last 5 games. */
@@ -19,8 +36,30 @@ export interface RecentFormEstimate {
   ewma: number | null;
   /** Median of the last 10 games (robust to outliers). */
   medianL10: number | null;
-  /** EWMA regressed toward the season baseline — the headline stabilized read. */
+  /** EWMA regressed toward the season baseline — the pre-adjustment base. */
   stabilized: number | null;
+  /** The headline projection: `stabilized` × the clamped matchup adjustment. */
+  projection: number | null;
+  /** The combined, clamped multiplier applied to `stabilized` (1 = neutral). */
+  adjustment: number;
+  /** The per-factor multipliers actually folded in (for the breakdown UI). */
+  factors: ProjectionAdjustments;
+}
+
+const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
+
+/**
+ * Combine the available matchup factors into one clamped multiplier. Missing/neutral
+ * factors contribute nothing; the product is bounded by PROJECTION_ADJ_BOUNDS so no
+ * single game's context can dominate the recent-form base.
+ */
+export function combineAdjustments(adj: ProjectionAdjustments = {}): number {
+  const factors = [adj.opponent, adj.pace, adj.environment];
+  let product = 1;
+  for (const f of factors) {
+    if (f != null && Number.isFinite(f) && f > 0) product *= f;
+  }
+  return clamp(product, PROJECTION_ADJ_BOUNDS.min, PROJECTION_ADJ_BOUNDS.max);
 }
 
 function mean(xs: number[]): number | null {
@@ -58,16 +97,27 @@ export function shrinkToBaseline(
 }
 
 /**
- * Recent-form estimate from most-recent-first values + a season baseline mean.
- * Returns all four reference numbers so the UI shows a range, plus the
- * regression-stabilized headline. Descriptive recent form — not a prediction.
+ * Player projection from most-recent-first values + a season baseline mean, with an
+ * optional matchup adjustment (opponent / pace / environment). Returns the raw L5/L10/
+ * median context, the recency-stabilized base, and the adjusted headline `projection`.
  */
 export function recentFormEstimate(
   values: number[],
   seasonMean: number | null,
+  adjustments: ProjectionAdjustments = {},
 ): RecentFormEstimate {
+  const adjustment = combineAdjustments(adjustments);
   if (values.length === 0) {
-    return { rawL5: null, rawL10: null, ewma: null, medianL10: null, stabilized: null };
+    return {
+      rawL5: null,
+      rawL10: null,
+      ewma: null,
+      medianL10: null,
+      stabilized: null,
+      projection: null,
+      adjustment,
+      factors: adjustments,
+    };
   }
   const e = ewma(values);
   // Baseline for shrinkage: the season mean when available, else the EWMA itself
@@ -82,5 +132,8 @@ export function recentFormEstimate(
     ewma: e,
     medianL10: median(values.slice(0, 10)),
     stabilized,
+    projection: stabilized === null ? null : Math.max(0, stabilized * adjustment),
+    adjustment,
+    factors: adjustments,
   };
 }

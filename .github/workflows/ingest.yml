@@ -23,8 +23,8 @@ name: Ingest NBA + MLB + NFL data
 
 on:
   schedule:
-    # 10:00 UTC daily (~early morning US) — after the prior night's games settle.
-    - cron: '0 10 * * *'
+    # 9:00 UTC daily (~early morning US) — after the prior night's games settle.
+    - cron: '0 9 * * *'
   workflow_dispatch: {}
 
 concurrency:

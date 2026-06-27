@@ -10,6 +10,8 @@ import 'dotenv/config';
 import { db } from '../lib/db';
 import { recordIngestRun } from './ingestRun';
 import { fetchMlbSchedule, fetchNbaSchedule, fetchNflSchedule, type ScheduleGameRow } from './schedule';
+import { fetchEspnGameOdds, type GameOddsRow } from './gameOdds';
+import type { Sport } from '../lib/sports';
 
 /** The next `days` calendar days as YYYY-MM-DD in US Eastern (the betting day). */
 function slateDates(days = 2): string[] {
@@ -74,11 +76,12 @@ async function ingestSport(
 
 async function main() {
   const [mlbTeams, nbaTeams, nflTeams] = await Promise.all([
-    db.team.findMany({ where: { sport: 'mlb' }, select: { id: true, externalId: true } }),
+    db.team.findMany({ where: { sport: 'mlb' }, select: { id: true, externalId: true, abbreviation: true } }),
     db.team.findMany({ where: { sport: 'nba' }, select: { id: true, abbreviation: true } }),
     db.team.findMany({ where: { sport: 'nfl' }, select: { id: true, abbreviation: true } }),
   ]);
   const mlbByExternalId = new Map(mlbTeams.map((t) => [String(t.externalId), t.id]));
+  const mlbByAbbr = new Map(mlbTeams.map((t) => [t.abbreviation, t.id]));
   const nbaByAbbr = new Map(nbaTeams.map((t) => [t.abbreviation, t.id]));
   const nflByAbbr = new Map(nflTeams.map((t) => [t.abbreviation, t.id]));
 
@@ -88,10 +91,60 @@ async function main() {
   // NFL plays weekly (Thu–Mon) — pull the next 8 days so the full week is present.
   await ingestSport('nfl', fetchNflSchedule, (k) => nflByAbbr.get(k), slateDates(8));
 
+  // Vegas odds (idea #4) from the ESPN scoreboard — for every sport, matched back to
+  // the schedule rows above by team + date. Best-effort: games without odds stay null.
+  await ingestGameOdds('mlb', mlbByAbbr, daily);
+  await ingestGameOdds('nba', nbaByAbbr, daily);
+  await ingestGameOdds('nfl', nflByAbbr, slateDates(8));
+
   // Prune games older than 3 days so the table stays small.
   const cutoff = new Date(Date.now() - 3 * 86_400_000);
   const pruned = await db.scheduledGame.deleteMany({ where: { date: { lt: cutoff } } });
   if (pruned.count) console.log(`[schedule] pruned ${pruned.count} stale games`);
+}
+
+/** Attach ESPN game odds to the matching ScheduledGame rows (by team + a ±1-day
+ *  window, to absorb the UTC/ET date offset). One team plays at most once/day. */
+async function ingestGameOdds(
+  sport: Sport,
+  teamByAbbr: Map<string, number>,
+  dates: string[],
+): Promise<void> {
+  let fetched = 0;
+  let updated = 0;
+  for (const date of dates) {
+    let rows: GameOddsRow[] = [];
+    try {
+      rows = await fetchEspnGameOdds(sport, date);
+    } catch (err) {
+      console.warn(`[odds:${sport}] ${date} fetch failed: ${(err as Error).message}`);
+      continue;
+    }
+    fetched += rows.length;
+    for (const r of rows) {
+      const homeTeamId = teamByAbbr.get(r.homeAbbr);
+      const awayTeamId = teamByAbbr.get(r.awayAbbr);
+      if (!homeTeamId || !awayTeamId) continue;
+      // Exact slate-day match (same key the schedule stored), so series games on
+      // consecutive days each get their OWN odds.
+      const res = await db.scheduledGame.updateMany({
+        where: {
+          sport,
+          homeTeamId,
+          awayTeamId,
+          date: new Date(`${r.dateIso}T00:00:00Z`),
+        },
+        data: {
+          oddsProvider: r.oddsProvider,
+          gameTotal: r.gameTotal,
+          homeSpread: r.homeSpread,
+          homeFavorite: r.homeFavorite,
+        },
+      });
+      updated += res.count;
+    }
+  }
+  console.log(`[odds:${sport}] ${fetched} odds fetched, ${updated} games updated`);
 }
 
 recordIngestRun('schedule', main)

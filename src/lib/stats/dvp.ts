@@ -54,6 +54,20 @@ export function matchupGrade(cell: DvpCell): MatchupGrade {
 export const DVP_MULTIPLIER_BOUNDS = { min: 0.9, max: 1.1 } as const;
 
 /**
+ * Opponent projection multiplier derived from a cell's RANK (softness), centered at
+ * 1.0: the softest matchup (rank 1, allows the most) earns the max boost, the toughest
+ * the max cut, the middle 1.0. Uses only the cell — no league-average lookup — and
+ * returns 1 (neutral) for low-sample/unranked cells. Bounded by DVP_MULTIPLIER_BOUNDS.
+ */
+export function opponentMultiplierFromCell(cell: DvpCell): number {
+  if (cell.lowSample || cell.totalRanked <= 1) return 1;
+  // Map rank → [0,1] so rank 1 (softest) = 1, the toughest = 0, the median = 0.5.
+  const softness = (cell.totalRanked - cell.rank) / (cell.totalRanked - 1);
+  const span = DVP_MULTIPLIER_BOUNDS.max - 1;
+  return 1 + (softness - 0.5) * 2 * span;
+}
+
+/**
  * A gentle, clamped multiplier (±10%) from how much this opponent allows vs the
  * league average for the bucket+stat. Forced to 1.0 (no effect) on low-sample
  * cells. Descriptive nudge only — never let matchup swing an estimate far.

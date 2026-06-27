@@ -130,7 +130,7 @@ line — otherwise the numbers shift retroactively under users._
 **N2. Real per-page freshness.**
 [`src/app/sitemap.ts`](src/app/sitemap.ts) sets a blanket `lastModified: now` on every URL including
 player pages — a weak/again-false recrawl signal. Compute each player's `max(gameDate)` (one batched
-`groupBy`), set per-entry `lastModified` to it, add a visible **"Stats updated through {date} — nightly
+`groupBy`), set per-entry `lastModified` to it, add a visible **"Stats updated: {date} — nightly
 box scores, not live"** stamp on the player page header, and add a `Dataset` node with `dateModified` to
 the existing JSON-LD `@graph`. Never claim "live"/"real-time" on a nightly ingest — that's itself a trust
 violation.
