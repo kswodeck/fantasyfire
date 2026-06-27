@@ -13,15 +13,27 @@ export const metadata: Metadata = {
 const FAQS: { q: string; a: string }[] = [
   {
     q: 'What is FantasyFire?',
-    a: 'FantasyFire is an NBA, MLB, and NFL player-prop research tool. Search any player to see hit rates, matchups, sample-size confidence, and fair-price math — all computed from public game logs.',
+    a: 'FantasyFire is a projection and +EV research tool for NBA, MLB, and NFL player props. For any player it projects each prop, turns that into the probability the line clears, and prices it against the market — all built on public game logs, with the uncertainty shown.',
+  },
+  {
+    q: 'How do you project a player?',
+    a: "We start with a recency-weighted average of recent games, regressed toward the season average so a short streak doesn't run away, then adjust it for the specific game: the opponent (defense-vs-position, or the probable starter in MLB), pace, the Vegas game total, and recent usage. Each adjustment is gently capped, so context nudges the number without swinging it.",
+  },
+  {
+    q: 'What does +EV mean here?',
+    a: "When the books we track post two-sided odds, we remove the vig and take the median to get a no-vig 'fair' probability, then flag the best available price and its expected value (+EV). A book paying better than that fair price — or our model disagreeing with it — is where an edge lives. It's a comparison of numbers, not a guarantee.",
   },
   {
     q: 'Where does the data come from?',
-    a: 'Everything is computed from publicly available game logs, refreshed nightly. FantasyFire is independent and is not affiliated with any league or team.',
+    a: 'Projections are computed from publicly available game logs, refreshed nightly. Market prices, Vegas game totals, and injury status come from public sportsbook and league feeds through the day. FantasyFire is independent and is not affiliated with any league, team, or sportsbook.',
   },
   {
     q: 'Do you sell picks or give betting advice?',
-    a: 'No. FantasyFire is a research tool, not a tout service. Hit rates and matchup numbers are descriptive statistics about past games — not predictions, advice, or guarantees.',
+    a: 'No. We show a projection, a fair price, and where a line looks soft — research, not a tout service. A +EV number is not a promise; a soft line can still lose. Nothing here is betting, financial, or investment advice.',
+  },
+  {
+    q: 'Do you account for injuries?',
+    a: "Yes — each page carries the player's current injury status from the public feed. An Out / IL flag gates the read (the numbers describe past games, not a player who isn't playing), and Questionable shows as a caution. We surface status; confirm the final call yourself.",
   },
   {
     q: 'What does the confidence badge mean?',
@@ -49,7 +61,7 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: 'How does the fair-price calculator work?',
-    a: "Enter a sportsbook's American odds and we show the implied probability, the no-vig fair price when both sides are entered, and the edge versus the player's historical hit rate. It's history versus the price you entered — not a prediction.",
+    a: "When the books we track post odds, we de-vig them automatically and show the fair price, best number, and +EV. You can also enter a sportsbook's American odds yourself to see the implied probability, the no-vig fair price (with both sides), and the edge versus the player's history. Either way it's a comparison of numbers, not a prediction.",
   },
   {
     q: 'Which sports do you cover?',
@@ -67,8 +79,24 @@ const TERMS: { term: string; def: string }[] = [
     def: 'An over hits when the stat is above the line; an under when it is below.',
   },
   {
+    term: 'Projection',
+    def: 'Our number for a player+stat: a recency-weighted, season-regressed base, then adjusted (gently capped) for the opponent, pace, the Vegas game total, and recent usage. Shown next to the raw L5/L10/median it’s built from.',
+  },
+  {
+    term: 'Model probability',
+    def: 'The projection turned into P(the line clears), using a negative-binomial / Poisson distribution for counts and a normal for yardage. It’s what we compare to the market price.',
+  },
+  {
     term: 'FireFactor',
-    def: 'Our 0–100 research signal for a line, shown as a heat read: an over runs warm — Warm, Hot, or Blazing (a flame, amber → red) — and an under runs cool — Cool, Cold, or Frozen (a snowflake, sky → indigo); a balanced line is No read. Deeper color means a stronger edge. It blends the recency-weighted hit rate, recent-form estimate, consistency, and matchup, and is research, never a pick.',
+    def: 'Our 0–100 research signal for a line, shown as a heat read: an over runs warm — Warm, Hot, or Blazing (a flame, amber → red) — and an under runs cool — Cool, Cold, or Frozen (a snowflake, sky → indigo); a balanced line is No read. Deeper color means a stronger edge. It blends the hit rate, the projection’s probability vs the line, consistency, and matchup (plus +EV when a price is known), and is research, never a pick.',
+  },
+  {
+    term: 'No-vig consensus / +EV',
+    def: 'We de-vig each book’s two-sided odds and take the median for a “fair” probability, then flag the best available price and its expected value. A price beating the fair number is +EV.',
+  },
+  {
+    term: 'Game environment',
+    def: 'A player’s implied team total — half the Vegas game total, shifted by the spread — versus the league average. A high-total game is a richer scoring environment and nudges the projection up.',
   },
   {
     term: 'Line value (discount)',

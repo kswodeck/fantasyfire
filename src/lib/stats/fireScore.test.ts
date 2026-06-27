@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { computeFireFactor, type FireFactorInput, type WindowHits } from './fireScore';
+import {
+  computeFireFactor,
+  FIREFACTOR_HIT_SPAN,
+  type FireFactorInput,
+  type WindowHits,
+} from './fireScore';
 import { wilsonInterval } from './confidence';
 
 function win(overs: number, decided: number, window = '10'): WindowHits {
@@ -59,10 +64,29 @@ describe('computeFireFactor', () => {
     expect(big.score).toBeGreaterThan(hot.score);
   });
 
-  it('Passes when there are too few games', () => {
-    const r = computeFireFactor({ ...base, windows: [win(3, 4, '5')], gamesPlayed: 4 });
+  it('Passes only when there are no decided games at the line', () => {
+    const r = computeFireFactor({ ...base, windows: [win(0, 0, '5')], gamesPlayed: 0 });
     expect(r.tier).toBe('Pass');
     expect(r.note).toMatch(/no read/i);
+  });
+
+  it('still grades a thin but strong sample (harder, not thrown out)', () => {
+    const r = computeFireFactor({ ...base, windows: [win(4, 4, '5')], gamesPlayed: 4 });
+    expect(r.tier).not.toBe('Pass'); // a clean 4/4 lean can still reach a read
+    expect(r.note).toMatch(/small sample/i);
+  });
+
+  it('a thin AND weak sample still passes via the score floor', () => {
+    const r = computeFireFactor({
+      line: 20,
+      windows: [win(2, 4, '5')],
+      projection: 20,
+      stdev: 5,
+      cv: 0.6,
+      matchup: undefined,
+      gamesPlayed: 4,
+    });
+    expect(r.tier).toBe('Pass'); // ~coin flip on a tiny sample → score below the floor
   });
 
   it('degrades gracefully when projection + matchup are missing', () => {
@@ -121,7 +145,7 @@ describe('computeFireFactor', () => {
     const r = computeFireFactor({ ...base, windows: [win(overs, decided, 'season')], gamesPlayed: decided });
     const center = wilsonInterval(overs, decided).center;
     const hit = r.components.find((c) => c.key === 'hit')!.score;
-    expect(hit).toBeCloseTo(Math.max(0, Math.min(1, (center - 0.5) / 0.2)), 5);
+    expect(hit).toBeCloseTo(Math.max(0, Math.min(1, (center - 0.5) / FIREFACTOR_HIT_SPAN)), 5);
   });
 
   it('a ~50/50 history gives a near-zero hit sub-score and no real lean', () => {

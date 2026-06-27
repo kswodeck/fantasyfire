@@ -10,14 +10,14 @@ import {
   RECENT_GAMES_WINDOW,
   EWMA_ALPHA,
   SHRINKAGE_K,
+  PROJECTION_ADJ_BOUNDS,
   CONSISTENCY_CV_THRESHOLDS,
   FIREFACTOR_WEIGHTS,
-  FIREFACTOR_MIN_GAMES,
 } from '@/lib/stats';
 
 export const metadata: Metadata = {
   title: 'How It Works',
-  description: `Exactly how ${SITE.name} works: hit rates, Wilson confidence intervals, defense-vs-position, qualifying games, default lines, fair-price math — and what it deliberately does not model.`,
+  description: `Exactly how ${SITE.name} projects a player prop, turns it into a probability, and prices it against the no-vig market to find +EV — with the uncertainty shown, down to the constants the code uses.`,
   alternates: { canonical: '/how-it-works' },
 };
 
@@ -25,6 +25,8 @@ export const metadata: Metadata = {
 // from the code that produces them.
 const HIGH = CONFIDENCE_BADGE_WIDTHS.high;
 const MED = CONFIDENCE_BADGE_WIDTHS.medium;
+const ADJ_MIN = Math.round((1 - PROJECTION_ADJ_BOUNDS.min) * 100);
+const ADJ_MAX = Math.round((PROJECTION_ADJ_BOUNDS.max - 1) * 100);
 
 export default function HowItWorksPage() {
   return (
@@ -37,22 +39,24 @@ export default function HowItWorksPage() {
 
       <Prose>
         <p>
-          Every number on {SITE.name}{' '}is computed from public NBA, MLB, and NFL game logs — no
-          black box, no proprietary &ldquo;model&rdquo; you have to take on faith. This page
-          documents exactly what we do, down to the constants the code actually uses, because a
-          research tool is only as trustworthy as the math behind it — and because the most
-          important thing we show is <strong>how much to trust each number</strong>, not just the
-          number itself.
+          {SITE.name}{' '}does three things with public game logs: it <strong>projects</strong>{' '}
+          every prop, turns that projection into the <strong>probability</strong> the line clears,
+          and <strong>prices it against the market</strong> to show where the number is soft. No
+          black box — this page documents exactly what we do, down to the constants the code uses,
+          and every number is shown with <strong>how much to trust it</strong>, because a
+          projection without its uncertainty is just a guess in a nicer font.
         </p>
 
         <h2>The data</h2>
         <p>
-          Everything is computed from publicly available NBA, MLB, and NFL box-score game logs,
-          ingested nightly into our database. The web app only reads that data — it never
-          invents it. Each player page shows a <strong>&ldquo;Stats updated through &rdquo;
-          date</strong>: these are completed-game box scores refreshed once a day, not a
-          live feed. If a game just finished, it may not appear until the next nightly
-          update, and late official stat corrections are re-pulled for recent games.
+          The projections are computed from publicly available NBA, MLB, and NFL box-score game
+          logs, ingested nightly. On top of that we read three public feeds through the day:{' '}
+          <strong>book lines and odds</strong> (PrizePicks, Underdog, and major sportsbooks),{' '}
+          <strong>Vegas game odds</strong> (the total and spread), and{' '}
+          <strong>injury status</strong>. The app only reads this data — it never invents it. Each
+          player page shows a <strong>&ldquo;Stats updated through&rdquo; date</strong>: the box
+          scores are completed-game data refreshed once a day, not a live feed, and late official
+          stat corrections are re-pulled for recent games.
         </p>
 
         <h2>Hit rate</h2>
@@ -99,30 +103,55 @@ export default function HowItWorksPage() {
           confidence, not as an edge. That honesty is the whole point.
         </p>
 
-        <h2>Default line</h2>
+        <h2>The projection</h2>
         <p>
-          When you open a player without entering a line, we pre-fill a{' '}
-          <strong>book-style half-point line</strong> (x.5) so the default can never push —
-          the same way a sportsbook posts a prop. We center it on the player&rsquo;s{' '}
-          <strong>season median game</strong> (the typical game) and pick whichever half-point
-          just below or above the median splits their games <strong>closest to 50/50</strong>{' '}
-          over–under, so the default isn&rsquo;t tilted toward either side. (We don&rsquo;t just
-          round the median up — that placed the line above the typical game and pushed every
-          count stat toward the Under.) You can type any line you like — the point of the tool is
-          to check the exact number on your card.
+          The base is a <strong>recency-weighted average</strong> (EWMA, α = {EWMA_ALPHA}) of the
+          player&rsquo;s recent games, regressed toward their season average by {SHRINKAGE_K}{' '}
+          pseudo-games so a short hot or cold streak doesn&rsquo;t masquerade as the true level.
+          That base is then <strong>adjusted for the specific game it faces</strong>, each factor a
+          gentle, clamped multiplier:
+        </p>
+        <ul>
+          <li>
+            <strong>Opponent.</strong> How soft the matchup is for the role — defense-vs-position
+            in the NBA and NFL, and in MLB the <strong>specific probable starter</strong>&rsquo;s
+            strikeout and hits-allowed rates for a hitter, falling back to the staff when no starter
+            is posted.
+          </li>
+          <li>
+            <strong>Pace (NBA).</strong> More possessions means more shots, rebounds, and assists
+            to go around, so a fast projected game nudges counting stats up. Pace is estimated
+            straight from box-score totals (FGA + 0.44·FTA − OREB + TOV).
+          </li>
+          <li>
+            <strong>Game environment.</strong> The player&rsquo;s implied team total — half the
+            Vegas game total, shifted by the spread — versus the league average. A high-total spot
+            is a richer scoring environment.
+          </li>
+          <li>
+            <strong>Usage trend.</strong> Recent opportunity (minutes in the NBA, carries and
+            targets in the NFL, plate appearances in MLB) versus the season baseline, so a player
+            whose role just expanded is projected up before the box score fully catches up.
+          </li>
+        </ul>
+        <p>
+          Each factor is capped, and their product is capped again (about −{ADJ_MIN}% to +{ADJ_MAX}%
+          overall), so context <strong>nudges</strong> the projection — it can never swing it wildly
+          off the player&rsquo;s established level. Any factor whose data is missing simply drops to
+          neutral. We still show the raw L5, L10, and median next to the headline number, so you can
+          always see the recent form the projection is built from.
         </p>
 
-        <h2>Which games count (opportunity filter)</h2>
+        <h2>From projection to probability</h2>
         <p>
-          A garbage-time cameo or an early injury exit isn&rsquo;t a representative game,
-          so we drop games where a player was barely involved. The bar is{' '}
-          <strong>per player</strong>, not a fixed floor: we blend each player&rsquo;s
-          season-long workload with their last {RECENT_GAMES_WINDOW}{' '}games, so part-time
-          and platoon players aren&rsquo;t zeroed out. Workload means minutes in the NBA
-          and plate appearances for MLB hitters; MLB pitchers are not opportunity-filtered
-          (a workload proxy is misleading for them). The matchup numbers
-          (defense-vs-position / opposing pitching) use a team&rsquo;s full game logs, so
-          they aren&rsquo;t affected by this per-player filter.
+          A projection of 27.3 against a 26.5 line means very different things for a steady player
+          and a boom-or-bust one, so we don&rsquo;t stop at the point estimate — we turn it into{' '}
+          <strong>P(the line clears)</strong> using the right distribution for the stat: a{' '}
+          <strong>negative binomial</strong> (or Poisson) for counts like points, strikeouts, and
+          home runs, which handles a streaky player&rsquo;s fatter tails, and a{' '}
+          <strong>normal</strong> for continuous stats like passing and receiving yards. That model
+          probability is what feeds the projection component of FireFactor and what we compare to the
+          market.
         </p>
 
         <h2>Matchup context</h2>
@@ -136,11 +165,11 @@ export default function HowItWorksPage() {
           read precision into a noisy cell.
         </p>
         <p>
-          <strong>MLB — opposing pitching.</strong> For a hitter we show how much of the
-          stat the opponent&rsquo;s pitching staff has allowed per game. Pitcher props do
-          not yet get a matchup number. The matchup, defense, estimate, and projection
-          always describe the player&rsquo;s <strong>next game</strong> (or the current one
-          if it has already started), not a past opponent.
+          <strong>MLB — opposing pitching.</strong> For a hitter we show how much of the stat the
+          opponent&rsquo;s staff has allowed per game, and when the <strong>probable starter</strong>{' '}
+          is known we use that pitcher&rsquo;s own rates in the projection. Pitcher props do not yet
+          get a matchup number. The matchup always describes the player&rsquo;s{' '}
+          <strong>next game</strong> (or the current one if it has already started).
         </p>
         <p>
           <strong>MLB — park factors.</strong> Each MLB player page shows their{' '}
@@ -152,27 +181,56 @@ export default function HowItWorksPage() {
           in, and silently re-weighting it would shift the numbers under you.
         </p>
 
-        <h2>Fair-price math</h2>
+        <h2>Availability</h2>
         <p>
-          If you enter a book&rsquo;s American odds, we convert them to an implied
-          probability; if you enter <em>both</em> sides we remove the vig to show the
-          no-vig fair price. The &ldquo;edge&rdquo; we display is the difference between
-          the player&rsquo;s historical hit rate and that price —{' '}
-          <strong>a comparison of past results against the number you typed, not a
-          prediction</strong> that the over or under will hit.
+          A great-looking number is moot if the player isn&rsquo;t taking the field, so each page
+          carries the player&rsquo;s current <strong>injury status</strong> from the public feed. An{' '}
+          <strong>Out</strong> (or IL) flag <strong>gates the read</strong> — the numbers still
+          describe past games, but the page tells you plainly that they don&rsquo;t describe today.
+          Questionable / day-to-day shows as a caution to confirm before the game. We surface status;
+          we don&rsquo;t pretend to know a coach&rsquo;s final call.
         </p>
 
-        <h2>Recent-form estimate &amp; the FireFactor signal (experimental)</h2>
+        <h2>Market edge &amp; +EV</h2>
         <p>
-          As a quick read we add a <strong>recent-form estimate</strong>: a
-          recency-weighted average (EWMA, α = {EWMA_ALPHA}) of recent games, then regressed
-          toward the player&rsquo;s season average by {SHRINKAGE_K}{' '}pseudo-games so a
-          short hot or cold streak doesn&rsquo;t masquerade as the true level. We always
-          show it as a <strong>range</strong> — last-5 mean, last-10 mean, and median next
-          to the stabilized number — never one hero figure. It is a descriptive summary of
-          past games, <strong>not a forecast</strong> of a specific game, and carries no
-          opponent, rest, injury, or lineup adjustment.
+          When the books we track post two-sided odds for a prop, we <strong>remove the vig</strong>{' '}
+          from each and take the median to get a <strong>no-vig consensus</strong> probability — a
+          sharper &ldquo;fair&rdquo; price than any single book&rsquo;s number, since the margin is
+          stripped out. From that we surface the <strong>best available price</strong> on each side
+          and its <strong>expected value</strong>, and we compare our model&rsquo;s probability to
+          the market&rsquo;s. A book paying better than the consensus, or a model that disagrees with
+          it, is where an edge lives.
         </p>
+        <p>
+          You can also enter a price yourself: we convert American odds to an implied probability,
+          remove the vig when you enter both sides, and show the edge versus the player&rsquo;s
+          history. Whether the price is scraped or typed, the edge is{' '}
+          <strong>a comparison of numbers, not a promise</strong> that the over or under hits.
+        </p>
+
+        <h2>Default line</h2>
+        <p>
+          When you open a player without a real book line, we pre-fill a{' '}
+          <strong>book-style half-point line</strong> (x.5) so the default can never push. We center
+          it on the player&rsquo;s <strong>season median game</strong> and pick whichever half-point
+          just below or above the median splits their games <strong>closest to 50/50</strong>{' '}
+          over–under, so the default isn&rsquo;t tilted toward either side. You can type any line you
+          like — the point of the tool is to check the exact number on your card.
+        </p>
+
+        <h2>Which games count (opportunity filter)</h2>
+        <p>
+          A garbage-time cameo or an early injury exit isn&rsquo;t a representative game,
+          so we drop games where a player was barely involved. The bar is{' '}
+          <strong>per player</strong>, not a fixed floor: we blend each player&rsquo;s
+          season-long workload with their last {RECENT_GAMES_WINDOW}{' '}games, so part-time
+          and platoon players aren&rsquo;t zeroed out. Workload means minutes in the NBA,
+          plate appearances for MLB hitters, and role involvement (pass attempts, carries,
+          targets) in the NFL; MLB pitchers are not opportunity-filtered. The matchup numbers use a
+          team&rsquo;s full game logs, so they aren&rsquo;t affected by this per-player filter.
+        </p>
+
+        <h2>Consistency &amp; splits</h2>
         <p>
           <strong>Consistency</strong> reads a player&rsquo;s floor and ceiling (the 20th
           and 80th percentiles of recent games) and labels the spread Steady, Variable, or
@@ -181,16 +239,15 @@ export default function HowItWorksPage() {
           {CONSISTENCY_CV_THRESHOLDS.boomBust}). The <strong>matchup grade</strong> (A–F)
           turns the Defense-vs-Position rank into a letter — A = one of the softest matchups
           for the role, F = one of the toughest — and shows <strong>NR</strong> (not rated)
-          on low-sample cells.
+          on low-sample cells. <strong>Situational splits</strong> break any stat down by home/away
+          and by days since the player&rsquo;s last game, each with its <strong>own</strong> 95%
+          Wilson confidence — so a small-sample &ldquo;crushes at home&rdquo; reads as Low, not as an
+          edge.
         </p>
+
+        <h2>FireFactor</h2>
         <p>
-          <strong>Situational splits</strong> break any stat down by home/away and by days since
-          the player&rsquo;s last game, and each split carries its <strong>own</strong> 95% Wilson
-          confidence — so a small-sample &ldquo;crushes at home&rdquo; reads as Low, not as an edge.
-          Splits describe past games in that situation; they are not a forecast.
-        </p>
-        <p>
-          <strong>FireFactor</strong> blends these descriptive signals into one transparent{' '}
+          <strong>FireFactor</strong> blends these signals into one transparent{' '}
           <strong>heat read</strong>. An over read runs warm — a{' '}
           <span className="font-medium text-heat-1">Warm</span>,{' '}
           <span className="font-medium text-heat-2">Hot</span>, or{' '}
@@ -204,63 +261,54 @@ export default function HowItWorksPage() {
         </p>
         <ul>
           <li>
-            Its strength is the <strong>recency-weighted hit rate vs the line</strong> (shrunk
-            toward 50% on thin samples), then scaled down by a{' '}
-            <strong>95% Wilson lower-bound trust factor</strong> — so thin samples and hot streaks
-            are discounted, not rewarded.
+            It ranks by the <strong>95% Wilson lower-bound trust factor</strong>, so thin samples
+            and hot streaks are discounted, not rewarded — confidence is counted, not assumed.
           </li>
           <li>
-            The number is always shown with its <strong>component breakdown</strong> (hit
-            rate, recent-form estimate, consistency, matchup), weighted{' '}
+            The number is always shown with its <strong>component breakdown</strong> — hit rate,
+            the projection&rsquo;s probability vs the line, consistency, and matchup, weighted{' '}
             {Math.round(FIREFACTOR_WEIGHTS.hit * 100)}/
             {Math.round(FIREFACTOR_WEIGHTS.proj * 100)}/
             {Math.round(FIREFACTOR_WEIGHTS.consistency * 100)}/
-            {Math.round(FIREFACTOR_WEIGHTS.matchup * 100)}, and any missing input is dropped
-            rather than guessed. Fewer than {FIREFACTOR_MIN_GAMES}{' '}games is always a No read.
-            If you enter a real price, FireFactor adds the one legitimate value read — the
-            edge and expected value versus the number you typed, labeled as such and never a
-            guarantee.
+            {Math.round(FIREFACTOR_WEIGHTS.matchup * 100)}, fused in log-odds so a neutral
+            component abstains rather than dragging a strong read to the middle. Any missing input
+            is dropped, not guessed, and a thin sample isn&rsquo;t thrown out — the trust factor
+            just makes a read much harder to reach, so only a line with no decided games at all is
+            an automatic No read.
           </li>
           <li>
-            When a line is posted at more than one book, FireFactor compares your book&rsquo;s
-            number to the <strong>market consensus</strong> (the median across books) and folds a
-            small, capped <strong>line-value</strong> boost into the read: a genuinely softer
-            number — one you&rsquo;d clear more often — nudges the heat up, but can never
-            manufacture an edge on its own. The full book-by-book comparison lives on each
-            player&rsquo;s page.
+            When the line carries real odds, FireFactor folds in the <strong>+EV versus the
+            no-vig market</strong> and a small, capped <strong>line-value</strong> boost for a
+            softer-than-market number — value the price actually offers, never an edge conjured
+            from nothing.
           </li>
         </ul>
 
-        <h2>What we deliberately do not model</h2>
+        <h2>What we still don&rsquo;t model</h2>
         <p>
           Being honest about the limits is part of the method:
         </p>
         <ul>
           <li>
-            <strong>No live odds or prop lines.</strong> No free data source provides
-            player prop lines, so lines are entered by you. We do not do line shopping or
-            cross-book +EV.
+            <strong>No trained/fitted forecast.</strong> The projection and FireFactor are
+            transparent heuristics with published weights and clamps, shown with their uncertainty —
+            not a machine-learned model of a specific game.
           </li>
           <li>
-            <strong>No injury, lineup, or active-status data.</strong> We show the day&rsquo;s
-            schedule (matchups and probable pitchers), but we describe past games and
-            don&rsquo;t know who is active today. Confirm availability yourself.
+            <strong>No same-game correlation.</strong> Each prop is read on its own; we don&rsquo;t
+            model how a player&rsquo;s props move together or build parlays.
           </li>
           <li>
-            <strong>No trained/fitted projection model.</strong> The recent-form estimate
-            and FireFactor are transparent heuristics with published weights, shown with
-            their uncertainty — not a fitted forecast of a specific game.
-          </li>
-          <li>
-            <strong>Coarse positions and pitcher matchups.</strong> DvP uses three buckets,
-            and MLB pitcher props have no matchup adjustment yet.
+            <strong>No weather, and coarse matchups.</strong> Positions use three NBA buckets,
+            MLB pitcher props get no matchup adjustment yet, and we don&rsquo;t model wind or
+            temperature.
           </li>
         </ul>
 
         <p>
-          In short: these are <strong>descriptive statistics about past performance</strong>,
-          presented with their uncertainty — not predictions, advice, or a guarantee. New here?
-          Start by <Link href="/players">browsing players</Link>, read more{' '}
+          In short: these are <strong>transparent projections priced against the market</strong>,
+          every number shown with its uncertainty — research, not a pick, advice, or a guarantee. New
+          here? Start by <Link href="/players">browsing players</Link>, read more{' '}
           <Link href="/about">about {SITE.name}</Link>, or look up a term in the{' '}
           <Link href="/faq">FAQ &amp; glossary</Link>. And see{' '}
           <Link href="/responsible-gaming">responsible gaming</Link> before you wager.

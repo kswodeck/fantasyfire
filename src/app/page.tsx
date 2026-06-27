@@ -2,6 +2,7 @@ import { FlameMark } from '@/components/FlameMark';
 import { HomeTopLeans, type HomeCard } from '@/components/HomeTopLeans';
 import { getBoard, getSourcedBoards, getTonightSlate, hasUpcomingGames } from '@/lib/server/players';
 import { getAvailableSources } from '@/lib/server/providedLines';
+import { SITE } from '@/lib/site';
 import { SPORT_LIST, SPORTS, type Sport } from '@/lib/sports';
 import type { BoardRow, TonightGame } from '@/lib/types';
 
@@ -66,12 +67,12 @@ export default async function Home() {
       <section className="flex flex-col items-center gap-6 py-14 text-center">
         <FlameMark className="h-14 w-14 text-brand" />
         <h1 className="max-w-2xl text-4xl font-bold tracking-tight sm:text-5xl">
-          Honest player-prop research
+          A projection and a fair price for every prop
         </h1>
         <p className="max-w-xl text-lg text-muted">
-          Hit rates, matchup context, sample-size confidence, and fair-price math across the NBA,
-          MLB, and NFL — computed from public game logs, with the uncertainty shown rather than
-          hidden.
+          {SITE.name} projects every NBA, MLB, and NFL player prop from public game logs —
+          adjusted for matchup, pace, the Vegas game total, and usage — then prices it against the
+          market to show where the number is soft. Built on the uncertainty most tools hide.
         </p>
       </section>
 
@@ -89,16 +90,16 @@ export default async function Home() {
 
       <section className="grid gap-4 pb-10 sm:grid-cols-3">
         <FeatureCard
-          title="Hit rates that don't lie"
-          body="Over/under rates across recent windows and the full season — with the raw game-by-game bars, not just a number."
+          title="Matchup-aware projections"
+          body="A model number for every prop — opponent, pace, the Vegas total, and recent usage folded in — turned into the probability the line clears."
         />
         <FeatureCard
-          title="Sample-size honesty"
-          body="A Wilson confidence interval on every hit rate, so a short hot streak doesn't masquerade as a real edge."
+          title="Edge vs. the market"
+          body="We de-vig the books we track to a no-vig fair price, flag the best available number, and show the +EV — automatically, no odds to type."
         />
         <FeatureCard
-          title="Matchup context"
-          body="How the most-recent opponent stacks up — defense-vs-position in the NBA and NFL, opposing pitching in MLB."
+          title="Honest by construction"
+          body="A 95% Wilson interval on every rate and a trust factor that discounts thin samples, so a hot streak never masquerades as an edge."
         />
       </section>
     </div>

@@ -34,10 +34,16 @@ export type FireTier = 'Strong lean' | 'Lean' | 'Slight lean' | 'No lean' | 'Pas
 export const FIREFACTOR_WEIGHTS = { hit: 0.34, proj: 0.24, consistency: 0.16, matchup: 0.14 } as const;
 /** In VALUE mode, how the signal blend and the price-value split the score. */
 export const FIREFACTOR_VALUE_SPLIT = { signal: 0.7, value: 0.3 } as const;
-/** 0-100 cutoffs for the tier label. */
-export const FIREFACTOR_TIER_CUTOFFS = { strong: 66, lean: 56, slight: 42, none: 28 } as const;
+/** 0-100 cutoffs for the tier label. The read floor (`slight`) is set just below the
+ *  dense middle of the score distribution, so a borderline edge surfaces as an honest
+ *  "Slight lean" rather than collapsing to "No read"; Lean/Strong stay scarce. */
+export const FIREFACTOR_TIER_CUTOFFS = { strong: 66, lean: 56, slight: 40, none: 28 } as const;
 /** Below this many games we never grade above "Pass". */
 export const FIREFACTOR_MIN_GAMES = 5;
+/** The hit sub-score reaches 1.0 this far above a 50% rate — at 0.17, a 60% over rate
+ *  contributes positively (~0.59) instead of scoring neutral, so real edges in the
+ *  55–65% band register without over-rewarding them. */
+export const FIREFACTOR_HIT_SPAN = 0.17;
 /** Cross-book line value: boost = clamp(0, edge * gain, cap) added to the 0-100 score,
  *  so a genuine discount can lift the read up a tier but can't manufacture one alone. */
 export const FIREFACTOR_LINE_VALUE = { gain: 40, cap: 10 } as const;
@@ -202,7 +208,7 @@ export function computeFireFactor(input: FireFactorInput): FireFactorResult {
   const blended = blendWilson(windows, side);
 
   const trustFactor =
-    blended === null ? 0.35 : Math.max(0.35, Math.min(1, (blended.lower + 0.1) / 0.6));
+    blended === null ? 0.4 : Math.max(0.4, Math.min(1, (blended.lower + 0.1) / 0.6));
 
   const comps: FireFactorComponent[] = [];
   if (blended !== null) {
@@ -213,7 +219,7 @@ export function computeFireFactor(input: FireFactorInput): FireFactorResult {
     comps.push({
       key: 'hit',
       label: 'Hit rate (confidence-adjusted)',
-      score: clamp01((blended.center - 0.5) / 0.2),
+      score: clamp01((blended.center - 0.5) / FIREFACTOR_HIT_SPAN),
       weight: FIREFACTOR_WEIGHTS.hit,
     });
   }
@@ -288,15 +294,20 @@ export function computeFireFactor(input: FireFactorInput): FireFactorResult {
 
   score = Math.round(clamp01(score / 100) * 100);
 
-  // Gate on DECIDED games (the honest non-double-counted sample from the buckets),
-  // not games played: a line with many appearances but few decided games (lots of
-  // pushes/DNPs at that number) is still too thin to read.
-  const insufficient = blended === null || blended.decided < FIREFACTOR_MIN_GAMES;
+  // A line is only UNREADABLE when it has no decided games at all (all pushes / never
+  // played at that number). A THIN sample — a few decided games — is still graded: the
+  // Wilson-lower-bound trust factor already scales the score down hard on little data,
+  // so a read is harder to reach but the line isn't thrown out. `decided` is the honest
+  // non-double-counted sample from the disjoint buckets.
+  const insufficient = blended === null;
+  const thinSample = blended !== null && blended.decided < FIREFACTOR_MIN_GAMES;
   const tier = tierFor(score, !insufficient && score >= FIREFACTOR_TIER_CUTOFFS.none);
 
   const note = insufficient
-    ? 'Not enough decided games to read this line — treat as no read.'
-    : `Recent history runs ${side} on this line. Descriptive research from past games — not betting advice.`;
+    ? 'No decided games at this line yet — no read.'
+    : `Recent history runs ${side} on this line${
+        thinSample ? ' on a small sample, so read with extra caution' : ''
+      }. Descriptive research from past games — not betting advice.`;
 
   return { side, score, tier, trustFactor, components: comps, valueMode, note };
 }
