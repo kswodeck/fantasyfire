@@ -15,6 +15,7 @@
 import 'dotenv/config';
 import { db } from '../lib/db';
 import { recordIngestRun } from './ingestRun';
+import { withDbRetry } from './dbRetry';
 import { fetchPrizePicksLines } from './prizepicks';
 import { fetchUnderdogLines } from './underdog';
 import { fetchRotowireLines } from './rotowire';
@@ -33,10 +34,14 @@ const SOURCES: Array<{ id: string; fetch: () => Promise<ProvidedLineRow[]> }> = 
 
 /** name → playerId for a sport, with collisions collapsed to null so we never guess. */
 async function playerIndex(sport: Sport): Promise<Map<string, number | null>> {
-  const players = await db.player.findMany({
-    where: { sport },
-    select: { id: true, firstName: true, lastName: true },
-  });
+  const players = await withDbRetry(
+    () =>
+      db.player.findMany({
+        where: { sport },
+        select: { id: true, firstName: true, lastName: true },
+      }),
+    `playerIndex(${sport})`,
+  );
   const map = new Map<string, number | null>();
   for (const p of players) {
     const key = normalizeName(`${p.firstName} ${p.lastName}`);
@@ -96,9 +101,11 @@ async function main(): Promise<number> {
   }
 
   // Concurrent batches (no $transaction — it times out over a remote pooler).
+  // Each batch retries transient pooler blips so one ETIMEDOUT doesn't fail the run.
   const BATCH = 20;
   for (let i = 0; i < ops.length; i += BATCH) {
-    await Promise.all(ops.slice(i, i + BATCH).map((fn) => fn()));
+    const batch = ops.slice(i, i + BATCH);
+    await withDbRetry(() => Promise.all(batch.map((fn) => fn())), `upsert batch ${i / BATCH}`);
   }
 
   const summary = [...perSource.entries()].map(([s, n]) => `${s}=${n}`).join(', ');

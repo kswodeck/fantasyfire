@@ -31,6 +31,10 @@ const createPrismaClient = () => {
   const adapter = new PrismaPg({
     connectionString,
     max: 3,
+    // Fail a stalled connect in ~10s instead of waiting on the OS TCP timeout (tens
+    // of seconds). The pooler occasionally blips; callers that retry (see dbRetry.ts)
+    // then recover quickly rather than burning a cron run's whole budget on one hang.
+    connectionTimeoutMillis: 10_000,
     ...(hasSslmode ? { ssl: { rejectUnauthorized: false } } : {}),
   });
   return new PrismaClient({ adapter });

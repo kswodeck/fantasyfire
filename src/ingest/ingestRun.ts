@@ -4,6 +4,7 @@
 // but never masks the job's own result, and the original error is rethrown so each
 // script's existing exit-code handling still fires.
 import { db } from '../lib/db';
+import { withDbRetry } from './dbRetry';
 
 type RunStatus = 'success' | 'failure';
 
@@ -16,17 +17,21 @@ async function record(
 ): Promise<void> {
   try {
     const finishedAt = new Date();
-    await db.ingestRun.create({
-      data: {
-        job,
-        status,
-        rowsWritten,
-        error: error ? error.slice(0, 500) : null,
-        startedAt,
-        finishedAt,
-        durationMs: finishedAt.getTime() - startedAt.getTime(),
-      },
-    });
+    await withDbRetry(
+      () =>
+        db.ingestRun.create({
+          data: {
+            job,
+            status,
+            rowsWritten,
+            error: error ? error.slice(0, 500) : null,
+            startedAt,
+            finishedAt,
+            durationMs: finishedAt.getTime() - startedAt.getTime(),
+          },
+        }),
+      `ingestRun.create(${job})`,
+    );
   } catch (e) {
     console.warn(`[ingestRun] failed to record "${job}" run:`, e instanceof Error ? e.message : e);
   }
