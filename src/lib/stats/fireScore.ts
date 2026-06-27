@@ -9,9 +9,17 @@
 //    heat word + flame/snowflake icon + warm/cool color are derived in tierStyle.ts.
 //  - It ranks/gates by the WILSON LOWER BOUND, so small samples and hot streaks
 //    are discounted, not hyped (trustFactor drags the score down).
+//  - It FUSES EVIDENCE IN LOG-ODDS: each component is a 0-1 sub-score, but they
+//    combine as a weighted sum of LOG-ODDS (not a weighted average of the raw
+//    sub-scores). A neutral component (~0.5) contributes ZERO and abstains rather
+//    than dragging a strong read back toward the middle; a confident component
+//    moves the result in its direction.
 //  - It DEGRADES GRACEFULLY: any missing component (no projection, no matchup, no
-//    price) is dropped and the remaining weights renormalize — a missing input
-//    never inflates the score, it only widens uncertainty.
+//    price) simply isn't in the sum — same as a neutral one. A missing input never
+//    inflates the score, it only pulls the read toward 50/50 (widens uncertainty).
+//  - It reads recent form as NON-OVERLAPPING buckets (games 1-5, 6-10, 11-20, 21+)
+//    derived from the cumulative windows, so the most-recent games are weighted up
+//    by recency WITHOUT being double-counted across nested windows.
 //  - LEAN mode (default, free, no price) reads recent history vs the line. VALUE
 //    mode (only when the user enters a real price) adds the one legitimate
 //    "value vs the price you entered — not a guarantee" component.
@@ -21,7 +29,8 @@ import type { MatchupGrade } from './dvp';
 export type FireSide = 'over' | 'under';
 export type FireTier = 'Strong lean' | 'Lean' | 'Slight lean' | 'No lean' | 'Pass';
 
-/** Component weights (LEAN mode), renormalized over whichever are present. */
+/** Component weights (LEAN mode) — multipliers on each component's log-odds in the
+ *  evidence sum. Whichever components are present contribute; the rest abstain. */
 export const FIREFACTOR_WEIGHTS = { hit: 0.34, proj: 0.24, consistency: 0.16, matchup: 0.14 } as const;
 /** In VALUE mode, how the signal blend and the price-value split the score. */
 export const FIREFACTOR_VALUE_SPLIT = { signal: 0.7, value: 0.3 } as const;
@@ -32,16 +41,32 @@ export const FIREFACTOR_MIN_GAMES = 5;
 /** Cross-book line value: boost = clamp(0, edge * gain, cap) added to the 0-100 score,
  *  so a genuine discount can lift the read up a tier but can't manufacture one alone. */
 export const FIREFACTOR_LINE_VALUE = { gain: 40, cap: 10 } as const;
-/** Recency weight per window when blending the Wilson lower bound. */
+/** Recency weight per non-overlapping bucket (keyed by the cumulative window it
+ *  came from) when blending the Wilson bounds. Recent games count for more. */
 export const FIREFACTOR_WINDOW_RECENCY: Record<string, number> = {
   '5': 1.3,
   '10': 1.2,
   '20': 1.0,
   season: 0.8,
 };
+/** Cumulative game count each window label covers (used to split nested windows
+ *  into disjoint buckets). 'season' (and anything unknown) is open-ended. */
+const WINDOW_CUTOFF: Record<string, number> = { '5': 5, '10': 10, '20': 20, season: Infinity };
+function windowCutoff(label: string): number {
+  if (label in WINDOW_CUTOFF) return WINDOW_CUTOFF[label];
+  const n = Number(label);
+  return Number.isFinite(n) ? n : Infinity;
+}
+/** Sub-scores are clamped away from 0/1 before logit so a single perfect/zero
+ *  component can't dominate the sum with an infinite log-odds. */
+const LOGIT_CLAMP = 0.05;
 
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 const sigmoid = (x: number) => 1 / (1 + Math.exp(-x));
+const logit = (s: number) => {
+  const c = Math.max(LOGIT_CLAMP, Math.min(1 - LOGIT_CLAMP, s));
+  return Math.log(c / (1 - c));
+};
 const GRADE_SCORE: Record<MatchupGrade, number | null> = {
   A: 1,
   B: 0.75,
@@ -75,7 +100,8 @@ export interface FireFactorInput {
    *  consensus (median across books) line's hit rate. Positive = a softer/better
    *  number than the market; folds a capped boost into the score. */
   lineValueEdge?: number | null;
-  /** Total games available (gates the Pass floor). */
+  /** Total games available. Kept for callers/back-compat; the Pass floor now gates
+   *  on the total DECIDED games across the (de-overlapped) windows, not this. */
   gamesPlayed: number;
 }
 
@@ -101,21 +127,56 @@ export interface FireFactorResult {
   note: string;
 }
 
-/** Recency-weighted blend of a side's Wilson lower bound + center across windows. */
-function blendWilson(windows: WindowHits[], side: FireSide): { lower: number; center: number } | null {
+interface Bucket {
+  window: string;
+  overs: number;
+  decided: number;
+}
+
+/**
+ * Turn the CUMULATIVE windows (L5 ⊂ L10 ⊂ L20 ⊂ season) into NON-OVERLAPPING
+ * buckets (games 1-5, 6-10, 11-20, 21+) by subtracting each window from the next.
+ * Without this the most-recent games sit in every window and get counted 3-4×;
+ * disjoint buckets let recency weighting up-weight them without double-counting.
+ */
+function disjointBuckets(windows: WindowHits[]): Bucket[] {
+  const sorted = windows
+    .filter((w) => w.decided > 0)
+    .slice()
+    .sort((a, b) => windowCutoff(a.window) - windowCutoff(b.window) || a.decided - b.decided);
+  const out: Bucket[] = [];
+  let prevOvers = 0;
+  let prevDecided = 0;
+  for (const w of sorted) {
+    const decided = w.decided - prevDecided;
+    const overs = w.overs - prevOvers;
+    prevOvers = w.overs;
+    prevDecided = w.decided;
+    if (decided > 0) out.push({ window: w.window, overs: clamp01(overs / decided) * decided, decided });
+  }
+  return out;
+}
+
+/** Recency-weighted blend of a side's Wilson bounds across disjoint buckets.
+ *  `decided` is the total over all buckets — the honest (non-double-counted) sample. */
+function blendWilson(
+  windows: WindowHits[],
+  side: FireSide,
+): { lower: number; center: number; decided: number } | null {
   let lowerNum = 0;
   let centerNum = 0;
   let den = 0;
-  for (const w of windows) {
-    if (w.decided <= 0) continue;
-    const successes = side === 'over' ? w.overs : w.decided - w.overs;
-    const iv = wilsonInterval(successes, w.decided);
-    const wt = w.decided * (FIREFACTOR_WINDOW_RECENCY[w.window] ?? 1);
+  let decided = 0;
+  for (const b of disjointBuckets(windows)) {
+    const successes = side === 'over' ? b.overs : b.decided - b.overs;
+    const iv = wilsonInterval(successes, b.decided);
+    const wt = b.decided * (FIREFACTOR_WINDOW_RECENCY[b.window] ?? 1);
     lowerNum += wt * iv.lower;
     centerNum += wt * iv.center;
     den += wt;
+    decided += b.decided;
   }
-  return den === 0 ? null : { lower: lowerNum / den, center: centerNum / den };
+  return den === 0 ? null : { lower: lowerNum / den, center: centerNum / den, decided };
 }
 
 function tierFor(score: number, ok: boolean): FireTier {
@@ -128,8 +189,7 @@ function tierFor(score: number, ok: boolean): FireTier {
 }
 
 export function computeFireFactor(input: FireFactorInput): FireFactorResult {
-  const { line, windows, projection, stdev, cv, matchup, evPerDollar, lineValueEdge, gamesPlayed } =
-    input;
+  const { line, windows, projection, stdev, cv, matchup, evPerDollar, lineValueEdge } = input;
 
   // Side = the side recent history leans (blended Wilson CENTER of the over).
   const overBlend = blendWilson(windows, 'over');
@@ -179,8 +239,11 @@ export function computeFireFactor(input: FireFactorInput): FireFactorResult {
     });
   }
 
-  const wsum = comps.reduce((a, c) => a + c.weight, 0);
-  const raw = wsum === 0 ? 0 : comps.reduce((a, c) => a + c.weight * c.score, 0) / wsum;
+  // Fuse the present components as a weighted sum of LOG-ODDS, then squash back to
+  // [0,1]. A neutral 0.5 component has log-odds 0 → it abstains instead of pulling
+  // the read toward the middle; a missing component is simply absent (also 0).
+  const logOdds = comps.reduce((a, c) => a + c.weight * logit(c.score), 0);
+  const raw = comps.length === 0 ? 0 : sigmoid(logOdds);
 
   // VALUE mode: only when the user entered a real price for the chosen side.
   const evForSide = side === 'over' ? evPerDollar?.over : evPerDollar?.under;
@@ -196,6 +259,8 @@ export function computeFireFactor(input: FireFactorInput): FireFactorResult {
 
   // Cross-book line value: a softer number than the market lifts the score (capped), so a
   // genuine discount can nudge the read up a tier — but never conjures one from nothing.
+  // The boost is scaled by trustFactor too, so a thin sample can't ride a soft line to a
+  // strong read — the discount is only worth as much as the history backing it.
   if (lineValueEdge != null && blended !== null) {
     comps.push({
       key: 'lineValue',
@@ -203,12 +268,16 @@ export function computeFireFactor(input: FireFactorInput): FireFactorResult {
       score: clamp01(0.5 + lineValueEdge * 2),
       weight: 0,
     });
-    score += Math.max(0, Math.min(FIREFACTOR_LINE_VALUE.cap, lineValueEdge * FIREFACTOR_LINE_VALUE.gain));
+    const boost = Math.max(0, Math.min(FIREFACTOR_LINE_VALUE.cap, lineValueEdge * FIREFACTOR_LINE_VALUE.gain));
+    score += boost * trustFactor;
   }
 
   score = Math.round(clamp01(score / 100) * 100);
 
-  const insufficient = blended === null || gamesPlayed < FIREFACTOR_MIN_GAMES;
+  // Gate on DECIDED games (the honest non-double-counted sample from the buckets),
+  // not games played: a line with many appearances but few decided games (lots of
+  // pushes/DNPs at that number) is still too thin to read.
+  const insufficient = blended === null || blended.decided < FIREFACTOR_MIN_GAMES;
   const tier = tierFor(score, !insufficient && score >= FIREFACTOR_TIER_CUTOFFS.none);
 
   const note = insufficient
