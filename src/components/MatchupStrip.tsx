@@ -7,10 +7,11 @@ import { TeamLogo } from './TeamLogo';
 import { MatchupTime } from './MatchupTime';
 
 /**
- * Condensed, clickable matchups strip. Each game is a compact chip (away @ home + start
- * time) so the whole slate fits in a row or two. The chip body toggles the game as a
- * board filter; the ↗ on its right opens the full per-game leans page. Selected chips
- * are highlighted.
+ * Condensed, clickable matchups grid. Each game is a compact chip (away @ home + start
+ * time) laid out in equal-width columns so every chip occupies the same space regardless
+ * of abbreviation/time length — one full-width column on narrow screens, more as room
+ * allows. The chip body toggles the game as a board filter; the ↗ on its right opens the
+ * full per-game leans page. Selected chips are highlighted.
  */
 export function MatchupStrip({
   sport,
@@ -24,7 +25,7 @@ export function MatchupStrip({
   onToggle: (externalId: string) => void;
 }) {
   return (
-    <ul className="flex flex-wrap gap-1.5">
+    <ul className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-1.5">
       {games.map((g) => {
         const isSel = selected.has(g.externalId);
         const label = `${g.away.abbr} @ ${g.home.abbr}`;
@@ -32,7 +33,7 @@ export function MatchupStrip({
           <li key={g.externalId}>
             <div
               className={
-                'inline-flex items-stretch overflow-hidden rounded-lg border text-xs transition-colors ' +
+                'flex h-full w-full items-stretch overflow-hidden rounded-lg border text-xs transition-colors ' +
                 (isSel
                   ? 'border-brand bg-brand/10'
                   : 'border-line bg-surface hover:border-brand/60')
@@ -43,14 +44,14 @@ export function MatchupStrip({
                 onClick={() => onToggle(g.externalId)}
                 aria-pressed={isSel}
                 title={`Filter the reads to ${label}`}
-                className="inline-flex items-center gap-1 px-2 py-1 text-foreground"
+                className="flex min-w-0 flex-1 items-center gap-1 whitespace-nowrap px-2 py-1 text-foreground"
               >
                 <TeamLogo sport={sport} externalId={g.away.externalId} abbr={g.away.abbr} size={15} />
                 <span className="font-semibold">{g.away.abbr}</span>
                 <span className="text-muted">@</span>
                 <TeamLogo sport={sport} externalId={g.home.externalId} abbr={g.home.abbr} size={15} />
                 <span className="font-semibold">{g.home.abbr}</span>
-                <MatchupTime iso={g.startTime} className="ml-0.5 text-muted" />
+                <MatchupTime iso={g.startTime} className="ml-auto pl-1.5 tabular-nums text-muted" />
               </button>
               <Link
                 href={`/${sport}/game/${g.externalId}`}
