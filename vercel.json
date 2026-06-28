@@ -5,7 +5,8 @@
   "buildCommand": "prisma generate && next build",
   "git": {
     "deploymentEnabled": {
-      "develop": false
+      "*": false,
+      "main": true
     }
   }
 }
