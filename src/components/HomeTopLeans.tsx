@@ -38,7 +38,8 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
   // Books that have board rows in at least one sport → the single selector's options.
   const liveSet = new Set<string>();
   for (const c of cards) {
-    for (const [s, rows] of Object.entries(c.boardsBySource)) if (rows.length > 0) liveSet.add(s);
+    for (const [s, rows] of Object.entries(c.boardsBySource))
+      if (rows.length > 0) liveSet.add(s);
   }
   const liveSources = orderSources([...liveSet]);
   const shown = liveSources.includes(selected)
@@ -52,7 +53,11 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
 
   const single = cards.length === 1;
   const gridCols =
-    cards.length >= 3 ? 'sm:grid-cols-2 lg:grid-cols-3' : cards.length === 2 ? 'sm:grid-cols-2' : '';
+    cards.length >= 3
+      ? 'sm:grid-cols-2 lg:grid-cols-3'
+      : cards.length === 2
+        ? 'sm:grid-cols-2'
+        : '';
 
   const toggleBtn = (m: 'today' | 'all', text: string) => (
     <button
@@ -61,7 +66,9 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
       aria-pressed={mode === m}
       className={
         'cursor-pointer rounded-md px-3 py-1.5 transition-colors sm:py-1 ' +
-        (mode === m ? 'bg-brand text-brand-foreground' : 'text-muted hover:text-foreground')
+        (mode === m
+          ? 'bg-brand text-brand-foreground'
+          : 'text-muted hover:text-foreground')
       }
     >
       {text}
@@ -94,7 +101,9 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
           let rows = hasSources ? (c.boardsBySource[shown] ?? []) : c.medianLeans;
           if (mode === 'today' && c.todayTeams.length > 0) {
             const teams = new Set(c.todayTeams);
-            rows = rows.filter((r) => r.player.teamAbbreviation && teams.has(r.player.teamAbbreviation));
+            rows = rows.filter(
+              (r) => r.player.teamAbbreviation && teams.has(r.player.teamAbbreviation),
+            );
           }
           rows = rows.slice(0, DISPLAY);
           return (
@@ -130,7 +139,7 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
                         : 'No data available yet.'}
                   </p>
                 ) : (
-                  <BoardTable sport={c.sport} rows={rows} />
+                  <BoardTable rows={rows} />
                 )}
                 <Link
                   href={`/${c.sport}/board`}

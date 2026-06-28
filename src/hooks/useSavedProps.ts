@@ -34,11 +34,17 @@ export function useSavedProps(): { props: SavedProp[]; hydrated: boolean } {
     window.addEventListener('storage', sync);
     window.addEventListener('focus', refresh);
     document.addEventListener('visibilitychange', refresh);
+    // Periodic sweep so a long-open tab clears finished games (and crosses midnight
+    // for the end-of-day rule) without needing a focus/visibility event. pruneExpired
+    // only fires the change event when it actually removes something, so an unchanged
+    // tick costs nothing and triggers no re-render.
+    const sweep = setInterval(pruneExpiredProps, 5 * 60_000);
     return () => {
       window.removeEventListener(SAVED_PROPS_EVENT, sync);
       window.removeEventListener('storage', sync);
       window.removeEventListener('focus', refresh);
       document.removeEventListener('visibilitychange', refresh);
+      clearInterval(sweep);
     };
   }, []);
 

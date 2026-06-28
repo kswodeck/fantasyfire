@@ -50,7 +50,9 @@ export default async function SportHome({ params }: PageProps) {
   try {
     sources = await getAvailableSources(sport);
     if (sources.length > 0) {
-      initialSource = sources.includes(DEFAULT_PROVIDED_SOURCE) ? DEFAULT_PROVIDED_SOURCE : sources[0];
+      initialSource = sources.includes(DEFAULT_PROVIDED_SOURCE)
+        ? DEFAULT_PROVIDED_SOURCE
+        : sources[0];
       boardsBySource = await getSourcedBoards(sport, sources, { limit: 9 });
       leans = boardsBySource[initialSource] ?? [];
     } else {
@@ -97,7 +99,6 @@ export default async function SportHome({ params }: PageProps) {
         <section className="mx-auto max-w-3xl pb-10">
           {hasSources ? (
             <SourcedBoardTable
-              sport={sport}
               boardsBySource={boardsBySource}
               sources={sources}
               defaultSource={initialSource}
@@ -118,7 +119,7 @@ export default async function SportHome({ params }: PageProps) {
                   experimental
                 </span>
               </h2>
-              <BoardTable sport={sport} rows={leans} />
+              <BoardTable rows={leans} />
             </>
           )}
           <Link

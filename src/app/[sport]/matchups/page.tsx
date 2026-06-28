@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
+import { SportSelect } from '@/components/SportSelect';
 import { DvpExplorer } from '@/components/DvpExplorer';
 import { FreshnessNote } from '@/components/FreshnessNote';
 import { RelatedLinks } from '@/components/RelatedLinks';
@@ -43,7 +44,16 @@ const NFL_STATS_BY_POS: Record<string, StatKey[]> = {
   TE: ['recYds', 'rec', 'recTds', 'targets'],
 };
 const NFL_STATS: StatKey[] = [
-  'passYds', 'passTds', 'passCmp', 'rushYds', 'carries', 'rushTds', 'rec', 'recYds', 'recTds', 'targets',
+  'passYds',
+  'passTds',
+  'passCmp',
+  'rushYds',
+  'carries',
+  'rushTds',
+  'rec',
+  'recYds',
+  'recTds',
+  'targets',
 ];
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -95,7 +105,10 @@ export default async function MatchupsPage({ params }: PageProps) {
         )
       : stats.flatMap((stat) => positions.map((p) => ({ stat, pos: p.value })));
     const entries = await Promise.all(
-      combos.map(async ({ stat, pos }) => [`${stat}:${pos}`, await getDvpTable(sport, stat, pos)] as const),
+      combos.map(
+        async ({ stat, pos }) =>
+          [`${stat}:${pos}`, await getDvpTable(sport, stat, pos)] as const,
+      ),
     );
     for (const [k, v] of entries) tables[k] = v;
     freshness = await getDataFreshness(sport);
@@ -104,7 +117,9 @@ export default async function MatchupsPage({ params }: PageProps) {
   }
 
   const statOpts = stats.map((s) => ({ value: s as string, label: STAT_DEFS[s].label }));
-  const unitByStat = Object.fromEntries(stats.map((s) => [s as string, STAT_DEFS[s].short]));
+  const unitByStat = Object.fromEntries(
+    stats.map((s) => [s as string, STAT_DEFS[s].short]),
+  );
   const hasData = Object.values(tables).some((t) => t.length > 0);
 
   const jsonLd = graph([
@@ -126,9 +141,16 @@ export default async function MatchupsPage({ params }: PageProps) {
       <JsonLd data={jsonLd} />
       <Breadcrumbs
         className="mb-4"
-        items={[{ label: 'Home', href: '/' }, { label: cfg.name, href: `/${sport}` }, { label: 'Matchups' }]}
+        items={[
+          { label: 'Home', href: '/' },
+          { label: cfg.name, href: `/${sport}` },
+          { label: 'Matchups' },
+        ]}
       />
-      <h1 className="text-3xl font-bold tracking-tight">{heading}</h1>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h1 className="text-3xl font-bold tracking-tight">{heading}</h1>
+        <SportSelect section="matchups" value={sport} />
+      </div>
       <p className="mt-2 max-w-2xl text-sm text-muted">
         {sport === 'mlb'
           ? 'How many of each stat every team’s pitching staff allows to hitters per game, ranked from the softest matchup (rank 1, allows the most) to the toughest — a quick read on which opponents inflate or suppress a prop.'
@@ -156,8 +178,8 @@ export default async function MatchupsPage({ params }: PageProps) {
       <RelatedLinks links={sportMeshLinks(sport, 'matchups')} />
 
       <p className="mt-8 text-xs leading-relaxed text-muted">
-        Descriptive research from public game logs — team-allowed averages describe past games and are not
-        predictions, picks, or betting advice.
+        Descriptive research from public game logs — team-allowed averages describe past
+        games and are not predictions, picks, or betting advice.
       </p>
     </div>
   );

@@ -2,13 +2,19 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { FilterableTrends } from '@/components/FilterableTrends';
+import { SportSelect } from '@/components/SportSelect';
 import { SourcedTrends } from '@/components/SourcedTrends';
 import { FreshnessNote } from '@/components/FreshnessNote';
 import { RelatedLinks } from '@/components/RelatedLinks';
 import { OffSeasonFallback } from '@/components/OffSeasonFallback';
-import { getTrendBoard, getSourcedTrends, getDataFreshness, hasUpcomingGames } from '@/lib/server/players';
+import {
+  getTrendBoard,
+  getSourcedTrends,
+  getDataFreshness,
+  hasUpcomingGames,
+} from '@/lib/server/players';
 import { getAvailableSources } from '@/lib/server/providedLines';
-import { DEFAULT_PROVIDED_SOURCE, sourceLabel } from '@/lib/providedSources';
+import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import { sportMeshLinks } from '@/lib/relatedLinks';
 import { JsonLd } from '@/components/JsonLd';
 import { breadcrumbList, datasetNode, graph } from '@/lib/jsonLd';
@@ -67,7 +73,10 @@ export default async function TrendsPage({ params }: PageProps) {
       ]);
       rows = bySource[initialSource] ?? [];
     } else {
-      [rows, freshness] = await Promise.all([getTrendBoard(sport), getDataFreshness(sport)]);
+      [rows, freshness] = await Promise.all([
+        getTrendBoard(sport),
+        getDataFreshness(sport),
+      ]);
     }
   } catch {
     // DB unavailable — render the empty state.
@@ -92,15 +101,23 @@ export default async function TrendsPage({ params }: PageProps) {
       <JsonLd data={jsonLd} />
       <Breadcrumbs
         className="mb-4"
-        items={[{ label: 'Home', href: '/' }, { label: cfg.name, href: `/${sport}` }, { label: 'Trends' }]}
+        items={[
+          { label: 'Home', href: '/' },
+          { label: cfg.name, href: `/${sport}` },
+          { label: 'Trends' },
+        ]}
       />
-      <h1 className="text-3xl font-bold tracking-tight">{cfg.name} Player Trends</h1>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h1 className="text-3xl font-bold tracking-tight">{cfg.name} Player Trends</h1>
+        <SportSelect section="trends" value={sport} includeAll />
+      </div>
       <p className="mt-2 max-w-2xl text-sm text-muted">
-        Players whose <span className="text-foreground">last-10 form</span> has swung hardest from their
-        season baseline — heating up or cooling off vs their{' '}
-        {hasSources ? `real line` : 'typical line'} — with each
-        player&rsquo;s <span className="text-foreground">current streak</span> shown alongside. Ranked
-        by the lower bound of a 95% Wilson interval, so a tiny hot sample sits below a steadier swing.
+        Players whose <span className="text-foreground">last-10 form</span> has swung
+        hardest from their season baseline — heating up or cooling off vs their{' '}
+        {hasSources ? `real line` : 'typical line'} — with each player&rsquo;s{' '}
+        <span className="text-foreground">current streak</span> shown alongside. Ranked by
+        the lower bound of a 95% Wilson interval, so a tiny hot sample sits below a
+        steadier swing.
         {hasSources ? ' Switch books with the selector below.' : ''}
       </p>
       <FreshnessNote date={freshness} className="mt-2" />
@@ -129,8 +146,8 @@ export default async function TrendsPage({ params }: PageProps) {
       <RelatedLinks links={sportMeshLinks(sport, 'trends')} />
 
       <p className="mt-8 text-xs leading-relaxed text-muted">
-        Descriptive research from public game logs — a recent swing describes past games and does not
-        predict the next one. Not predictions, picks, or betting advice.
+        Descriptive research from public game logs — a recent swing describes past games
+        and does not predict the next one. Not predictions, picks, or betting advice.
       </p>
     </div>
   );

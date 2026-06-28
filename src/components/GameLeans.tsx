@@ -82,7 +82,7 @@ function TeamSection({
           No qualifying reads for {team.abbr} on this book right now.
         </p>
       ) : (
-        <BoardTable sport={sport} rows={teamRows} />
+        <BoardTable rows={teamRows} />
       )}
     </section>
   );

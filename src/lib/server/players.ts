@@ -49,6 +49,7 @@ import type {
   PlayerBio,
   PlayerGame,
   PlayerListItem,
+  CardAvailability,
   ChartPoint,
   WindowResult,
   PlayerResearch,
@@ -210,31 +211,33 @@ type PlayerRecord = {
 
 // Wrapped in React cache() so generateMetadata + the page (same render) share
 // one query instead of two.
-const getPlayerRecord = cache(async (sport: Sport, slug: string): Promise<PlayerRecord | null> => {
-  const p = await db.player.findUnique({
-    where: { sport_slug: { sport, slug } },
-    select: {
-      id: true,
-      externalId: true,
-      slug: true,
-      firstName: true,
-      lastName: true,
-      position: true,
-      posBucket: true,
-      jersey: true,
-      height: true,
-      weight: true,
-      college: true,
-      country: true,
-      draftYear: true,
-      draftRound: true,
-      draftNumber: true,
-      fromYear: true,
-      team: { select: { id: true, abbreviation: true, name: true, externalId: true } },
-    },
-  });
-  return p ? { ...p, sport } : null;
-});
+const getPlayerRecord = cache(
+  async (sport: Sport, slug: string): Promise<PlayerRecord | null> => {
+    const p = await db.player.findUnique({
+      where: { sport_slug: { sport, slug } },
+      select: {
+        id: true,
+        externalId: true,
+        slug: true,
+        firstName: true,
+        lastName: true,
+        position: true,
+        posBucket: true,
+        jersey: true,
+        height: true,
+        weight: true,
+        college: true,
+        country: true,
+        draftYear: true,
+        draftRound: true,
+        draftNumber: true,
+        fromYear: true,
+        team: { select: { id: true, abbreviation: true, name: true, externalId: true } },
+      },
+    });
+    return p ? { ...p, sport } : null;
+  },
+);
 
 function toBio(p: PlayerRecord): PlayerBio {
   return {
@@ -277,7 +280,10 @@ function toSummary(p: PlayerRecord): PlayerSummary {
   };
 }
 
-export async function getPlayerBySlug(sport: Sport, slug: string): Promise<PlayerSummary | null> {
+export async function getPlayerBySlug(
+  sport: Sport,
+  slug: string,
+): Promise<PlayerSummary | null> {
   const p = await getPlayerRecord(sport, slug);
   return p ? toSummary(p) : null;
 }
@@ -287,21 +293,59 @@ export async function getPlayerBySlug(sport: Sport, slug: string): Promise<Playe
  * omits other sports' columns to cut egress — is still assignable; the full-row query
  * (player page) provides them all. Missing columns map to undefined → statValue → 0. */
 type StatGameRow = {
-  points?: number | null; rebounds?: number | null; oreb?: number | null; dreb?: number | null;
-  assists?: number | null; steals?: number | null; blocks?: number | null; turnovers?: number | null;
-  fouls?: number | null; fgm?: number | null; fga?: number | null; fg3m?: number | null;
-  fg3a?: number | null; ftm?: number | null; fta?: number | null; minutes?: number | null;
-  atBats?: number | null; hits?: number | null; doubles?: number | null; triples?: number | null;
-  homeRuns?: number | null; runs?: number | null; rbi?: number | null; walks?: number | null;
-  strikeouts?: number | null; stolenBases?: number | null; totalBases?: number | null; hbp?: number | null;
-  outs?: number | null; hitsAllowed?: number | null; runsAllowed?: number | null; earnedRuns?: number | null;
-  walksAllowed?: number | null; strikeoutsPitched?: number | null;
-  passYards?: number | null; passTds?: number | null; passCompletions?: number | null;
-  passAttempts?: number | null; passInts?: number | null; rushYards?: number | null;
-  rushAttempts?: number | null; rushTds?: number | null; receptions?: number | null;
-  targets?: number | null; recYards?: number | null; recTds?: number | null; fumblesLost?: number | null;
-  gameDate: Date; opponentTeamId: number; opponentTeam: { abbreviation: string; externalId: number };
-  isHome: boolean; wl: string | null; plusMinus: number | null;
+  points?: number | null;
+  rebounds?: number | null;
+  oreb?: number | null;
+  dreb?: number | null;
+  assists?: number | null;
+  steals?: number | null;
+  blocks?: number | null;
+  turnovers?: number | null;
+  fouls?: number | null;
+  fgm?: number | null;
+  fga?: number | null;
+  fg3m?: number | null;
+  fg3a?: number | null;
+  ftm?: number | null;
+  fta?: number | null;
+  minutes?: number | null;
+  atBats?: number | null;
+  hits?: number | null;
+  doubles?: number | null;
+  triples?: number | null;
+  homeRuns?: number | null;
+  runs?: number | null;
+  rbi?: number | null;
+  walks?: number | null;
+  strikeouts?: number | null;
+  stolenBases?: number | null;
+  totalBases?: number | null;
+  hbp?: number | null;
+  outs?: number | null;
+  hitsAllowed?: number | null;
+  runsAllowed?: number | null;
+  earnedRuns?: number | null;
+  walksAllowed?: number | null;
+  strikeoutsPitched?: number | null;
+  passYards?: number | null;
+  passTds?: number | null;
+  passCompletions?: number | null;
+  passAttempts?: number | null;
+  passInts?: number | null;
+  rushYards?: number | null;
+  rushAttempts?: number | null;
+  rushTds?: number | null;
+  receptions?: number | null;
+  targets?: number | null;
+  recYards?: number | null;
+  recTds?: number | null;
+  fumblesLost?: number | null;
+  gameDate: Date;
+  opponentTeamId: number;
+  opponentTeam: { abbreviation: string; externalId: number };
+  isHome: boolean;
+  wl: string | null;
+  plusMinus: number | null;
 };
 
 /** Map a Prisma stat row (with opponent) to the view-layer PlayerGame. */
@@ -403,7 +447,10 @@ export type MatchupOpponent = {
  * Returns null off-season / when the team has no upcoming game, letting callers
  * fall back to the last completed opponent.
  */
-async function getNextOpponent(sport: Sport, teamId: number): Promise<MatchupOpponent | null> {
+async function getNextOpponent(
+  sport: Sport,
+  teamId: number,
+): Promise<MatchupOpponent | null> {
   const todayUtc = new Date();
   todayUtc.setUTCHours(0, 0, 0, 0);
   const game = await db.scheduledGame.findFirst({
@@ -433,7 +480,12 @@ async function getNextOpponent(sport: Sport, teamId: number): Promise<MatchupOpp
 }
 
 /** Every injured player in a sport, severity-sorted — the injury-report page. */
-const INJURY_SEVERITY: Record<string, number> = { out: 0, doubtful: 1, questionable: 2, 'day-to-day': 3 };
+const INJURY_SEVERITY: Record<string, number> = {
+  out: 0,
+  doubtful: 1,
+  questionable: 2,
+  'day-to-day': 3,
+};
 export async function getInjuryReport(sport: Sport): Promise<InjuryReportRow[]> {
   const rows = await db.playerInjury
     .findMany({
@@ -445,7 +497,13 @@ export async function getInjuryReport(sport: Sport): Promise<InjuryReportRow[]> 
         returnDate: true,
         comment: true,
         player: {
-          select: { slug: true, firstName: true, lastName: true, position: true, team: { select: { abbreviation: true } } },
+          select: {
+            slug: true,
+            firstName: true,
+            lastName: true,
+            position: true,
+            team: { select: { abbreviation: true } },
+          },
         },
       },
     })
@@ -500,8 +558,13 @@ export async function getPlayerSlugsWithFreshness(
       _max: { gameDate: true },
     }),
   ]);
-  const lastByPlayer = new Map(freshness.map((f) => [f.playerId, f._max.gameDate ?? null]));
-  return players.map((p) => ({ slug: p.slug, lastGameDate: lastByPlayer.get(p.id) ?? null }));
+  const lastByPlayer = new Map(
+    freshness.map((f) => [f.playerId, f._max.gameDate ?? null]),
+  );
+  return players.map((p) => ({
+    slug: p.slug,
+    lastGameDate: lastByPlayer.get(p.id) ?? null,
+  }));
 }
 
 /**
@@ -520,7 +583,11 @@ export async function getTopPlayerSlugs(sport: Sport, limit = 150): Promise<stri
 }
 
 /** Search/list players in a sport for index pages and the API. */
-export async function searchPlayers(sport: Sport, q?: string, limit = 20): Promise<PlayerListItem[]> {
+export async function searchPlayers(
+  sport: Sport,
+  q?: string,
+  limit = 20,
+): Promise<PlayerListItem[]> {
   const where = q
     ? {
         sport,
@@ -536,6 +603,9 @@ export async function searchPlayers(sport: Sport, q?: string, limit = 20): Promi
     include: {
       team: { select: { abbreviation: true, name: true, externalId: true } },
       _count: { select: { gameStats: true } },
+      injury: {
+        select: { status: true, fantasyStatus: true, detail: true, returnDate: true },
+      },
     },
     orderBy: [{ gameStats: { _count: 'desc' } }, { lastName: 'asc' }],
     take: limit,
@@ -556,6 +626,7 @@ export async function searchPlayers(sport: Sport, q?: string, limit = 20): Promi
     teamName: teamDisplayName(sport, p.team?.abbreviation, p.team?.name ?? null),
     teamExternalId: p.team?.externalId ?? null,
     gamesPlayed: p._count.gameStats,
+    availability: toCardAvailability(p.injury),
   }));
 }
 
@@ -573,7 +644,10 @@ export async function getSportSummary(
 
 /** Most-recent game date in the dataset for a sport (ISO YYYY-MM-DD), for the freshness stamp. */
 export async function getDataFreshness(sport: Sport): Promise<string | null> {
-  const r = await db.playerGameStat.aggregate({ where: { sport }, _max: { gameDate: true } });
+  const r = await db.playerGameStat.aggregate({
+    where: { sport },
+    _max: { gameDate: true },
+  });
   return r._max.gameDate ? r._max.gameDate.toISOString().slice(0, 10) : null;
 }
 
@@ -621,7 +695,9 @@ async function getNbaDvpTable(
   // player, blend their season and last-N appearance minutes, then keep only
   // games at/above that bar. Done in SQL (window function) so the league-wide
   // DvP averages stay consistent with each player's own role.
-  const rows = await db.$queryRawUnsafe<{ opponentTeamId: number; avg: number; n: number }[]>(
+  const rows = await db.$queryRawUnsafe<
+    { opponentTeamId: number; avg: number; n: number }[]
+  >(
     `WITH games AS (
        SELECT s."opponentTeamId" AS opp, s.minutes AS minutes, (${expr}) AS val,
               ROW_NUMBER() OVER (PARTITION BY s."playerId" ORDER BY s."gameDate" DESC) AS rn,
@@ -667,11 +743,16 @@ async function getNbaDvp(
 }
 
 /** MLB matchup: a hitting stat the opponent's pitching staff allows per game. */
-async function getMlbHitterMatchupTable(stat: StatKey, season: string): Promise<DvpCell[]> {
+async function getMlbHitterMatchupTable(
+  stat: StatKey,
+  season: string,
+): Promise<DvpCell[]> {
   const expr = MLB_HIT_SQL[stat];
   if (!expr) return [];
   // Per-game team total allowed, then average across that opponent's games.
-  const rows = await db.$queryRawUnsafe<{ opponentTeamId: number; avg: number; n: number }[]>(
+  const rows = await db.$queryRawUnsafe<
+    { opponentTeamId: number; avg: number; n: number }[]
+  >(
     `SELECT opp AS "opponentTeamId", AVG(pg)::float8 AS avg, COUNT(*)::int AS n FROM (
        SELECT s."opponentTeamId" AS opp, s."gameId" AS g, SUM(${expr})::float8 AS pg
        FROM "PlayerGameStat" s
@@ -715,7 +796,9 @@ async function getNflDvpTable(
   // Average the stat allowed to featured players of this bucket, per opponent.
   // No per-player blended threshold (NBA-style) — with ~17 games a fixed
   // involvement floor is simpler and keeps cells from going empty.
-  const rows = await db.$queryRawUnsafe<{ opponentTeamId: number; avg: number; n: number }[]>(
+  const rows = await db.$queryRawUnsafe<
+    { opponentTeamId: number; avg: number; n: number }[]
+  >(
     `SELECT s."opponentTeamId" AS "opponentTeamId", AVG(${expr})::float8 AS avg, COUNT(*)::int AS n
      FROM "PlayerGameStat" s
      JOIN "Player" p ON p.id = s."playerId"
@@ -754,7 +837,9 @@ async function getNflDvp(
  * request; null off-NBA / on error so the projection just stays pace-neutral.
  */
 const getNbaPaceTable = cache(
-  async (season: string): Promise<{ byTeam: Map<number, number>; leagueAvg: number } | null> => {
+  async (
+    season: string,
+  ): Promise<{ byTeam: Map<number, number>; leagueAvg: number } | null> => {
     try {
       const rows = await db.$queryRawUnsafe<{ teamId: number; pace: number }[]>(
         `SELECT "teamId", AVG(poss)::float8 AS pace FROM (
@@ -794,7 +879,11 @@ async function getNextGameContext(
   const todayUtc = new Date();
   todayUtc.setUTCHours(0, 0, 0, 0);
   const game = await db.scheduledGame.findFirst({
-    where: { sport, date: { gte: todayUtc }, OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }] },
+    where: {
+      sport,
+      date: { gte: todayUtc },
+      OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }],
+    },
     orderBy: { date: 'asc' },
     select: {
       homeTeamId: true,
@@ -806,9 +895,11 @@ async function getNextGameContext(
   });
   if (!game) return { impliedTotal: null, opposingPitcher: null };
   const isHome = game.homeTeamId === teamId;
-  const teamSpread = game.homeSpread == null ? 0 : isHome ? game.homeSpread : -game.homeSpread;
+  const teamSpread =
+    game.homeSpread == null ? 0 : isHome ? game.homeSpread : -game.homeSpread;
   return {
-    impliedTotal: game.gameTotal == null ? null : impliedTeamTotal(game.gameTotal, teamSpread),
+    impliedTotal:
+      game.gameTotal == null ? null : impliedTeamTotal(game.gameTotal, teamSpread),
     opposingPitcher: isHome ? game.awayProbablePitcher : game.homeProbablePitcher,
   };
 }
@@ -834,7 +925,12 @@ const getMlbLeaguePitcherRates = cache(
   async (season: string): Promise<{ kRate: number; hitsRate: number } | null> => {
     const agg = await db.playerGameStat.aggregate({
       where: { sport: 'mlb', season },
-      _sum: { outs: true, hitsAllowed: true, walksAllowed: true, strikeoutsPitched: true },
+      _sum: {
+        outs: true,
+        hitsAllowed: true,
+        walksAllowed: true,
+        strikeoutsPitched: true,
+      },
     });
     const bf =
       (agg._sum.outs ?? 0) + (agg._sum.hitsAllowed ?? 0) + (agg._sum.walksAllowed ?? 0);
@@ -862,15 +958,24 @@ async function getMlbPitcherMatchupMultiplier(
   const [agg, league] = await Promise.all([
     db.playerGameStat.aggregate({
       where: { playerId: pid, season },
-      _sum: { outs: true, hitsAllowed: true, walksAllowed: true, strikeoutsPitched: true },
+      _sum: {
+        outs: true,
+        hitsAllowed: true,
+        walksAllowed: true,
+        strikeoutsPitched: true,
+      },
     }),
     getMlbLeaguePitcherRates(season),
   ]);
   if (!league) return null;
-  const bf = (agg._sum.outs ?? 0) + (agg._sum.hitsAllowed ?? 0) + (agg._sum.walksAllowed ?? 0);
+  const bf =
+    (agg._sum.outs ?? 0) + (agg._sum.hitsAllowed ?? 0) + (agg._sum.walksAllowed ?? 0);
   if (bf < 100) return null; // too few batters faced to trust the rate
   // Batter-strikeout prop keys off the pitcher's K rate; hitting props off hits allowed.
-  const rate = stat === 'so' ? (agg._sum.strikeoutsPitched ?? 0) / bf : (agg._sum.hitsAllowed ?? 0) / bf;
+  const rate =
+    stat === 'so'
+      ? (agg._sum.strikeoutsPitched ?? 0) / bf
+      : (agg._sum.hitsAllowed ?? 0) / bf;
   const leagueRate = stat === 'so' ? league.kRate : league.hitsRate;
   if (leagueRate <= 0) return null;
   return Math.min(1.1, Math.max(0.9, rate / leagueRate));
@@ -886,7 +991,8 @@ const getLeagueAvgTeamTotal = cache(async (sport: Sport): Promise<number | null>
     select: { gameTotal: true },
   });
   if (rows.length === 0) return null;
-  const avgGameTotal = rows.reduce((s, r) => s + (r.gameTotal as number), 0) / rows.length;
+  const avgGameTotal =
+    rows.reduce((s, r) => s + (r.gameTotal as number), 0) / rows.length;
   return avgGameTotal / 2;
 });
 
@@ -939,7 +1045,8 @@ async function getTeammateOutSplits(
   });
   type Agg = { dates: Set<string>; oppSum: number; oppN: number; bucket: string | null };
   const byId = new Map<number, Agg>();
-  for (const t of teammates) byId.set(t.id, { dates: new Set(), oppSum: 0, oppN: 0, bucket: t.posBucket });
+  for (const t of teammates)
+    byId.set(t.id, { dates: new Set(), oppSum: 0, oppN: 0, bucket: t.posBucket });
   for (const g of logs) {
     const a = byId.get(g.playerId);
     if (!a) continue;
@@ -997,7 +1104,8 @@ function lineValueComparison(
   if (linesBySource.length < 2) return null;
   const sorted = linesBySource.map((x) => x.line).sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
-  const consensusLine = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  const consensusLine =
+    sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
   const sideRate = (ln: number) => {
     const o = computeHitRate(games, stat, ln, 'season').hitRateOver ?? 0.5;
     return side === 'over' ? o : 1 - o;
@@ -1009,7 +1117,10 @@ function lineValueComparison(
   });
   books.sort((a, b) => b.edge - a.edge || b.sideHitRate - a.sideHitRate);
   const top = books[0];
-  const best = top && top.edge > 0.005 ? { source: top.source, line: top.line, edge: top.edge } : null;
+  const best =
+    top && top.edge > 0.005
+      ? { source: top.source, line: top.line, edge: top.edge }
+      : null;
   return { side, consensusLine, books, best };
 }
 
@@ -1051,7 +1162,8 @@ export async function getPlayerResearch(
   // line (only when PROVIDED_LINES_ENABLED + that book has one); else the
   // book-style half-point default. lineSource records where `line` came from.
   const src = source ?? DEFAULT_PROVIDED_SOURCE;
-  const providedLine = lineParam == null ? await getProvidedLine(sport, record.id, stat, src) : null;
+  const providedLine =
+    lineParam == null ? await getProvidedLine(sport, record.id, stat, src) : null;
   const line = lineParam ?? providedLine ?? defaultPropLine(games, stat);
   const lineSource = lineParam == null && providedLine != null ? src : null;
 
@@ -1123,7 +1235,9 @@ export async function getPlayerResearch(
     line,
     recent: l10,
     season: seasonResult,
-    dvp: dvp ? { cell: dvp, opponentAbbreviation: matchupOpponent!.abbreviation, unitLabel } : null,
+    dvp: dvp
+      ? { cell: dvp, opponentAbbreviation: matchupOpponent!.abbreviation, unitLabel }
+      : null,
   });
 
   // Verdict: the FireFactor "good prop" read + its sub-signals, computed on the
@@ -1161,13 +1275,19 @@ export async function getPlayerResearch(
     environmentMult = environmentMultiplier(ctx.impliedTotal, leagueAvg);
     // MLB: prefer the specific probable starter's quality over the staff-wide DvP.
     if (sport === 'mlb' && record.posBucket === 'H' && ctx.opposingPitcher) {
-      const pitcherMult = await getMlbPitcherMatchupMultiplier(stat, ctx.opposingPitcher, season);
+      const pitcherMult = await getMlbPitcherMatchupMultiplier(
+        stat,
+        ctx.opposingPitcher,
+        season,
+      );
       if (pitcherMult != null) opponentMult = pitcherMult;
     }
   }
   // Volume / usage trend (ideas #7/#8): recent opportunity (minutes, targets, …) vs
   // the season baseline — catches role changes the shrunk stat estimate lags.
-  const volumeMult = volumeMultiplier(games.map((g) => opportunityFor(sport, record.posBucket, g)));
+  const volumeMult = volumeMultiplier(
+    games.map((g) => opportunityFor(sport, record.posBucket, g)),
+  );
   const projection = recentFormEstimate(seasonResult.values, seasonResult.mean, {
     opponent: opponentMult,
     pace: paceMult,
@@ -1183,7 +1303,12 @@ export async function getPlayerResearch(
 
   // Model P(over) from the adjusted projection's distribution (idea #2) — the
   // principled "projection vs line" probability FireFactor leans on.
-  const modelProb = lineProbabilities(stat, projection.projection, seasonResult.stdev, line);
+  const modelProb = lineProbabilities(
+    stat,
+    projection.projection,
+    seasonResult.stdev,
+    line,
+  );
 
   // Cross-book market consensus + best price / +EV (idea #1) from the scraped book
   // odds — shown in the market-edge panel. NOT folded into FireFactor: the score must
@@ -1244,7 +1369,9 @@ export async function getPlayerResearch(
         rawStatus: injuryRow.rawStatus,
         fantasyStatus: injuryRow.fantasyStatus,
         detail: injuryRow.detail,
-        returnDate: injuryRow.returnDate ? injuryRow.returnDate.toISOString().slice(0, 10) : null,
+        returnDate: injuryRow.returnDate
+          ? injuryRow.returnDate.toISOString().slice(0, 10)
+          : null,
         comment: injuryRow.comment,
         news: injuryRow.news,
       }
@@ -1326,30 +1453,74 @@ export interface BoardOptions {
   requireProvidedLine?: boolean;
 }
 
-/** Current availability bucket per player id for the board (batched). */
+/** Map a PlayerInjury row (the badge-relevant columns) to the slim card shape. */
+function toCardAvailability(
+  injury:
+    | {
+        status: string;
+        fantasyStatus: string | null;
+        detail: string | null;
+        returnDate: Date | null;
+      }
+    | null
+    | undefined,
+): CardAvailability | null {
+  if (!injury) return null;
+  return {
+    status: injury.status as AvailabilityStatus,
+    fantasyStatus: injury.fantasyStatus,
+    detail: injury.detail,
+    returnDate: injury.returnDate ? injury.returnDate.toISOString().slice(0, 10) : null,
+  };
+}
+
+/** Current availability per player id for the board (batched) — the status gates the
+ *  read; the rest feeds the row's injury badge. */
 async function getBoardAvailability(
   sport: Sport,
   playerIds: number[],
-): Promise<Map<number, AvailabilityStatus>> {
-  const m = new Map<number, AvailabilityStatus>();
+): Promise<Map<number, CardAvailability>> {
+  const m = new Map<number, CardAvailability>();
   if (playerIds.length === 0) return m;
   const rows = await db.playerInjury
-    .findMany({ where: { sport, playerId: { in: playerIds } }, select: { playerId: true, status: true } })
+    .findMany({
+      where: { sport, playerId: { in: playerIds } },
+      select: {
+        playerId: true,
+        status: true,
+        fantasyStatus: true,
+        detail: true,
+        returnDate: true,
+      },
+    })
     .catch(() => []);
-  for (const r of rows) m.set(r.playerId, r.status as AvailabilityStatus);
+  for (const r of rows) {
+    const a = toCardAvailability(r);
+    if (a) m.set(r.playerId, a);
+  }
   return m;
 }
 
-export async function getBoard(sport: Sport, opts: BoardOptions = {}): Promise<BoardRow[]> {
+export async function getBoard(
+  sport: Sport,
+  opts: BoardOptions = {},
+): Promise<BoardRow[]> {
   const { limit = 40, scan = 120, perPlayerCap = 2, perStatCap = 10 } = opts;
   const { players, gamesByPlayer } = await loadBoardPool(sport, scan);
   if (players.length === 0) return [];
   // Real lines from the chosen book; empty map (no query) when the feature is off,
   // so the board falls back to the computed default line and behaves as before.
-  const providedLines = await getProvidedLineMap(sport, players.map((p) => p.id), opts.source);
+  const providedLines = await getProvidedLineMap(
+    sport,
+    players.map((p) => p.id),
+    opts.source,
+  );
   const season = await getActiveSeason(sport);
   const ctx = await boardMatchupContext(sport, players, season);
-  const availability = await getBoardAvailability(sport, players.map((p) => p.id));
+  const availability = await getBoardAvailability(
+    sport,
+    players.map((p) => p.id),
+  );
   return computeBoardRows(sport, players, gamesByPlayer, providedLines, {
     limit,
     perPlayerCap,
@@ -1409,7 +1580,9 @@ export async function getSourcedBoards(
 
 /** Median line per `${playerId}:${stat}` key across every book's line map — the market
  *  consensus the line-value boost + "best price" badge are scored against. */
-function consensusLineMap(allMaps: Record<string, Map<string, number>>): Map<string, number> {
+function consensusLineMap(
+  allMaps: Record<string, Map<string, number>>,
+): Map<string, number> {
   const byKey = new Map<string, number[]>();
   for (const m of Object.values(allMaps)) {
     for (const [k, v] of m) {
@@ -1446,7 +1619,9 @@ async function boardMatchupContext(
   const paceMultByPlayer = new Map<number, number>();
   const envMultByPlayer = new Map<number, number>();
   const empty = { grades, opponentMults, paceMultByPlayer, envMultByPlayer };
-  const teamIds = [...new Set(players.map((p) => p.teamId).filter((x): x is number => x != null))];
+  const teamIds = [
+    ...new Set(players.map((p) => p.teamId).filter((x): x is number => x != null)),
+  ];
   if (teamIds.length === 0) return empty;
 
   // Next opponent + game odds per board team — one query over upcoming games, earliest
@@ -1499,13 +1674,17 @@ async function boardMatchupContext(
   // DvP cell tables, memoized per (posBucket, stat): opponentTeamId -> cell (the cell
   // feeds both the grade and the opponent multiplier, so they stay in lock-step).
   const tableCache = new Map<string, Map<number, DvpCell>>();
-  const cellTable = async (bucket: PosBucket, stat: StatKey): Promise<Map<number, DvpCell>> => {
+  const cellTable = async (
+    bucket: PosBucket,
+    stat: StatKey,
+  ): Promise<Map<number, DvpCell>> => {
     const key = `${bucket}:${stat}`;
     const cached = tableCache.get(key);
     if (cached) return cached;
     let cells: DvpCell[] = [];
     if (sport === 'nba') cells = await getNbaDvpTable(bucket, stat, season);
-    else if (sport === 'mlb' && bucket === 'H') cells = await getMlbHitterMatchupTable(stat, season);
+    else if (sport === 'mlb' && bucket === 'H')
+      cells = await getMlbHitterMatchupTable(stat, season);
     else if (sport === 'nfl') cells = await getNflDvpTable(bucket, stat, season);
     const m = new Map<number, DvpCell>();
     for (const c of cells) m.set(c.opponentTeamId, c);
@@ -1548,14 +1727,20 @@ async function boardMatchupContext(
       p.id,
       environmentMultiplier(impliedByTeam.get(p.teamId) ?? null, leagueAvgTeamTotal),
     );
-    const pitcherName = sport === 'mlb' && bucket === 'H' ? oppPitcherByTeam.get(p.teamId) : undefined;
+    const pitcherName =
+      sport === 'mlb' && bucket === 'H' ? oppPitcherByTeam.get(p.teamId) : undefined;
     for (const stat of statKeysForSport(sport, bucket)) {
       const cell = (await cellTable(bucket, stat)).get(opp);
       if (cell) grades.set(`${p.id}:${stat}`, matchupGrade(cell));
       // Opponent factor: the probable starter's quality (MLB hitter) overrides the staff
       // DvP cell — same precedence as the player page.
       const pitcherMult = pitcherName ? await pitcherMultFor(pitcherName, stat) : null;
-      const oppMult = pitcherMult != null ? pitcherMult : cell ? opponentMultiplierFromCell(cell) : null;
+      const oppMult =
+        pitcherMult != null
+          ? pitcherMult
+          : cell
+            ? opponentMultiplierFromCell(cell)
+            : null;
       if (oppMult != null) opponentMults.set(`${p.id}:${stat}`, oppMult);
     }
   }
@@ -1575,7 +1760,10 @@ function computeBoardRows(
     requireProvided: boolean;
     /** Present only for the multi-book sourced boards: every book's line map + the
      *  consensus (median per key), so each row can score its book vs the market. */
-    lineValue?: { allMaps: Record<string, Map<string, number>>; consensus: Map<string, number> };
+    lineValue?: {
+      allMaps: Record<string, Map<string, number>>;
+      consensus: Map<string, number>;
+    };
     /** Next-opponent DvP grade per `${playerId}:${stat}`, so the board's FireFactor
      *  includes the same matchup component as the player page. */
     matchupGrades?: Map<string, MatchupGrade>;
@@ -1585,9 +1773,9 @@ function computeBoardRows(
     paceMultByPlayer?: Map<number, number>;
     /** Vegas game-environment multiplier per player (matches the page). */
     envMultByPlayer?: Map<number, number>;
-    /** Current availability bucket per player — Out players are dropped; game-time tiers
-     *  discount the read (same gate the player page applies). */
-    availability?: Map<number, AvailabilityStatus>;
+    /** Current availability per player — Out players are dropped; game-time tiers
+     *  discount the read (same gate the player page applies) and badge the row. */
+    availability?: Map<number, CardAvailability>;
   },
 ): BoardRow[] {
   const { limit, perPlayerCap, perStatCap, requireProvided } = opts;
@@ -1595,16 +1783,25 @@ function computeBoardRows(
   for (const p of players) {
     // Never surface a benched player as a board lean.
     const avail = opts.availability?.get(p.id);
-    if (avail === 'out') continue;
+    if (avail?.status === 'out') continue;
     const allGames = gamesByPlayer.get(p.id);
     if (!allGames || allGames.length < FIREFACTOR_MIN_GAMES) continue;
     const games = qualifyGames(sport, p.posBucket, allGames);
     if (games.length < FIREFACTOR_MIN_GAMES) continue;
-    const listItem = boardListItem(sport, p, games.length);
+    const listItem = boardListItem(sport, p, games.length, avail);
     // Volume/usage trend is per-player (same for all of their stats).
-    const volumeMult = volumeMultiplier(games.map((g) => opportunityFor(sport, p.posBucket, g)));
+    const volumeMult = volumeMultiplier(
+      games.map((g) => opportunityFor(sport, p.posBucket, g)),
+    );
 
-    for (const { stat, line, provided } of statLinesFor(sport, p.posBucket, games, providedLines, p.id, requireProvided)) {
+    for (const { stat, line, provided } of statLinesFor(
+      sport,
+      p.posBucket,
+      games,
+      providedLines,
+      p.id,
+      requireProvided,
+    )) {
       // Skip degenerate low-volume props ONLY for our computed median line — a 0.5
       // median means the player typically records 0, so any "lean" is a trivial
       // under. A real book line of 0.5 (e.g. "over 0.5 HR") is a legitimate prop.
@@ -1622,8 +1819,18 @@ function computeBoardRows(
         environment: opts.envMultByPlayer?.get(p.id) ?? 1,
         volume: volumeMult,
       });
-      const modelProb = lineProbabilities(stat, projection.projection, seasonHr.stdev, line);
-      const consistency = computeConsistency(seasonHr.values, seasonHr.mean, seasonHr.stdev, line);
+      const modelProb = lineProbabilities(
+        stat,
+        projection.projection,
+        seasonHr.stdev,
+        line,
+      );
+      const consistency = computeConsistency(
+        seasonHr.values,
+        seasonHr.mean,
+        seasonHr.stdev,
+        line,
+      );
       // Matchup grade (next opponent's DvP) comes from the batched `matchupGrades` map
       // so the board's FireFactor matches the player page; absent → degrades gracefully.
       const ffInput = {
@@ -1640,7 +1847,7 @@ function computeBoardRows(
       // same line/stat/matchup. Line-value (best price, cross-book discount) is a separate
       // badge, never folded into the score. The availability gate (game-time discount; Out
       // already dropped above) is the SAME one the page applies, so the read stays consistent.
-      const fireScore = gateAvailability(computeFireFactor(ffInput), avail);
+      const fireScore = gateAvailability(computeFireFactor(ffInput), avail?.status);
       // A 0.5 book line's only meaningful lean is the OVER ("will it happen"). The
       // under ("it won't") is trivial/obvious — never feature it as a top lean.
       if (line <= 0.5 && fireScore.side === 'under') continue;
@@ -1668,7 +1875,8 @@ function computeBoardRows(
           let best: { source: string; line: number; edge: number } | null = null;
           for (const b of allLines) {
             const e = rate(b.line) - consRate;
-            if (!best || e > best.edge) best = { source: b.source, line: b.line, edge: e };
+            if (!best || e > best.edge)
+              best = { source: b.source, line: b.line, edge: e };
           }
           if (best && best.edge <= 0.005) best = null;
           rowLineValue = { edge, best };
@@ -1724,9 +1932,58 @@ const BOARD_META_SELECT = {
   opponentTeam: { select: { abbreviation: true, externalId: true } },
 };
 const BOARD_STAT_COLS: Record<Sport, Record<string, true>> = {
-  nba: { points: true, rebounds: true, oreb: true, dreb: true, assists: true, steals: true, blocks: true, turnovers: true, fouls: true, fgm: true, fga: true, fg3m: true, fg3a: true, ftm: true, fta: true },
-  mlb: { atBats: true, hits: true, doubles: true, triples: true, homeRuns: true, runs: true, rbi: true, walks: true, strikeouts: true, stolenBases: true, totalBases: true, hbp: true, outs: true, hitsAllowed: true, runsAllowed: true, earnedRuns: true, walksAllowed: true, strikeoutsPitched: true },
-  nfl: { passYards: true, passTds: true, passCompletions: true, passAttempts: true, passInts: true, rushYards: true, rushAttempts: true, rushTds: true, receptions: true, targets: true, recYards: true, recTds: true, fumblesLost: true },
+  nba: {
+    points: true,
+    rebounds: true,
+    oreb: true,
+    dreb: true,
+    assists: true,
+    steals: true,
+    blocks: true,
+    turnovers: true,
+    fouls: true,
+    fgm: true,
+    fga: true,
+    fg3m: true,
+    fg3a: true,
+    ftm: true,
+    fta: true,
+  },
+  mlb: {
+    atBats: true,
+    hits: true,
+    doubles: true,
+    triples: true,
+    homeRuns: true,
+    runs: true,
+    rbi: true,
+    walks: true,
+    strikeouts: true,
+    stolenBases: true,
+    totalBases: true,
+    hbp: true,
+    outs: true,
+    hitsAllowed: true,
+    runsAllowed: true,
+    earnedRuns: true,
+    walksAllowed: true,
+    strikeoutsPitched: true,
+  },
+  nfl: {
+    passYards: true,
+    passTds: true,
+    passCompletions: true,
+    passAttempts: true,
+    passInts: true,
+    rushYards: true,
+    rushAttempts: true,
+    rushTds: true,
+    receptions: true,
+    targets: true,
+    recYards: true,
+    recTds: true,
+    fumblesLost: true,
+  },
 };
 function boardStatSelect(sport: Sport) {
   return { ...BOARD_META_SELECT, ...BOARD_STAT_COLS[sport] };
@@ -1761,10 +2018,15 @@ async function loadBoardPool(
 }
 
 /** Keep only games where the player got their normal role-relative opportunity. */
-function qualifyGames(sport: Sport, posBucket: string | null, allGames: PlayerGame[]): PlayerGame[] {
+function qualifyGames(
+  sport: Sport,
+  posBucket: string | null,
+  allGames: PlayerGame[],
+): PlayerGame[] {
   const qualifyFactor = sport === 'nba' ? 1 : 0.6;
   const cutoff =
-    qualifyFactor * blendedRoleThreshold(allGames.map((g) => opportunityFor(sport, posBucket, g)));
+    qualifyFactor *
+    blendedRoleThreshold(allGames.map((g) => opportunityFor(sport, posBucket, g)));
   return allGames.filter((g) => {
     const opp = opportunityFor(sport, posBucket, g);
     if (opp == null) return true;
@@ -1772,7 +2034,12 @@ function qualifyGames(sport: Sport, posBucket: string | null, allGames: PlayerGa
   });
 }
 
-function boardListItem(sport: Sport, p: BoardPlayer, gamesPlayed: number): PlayerListItem {
+function boardListItem(
+  sport: Sport,
+  p: BoardPlayer,
+  gamesPlayed: number,
+  availability?: CardAvailability,
+): PlayerListItem {
   return {
     sport,
     externalId: p.externalId,
@@ -1789,6 +2056,7 @@ function boardListItem(sport: Sport, p: BoardPlayer, gamesPlayed: number): Playe
     teamName: teamDisplayName(sport, p.team?.abbreviation, p.team?.name ?? null),
     teamExternalId: p.team?.externalId ?? null,
     gamesPlayed,
+    availability: availability ?? null,
   };
 }
 
@@ -1854,7 +2122,13 @@ const STREAK_MIN_LENGTH = 3;
 /** Minimum recent-vs-season swing (on the leaning side) to surface a trend. */
 const TREND_MIN_SWING = 0.18;
 
-type ScanComputeOpts = { limit: number; perPlayerCap: number; perStatCap: number };
+type ScanComputeOpts = {
+  limit: number;
+  perPlayerCap: number;
+  perStatCap: number;
+  /** Current availability per player — badges the trend row (trends don't gate). */
+  availability?: Map<number, CardAvailability>;
+};
 
 /** Trends from a loaded pool vs a line map (pure compute). Players whose RECENT
  *  (L10) form has swung hardest from their season baseline, ranked by Wilson lower. */
@@ -1872,8 +2146,15 @@ function computeTrendRows(
     if (!allGames || allGames.length < FIREFACTOR_MIN_GAMES) continue;
     const games = qualifyGames(sport, p.posBucket, allGames);
     if (games.length < FIREFACTOR_MIN_GAMES) continue;
-    const listItem = boardListItem(sport, p, games.length);
-    for (const { stat, line, provided } of statLinesFor(sport, p.posBucket, games, providedLines, p.id, requireProvided)) {
+    const listItem = boardListItem(sport, p, games.length, opts.availability?.get(p.id));
+    for (const { stat, line, provided } of statLinesFor(
+      sport,
+      p.posBucket,
+      games,
+      providedLines,
+      p.id,
+      requireProvided,
+    )) {
       if (!provided && line <= 0.5) continue;
       const recent = computeHitRate(games, stat, line, 10);
       const season = computeHitRate(games, stat, line, 'season');
@@ -1889,7 +2170,10 @@ function computeTrendRows(
       const successes = side === 'over' ? recent.overs : recent.unders;
       // The player's current consecutive run for this stat+line — the merged "Streaks"
       // metric, shown alongside the L10 swing (its side may differ from the lean).
-      const run = computeStreak(games.map((g) => statValue(stat, g)), line);
+      const run = computeStreak(
+        games.map((g) => statValue(stat, g)),
+        line,
+      );
       out.push({
         player: listItem,
         stat,
@@ -1918,12 +2202,28 @@ export async function getTrendBoard(
 ): Promise<TrendRow[]> {
   const { limit = 80, scan = 140, perPlayerCap = 1, perStatCap = 25 } = opts;
   const { players, gamesByPlayer } = await loadBoardPool(sport, scan);
-  const providedLines = await getProvidedLineMap(sport, players.map((p) => p.id), opts.source);
-  return computeTrendRows(sport, players, gamesByPlayer, providedLines, opts.requireProvidedLine === true, {
-    limit,
-    perPlayerCap,
-    perStatCap,
-  });
+  const providedLines = await getProvidedLineMap(
+    sport,
+    players.map((p) => p.id),
+    opts.source,
+  );
+  const availability = await getBoardAvailability(
+    sport,
+    players.map((p) => p.id),
+  );
+  return computeTrendRows(
+    sport,
+    players,
+    gamesByPlayer,
+    providedLines,
+    opts.requireProvidedLine === true,
+    {
+      limit,
+      perPlayerCap,
+      perStatCap,
+      availability,
+    },
+  );
 }
 
 /** One trends board per book from a single pool load (vs the book's real lines). */
@@ -1936,9 +2236,15 @@ export async function getSourcedTrends(
   const result: Record<string, TrendRow[]> = {};
   const { players, gamesByPlayer } = await loadBoardPool(sport, scan);
   const ids = players.map((p) => p.id);
+  const availability = await getBoardAvailability(sport, ids);
   for (const s of sources) {
     const providedLines = await getProvidedLineMap(sport, ids, s);
-    result[s] = computeTrendRows(sport, players, gamesByPlayer, providedLines, true, { limit, perPlayerCap, perStatCap });
+    result[s] = computeTrendRows(sport, players, gamesByPlayer, providedLines, true, {
+      limit,
+      perPlayerCap,
+      perStatCap,
+      availability,
+    });
   }
   return result;
 }
@@ -1972,7 +2278,10 @@ export async function getDvpTable(
         rank: c.rank,
         totalRanked: c.totalRanked,
         teamAbbreviation: t?.abbreviation ?? '',
-        teamName: teamDisplayName(sport, t?.abbreviation, t?.name ?? null) ?? t?.abbreviation ?? '',
+        teamName:
+          teamDisplayName(sport, t?.abbreviation, t?.name ?? null) ??
+          t?.abbreviation ??
+          '',
         teamExternalId: t?.externalId ?? 0,
         avgAllowed: c.avgAllowed,
         sampleSize: c.sampleSize,
@@ -1984,9 +2293,17 @@ export async function getDvpTable(
 }
 
 /** Season per-game leaders for a stat, qualified by a minimum games-played. */
-export async function getLeaders(sport: Sport, stat: StatKey, limit = 50): Promise<LeaderRow[]> {
+export async function getLeaders(
+  sport: Sport,
+  stat: StatKey,
+  limit = 50,
+): Promise<LeaderRow[]> {
   const expr =
-    sport === 'nba' ? NBA_STAT_SQL[stat] : sport === 'nfl' ? NFL_STAT_SQL[stat] : MLB_HIT_SQL[stat];
+    sport === 'nba'
+      ? NBA_STAT_SQL[stat]
+      : sport === 'nfl'
+        ? NFL_STAT_SQL[stat]
+        : MLB_HIT_SQL[stat];
   if (!expr) return [];
   const season = await getActiveSeason(sport);
   const minGames = sport === 'nba' ? 12 : sport === 'nfl' ? 6 : 20;
@@ -2002,7 +2319,8 @@ export async function getLeaders(sport: Sport, stat: StatKey, limit = 50): Promi
   // leaderboard. Rushing/receiving stay open (a mobile QB belongs on the rushing
   // board) — handled by avg>0 + the on-page position filter.
   const positionFilter =
-    sport === 'nfl' && (['passYds', 'passTds', 'passCmp', 'passAtt', 'ints'] as StatKey[]).includes(stat)
+    sport === 'nfl' &&
+    (['passYds', 'passTds', 'passCmp', 'passAtt', 'ints'] as StatKey[]).includes(stat)
       ? `AND p."posBucket" = 'QB'`
       : '';
   const rows = await db.$queryRawUnsafe<{ playerId: number; avg: number; n: number }[]>(
@@ -2022,7 +2340,12 @@ export async function getLeaders(sport: Sport, stat: StatKey, limit = 50): Promi
   if (rows.length === 0) return [];
   const players = await db.player.findMany({
     where: { id: { in: rows.map((r) => Number(r.playerId)) } },
-    include: { team: { select: { abbreviation: true, name: true, externalId: true } } },
+    include: {
+      team: { select: { abbreviation: true, name: true, externalId: true } },
+      injury: {
+        select: { status: true, fantasyStatus: true, detail: true, returnDate: true },
+      },
+    },
   });
   const byId = new Map(players.map((p) => [p.id, p]));
   const out: LeaderRow[] = [];
@@ -2031,7 +2354,12 @@ export async function getLeaders(sport: Sport, stat: StatKey, limit = 50): Promi
     if (!p) continue;
     out.push({
       rank: out.length + 1,
-      player: boardListItem(sport, p, Number(r.n)),
+      player: boardListItem(
+        sport,
+        p,
+        Number(r.n),
+        toCardAvailability(p.injury) ?? undefined,
+      ),
       perGame: Number(r.avg),
       gamesPlayed: Number(r.n),
     });
@@ -2087,7 +2415,11 @@ export async function analyzeSlate(sport: Sport, text: string): Promise<SlateRes
       continue;
     }
     if (!statKeysForSport(sport, match.posBucket).includes(e.stat)) {
-      results.push({ raw: e.raw, matched: false, reason: 'Stat not offered for this player' });
+      results.push({
+        raw: e.raw,
+        matched: false,
+        reason: 'Stat not offered for this player',
+      });
       continue;
     }
 
@@ -2101,7 +2433,10 @@ export async function analyzeSlate(sport: Sport, text: string): Promise<SlateRes
     let edge: number | null = null;
     let evPerDollar: number | null = null;
     if (e.odds != null) {
-      const ro = fairPriceReadout({ overOdds: e.odds, historicalHitRateOver: overHitRate });
+      const ro = fairPriceReadout({
+        overOdds: e.odds,
+        historicalHitRateOver: overHitRate,
+      });
       edge = ro.edge;
       evPerDollar = ro.evPerDollarOver;
     }
@@ -2137,7 +2472,9 @@ export async function analyzeSlate(sport: Sport, text: string): Promise<SlateRes
 export async function hasUpcomingGames(sport: Sport): Promise<boolean> {
   const todayUtc = new Date();
   todayUtc.setUTCHours(0, 0, 0, 0);
-  const count = await db.scheduledGame.count({ where: { sport, date: { gte: todayUtc } } });
+  const count = await db.scheduledGame.count({
+    where: { sport, date: { gte: todayUtc } },
+  });
   return count > 0;
 }
 
