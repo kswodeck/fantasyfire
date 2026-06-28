@@ -17,17 +17,21 @@ export function MatchupStrip({
   sport,
   games,
   selected,
+  startedIds,
   onToggle,
 }: {
   sport: Sport;
   games: TonightGame[];
   selected: Set<string>;
+  /** Games already underway — dimmed and excluded from the default scope (selectable). */
+  startedIds?: Set<string>;
   onToggle: (externalId: string) => void;
 }) {
   return (
     <ul className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-1.5">
       {games.map((g) => {
         const isSel = selected.has(g.externalId);
+        const started = startedIds?.has(g.externalId) ?? false;
         const label = `${g.away.abbr} @ ${g.home.abbr}`;
         return (
           <li key={g.externalId}>
@@ -36,22 +40,47 @@ export function MatchupStrip({
                 'flex h-full w-full items-stretch overflow-hidden rounded-lg border text-xs transition-colors ' +
                 (isSel
                   ? 'border-brand bg-brand/10'
-                  : 'border-line bg-surface hover:border-brand/60')
+                  : started
+                    ? 'border-line bg-surface opacity-60 hover:opacity-100'
+                    : 'border-line bg-surface hover:border-brand/60')
               }
             >
               <button
                 type="button"
                 onClick={() => onToggle(g.externalId)}
                 aria-pressed={isSel}
-                title={`Filter the reads to ${label}`}
+                title={
+                  started
+                    ? `${label} has started — tap to include its players`
+                    : `Filter the reads to ${label}`
+                }
                 className="flex min-w-0 flex-1 items-center gap-1 whitespace-nowrap px-2 py-1 text-foreground"
               >
-                <TeamLogo sport={sport} externalId={g.away.externalId} abbr={g.away.abbr} size={15} />
+                <TeamLogo
+                  sport={sport}
+                  externalId={g.away.externalId}
+                  abbr={g.away.abbr}
+                  size={15}
+                />
                 <span className="font-semibold">{g.away.abbr}</span>
                 <span className="text-muted">@</span>
-                <TeamLogo sport={sport} externalId={g.home.externalId} abbr={g.home.abbr} size={15} />
+                <TeamLogo
+                  sport={sport}
+                  externalId={g.home.externalId}
+                  abbr={g.home.abbr}
+                  size={15}
+                />
                 <span className="font-semibold">{g.home.abbr}</span>
-                <MatchupTime iso={g.startTime} className="ml-auto pl-1.5 tabular-nums text-muted" />
+                {started ? (
+                  <span className="ml-auto pl-1.5 font-medium uppercase tracking-wide text-muted">
+                    Started
+                  </span>
+                ) : (
+                  <MatchupTime
+                    iso={g.startTime}
+                    className="ml-auto pl-1.5 tabular-nums text-muted"
+                  />
+                )}
               </button>
               <Link
                 href={`/${sport}/game/${g.externalId}`}
