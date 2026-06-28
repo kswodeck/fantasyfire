@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import type { BoardRow } from '@/lib/types';
-import type { Sport } from '@/lib/sports';
 import { PlayerAvatar } from './PlayerAvatar';
 import { InjuryBadge } from './InjuryBadge';
+import { SportTag } from './SportTag';
 import { LeanArrow } from './LeanArrow';
 import { getTeam } from '@/lib/teams';
 import { tierTextClass, heatLabel } from '@/lib/tierStyle';
@@ -10,12 +10,21 @@ import { sourceLabel } from '@/lib/providedSources';
 
 /**
  * Ranked cross-player board (presentational). Each row links to the player page
- * with the stat + line preselected so the user can enter the real book line.
+ * with the stat + line preselected so the user can enter the real book line. Sport
+ * is read per-row (r.player.sport), so this renders single-sport or mixed-sport
+ * boards alike; `showSport` adds a league chip for the cross-sport ("All") view.
  */
-export function BoardTable({ sport, rows }: { sport: Sport; rows: BoardRow[] }) {
+export function BoardTable({
+  rows,
+  showSport = false,
+}: {
+  rows: BoardRow[];
+  showSport?: boolean;
+}) {
   return (
     <ol className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
       {rows.map((r) => {
+        const sport = r.player.sport;
         const team = getTeam(sport, r.player.teamAbbreviation);
         const dir =
           r.fireScore.tier === 'Pass'
@@ -24,7 +33,7 @@ export function BoardTable({ sport, rows }: { sport: Sport; rows: BoardRow[] }) 
               ? 'Over'
               : 'Under';
         return (
-          <li key={`${r.player.slug}-${r.stat}`}>
+          <li key={`${sport}-${r.player.slug}-${r.stat}`}>
             <Link
               href={`/${sport}/${r.player.slug}?stat=${r.stat}&line=${r.line}`}
               className="flex items-center gap-2.5 px-3 py-2.5 transition-colors hover:bg-surface-2"
@@ -38,6 +47,7 @@ export function BoardTable({ sport, rows }: { sport: Sport; rows: BoardRow[] }) 
               />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
+                  {showSport && <SportTag sport={sport} />}
                   <span className="truncate text-sm font-semibold">
                     {r.player.fullName}
                   </span>

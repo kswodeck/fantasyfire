@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { RelatedLinks } from '@/components/RelatedLinks';
 import { InjuriesClient } from '@/components/InjuriesClient';
+import { SportSelect } from '@/components/SportSelect';
 import { sportMeshLinks } from '@/lib/relatedLinks';
 import { getInjuryReport } from '@/lib/server/players';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
@@ -51,7 +52,10 @@ export default async function InjuriesPage({ params }: PageProps) {
           { label: 'Injuries' },
         ]}
       />
-      <h1 className="text-3xl font-bold tracking-tight">{cfg.name} Injury Report</h1>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h1 className="text-3xl font-bold tracking-tight">{cfg.name} Injury Report</h1>
+        <SportSelect section="injuries" value={sport} />
+      </div>
       <p className="mt-2 max-w-2xl text-sm text-muted">
         Current availability from public injury feeds — who&rsquo;s Out, on the IL, or a
         game-time decision, with the injury and estimated return. Availability is the

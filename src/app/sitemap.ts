@@ -52,11 +52,36 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     freshestOverall = newer(freshestOverall, freshestForSport);
     const sportMod = freshestForSport ?? now;
     sportEntries.push(
-      { url: absoluteUrl(`/${sport}`), changeFrequency: 'daily', priority: 0.9, lastModified: sportMod },
-      { url: absoluteUrl(`/${sport}/players`), changeFrequency: 'daily', priority: 0.8, lastModified: sportMod },
-      { url: absoluteUrl(`/${sport}/board`), changeFrequency: 'daily', priority: 0.8, lastModified: sportMod },
-      { url: absoluteUrl(`/${sport}/trends`), changeFrequency: 'daily', priority: 0.7, lastModified: sportMod },
-      { url: absoluteUrl(`/${sport}/matchups`), changeFrequency: 'daily', priority: 0.7, lastModified: sportMod },
+      {
+        url: absoluteUrl(`/${sport}`),
+        changeFrequency: 'daily',
+        priority: 0.9,
+        lastModified: sportMod,
+      },
+      {
+        url: absoluteUrl(`/${sport}/players`),
+        changeFrequency: 'daily',
+        priority: 0.8,
+        lastModified: sportMod,
+      },
+      {
+        url: absoluteUrl(`/${sport}/board`),
+        changeFrequency: 'daily',
+        priority: 0.8,
+        lastModified: sportMod,
+      },
+      {
+        url: absoluteUrl(`/${sport}/trends`),
+        changeFrequency: 'daily',
+        priority: 0.7,
+        lastModified: sportMod,
+      },
+      {
+        url: absoluteUrl(`/${sport}/matchups`),
+        changeFrequency: 'daily',
+        priority: 0.7,
+        lastModified: sportMod,
+      },
       ...LEADER_STATS[sport].map((stat) => ({
         url: absoluteUrl(`/${sport}/leaders/${stat}`),
         changeFrequency: 'daily' as const,
@@ -69,13 +94,60 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const homeMod = freshestOverall ?? now;
 
   const staticPages: MetadataRoute.Sitemap = [
-    { url: absoluteUrl('/'), changeFrequency: 'daily', priority: 1, lastModified: homeMod },
-    { url: absoluteUrl('/how-it-works'), changeFrequency: 'monthly', priority: 0.6, lastModified: now },
-    { url: absoluteUrl('/faq'), changeFrequency: 'monthly', priority: 0.5, lastModified: now },
-    { url: absoluteUrl('/about'), changeFrequency: 'monthly', priority: 0.4, lastModified: now },
-    { url: absoluteUrl('/responsible-gaming'), changeFrequency: 'yearly', priority: 0.3, lastModified: now },
-    { url: absoluteUrl('/privacy'), changeFrequency: 'yearly', priority: 0.2, lastModified: now },
-    { url: absoluteUrl('/terms'), changeFrequency: 'yearly', priority: 0.2, lastModified: now },
+    {
+      url: absoluteUrl('/'),
+      changeFrequency: 'daily',
+      priority: 1,
+      lastModified: homeMod,
+    },
+    {
+      url: absoluteUrl('/board'),
+      changeFrequency: 'daily',
+      priority: 0.9,
+      lastModified: homeMod,
+    },
+    {
+      url: absoluteUrl('/trends'),
+      changeFrequency: 'daily',
+      priority: 0.7,
+      lastModified: homeMod,
+    },
+    {
+      url: absoluteUrl('/how-it-works'),
+      changeFrequency: 'monthly',
+      priority: 0.6,
+      lastModified: now,
+    },
+    {
+      url: absoluteUrl('/faq'),
+      changeFrequency: 'monthly',
+      priority: 0.5,
+      lastModified: now,
+    },
+    {
+      url: absoluteUrl('/about'),
+      changeFrequency: 'monthly',
+      priority: 0.4,
+      lastModified: now,
+    },
+    {
+      url: absoluteUrl('/responsible-gaming'),
+      changeFrequency: 'yearly',
+      priority: 0.3,
+      lastModified: now,
+    },
+    {
+      url: absoluteUrl('/privacy'),
+      changeFrequency: 'yearly',
+      priority: 0.2,
+      lastModified: now,
+    },
+    {
+      url: absoluteUrl('/terms'),
+      changeFrequency: 'yearly',
+      priority: 0.2,
+      lastModified: now,
+    },
   ];
 
   return [...staticPages, ...sportEntries, ...playerEntries];

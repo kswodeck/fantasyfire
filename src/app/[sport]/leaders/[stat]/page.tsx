@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
+import { SportSelect } from '@/components/SportSelect';
 import { FilterableLeaders } from '@/components/FilterableLeaders';
 import { FreshnessNote } from '@/components/FreshnessNote';
 import { RelatedLinks } from '@/components/RelatedLinks';
@@ -26,7 +27,9 @@ const LEADER_STATS: Record<Sport, StatKey[]> = {
 };
 
 export function generateStaticParams() {
-  return SPORT_LIST.flatMap((sport) => LEADER_STATS[sport].map((stat) => ({ sport, stat })));
+  return SPORT_LIST.flatMap((sport) =>
+    LEADER_STATS[sport].map((stat) => ({ sport, stat })),
+  );
 }
 
 type PageProps = { params: Promise<{ sport: string; stat: string }> };
@@ -66,7 +69,10 @@ export default async function LeadersPage({ params }: PageProps) {
   let rows: LeaderRow[] = [];
   let freshness: string | null = null;
   try {
-    [rows, freshness] = await Promise.all([getLeaders(sport, stat, 100), getDataFreshness(sport)]);
+    [rows, freshness] = await Promise.all([
+      getLeaders(sport, stat, 100),
+      getDataFreshness(sport),
+    ]);
   } catch {
     // DB unavailable — render the empty state.
   }
@@ -99,13 +105,16 @@ export default async function LeadersPage({ params }: PageProps) {
           { label },
         ]}
       />
-      <h1 className="text-3xl font-bold tracking-tight">
-        {cfg.name} {label} Leaders
-      </h1>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h1 className="text-3xl font-bold tracking-tight">
+          {cfg.name} {label} Leaders
+        </h1>
+        <SportSelect section="leaders" value={sport} />
+      </div>
       {top ? (
         <p className="mt-2 max-w-2xl text-sm text-muted">
-          <span className="text-foreground">{top.player.fullName}</span> leads the {cfg.name} in{' '}
-          {label.toLowerCase()} at{' '}
+          <span className="text-foreground">{top.player.fullName}</span> leads the{' '}
+          {cfg.name} in {label.toLowerCase()} at{' '}
           <span className="text-foreground">
             {num1(top.perGame)} {short}
           </span>{' '}
@@ -148,8 +157,8 @@ export default async function LeadersPage({ params }: PageProps) {
       <RelatedLinks links={sportMeshLinks(sport, 'leaders')} />
 
       <p className="mt-8 text-xs leading-relaxed text-muted">
-        Descriptive research from public game logs — season averages, not predictions, picks, or betting
-        advice.
+        Descriptive research from public game logs — season averages, not predictions,
+        picks, or betting advice.
       </p>
     </div>
   );
