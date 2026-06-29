@@ -28,7 +28,10 @@ export function AllBoardExplorer({
 }) {
   const hasSources = sources.length > 0;
   const sourced = useSourced(boardsBySource, sources, defaultSource);
-  const rows = hasSources ? sourced.rows : medianRows;
+  // Drop true coin-flip reads (FireFactor 0) — a 50/50 isn't a play worth surfacing.
+  const rows = (hasSources ? sourced.rows : medianRows).filter(
+    (r) => r.fireScore.score > 0,
+  );
 
   const [query, setQuery] = useState('');
   const [visible, setVisible] = useState(STEP);
