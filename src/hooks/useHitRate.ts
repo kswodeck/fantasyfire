@@ -7,8 +7,11 @@ import type { Sport } from '@/lib/sports';
 
 /**
  * Fetch a player's research payload for a stat/line from the versioned API.
- * Seeded with `initialData` (from SSR) so the first render needs no fetch; later
- * stat/line changes refetch while keeping the previous data on screen.
+ * Seeded with `initialData` (from SSR) so the first render paints instantly; then
+ * `refetchOnMount: 'always'` pulls live data from the force-dynamic API a beat
+ * later, so the line shown reflects the latest providedlines ingest (every ~15 min
+ * at peak) rather than the page's ISR cache window. Later stat/line changes refetch
+ * while keeping the previous data on screen.
  */
 export function useHitRate({
   sport,
@@ -38,5 +41,9 @@ export function useHitRate({
     },
     initialData,
     placeholderData: (prev) => prev,
+    // The SSR seed comes from the page's ISR cache (daily), but lines move intraday.
+    // Always revalidate on mount so the rendered line tracks the live API, not the
+    // cached HTML. Costs one call to the already-dynamic /hitrate route per load.
+    refetchOnMount: 'always',
   });
 }

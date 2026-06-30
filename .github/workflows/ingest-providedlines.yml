@@ -25,6 +25,10 @@ name: Ingest provided lines + injuries (PrizePicks + Underdog + RotoWire + ESPN)
 #
 # Secret (Production environment):
 #   DATABASE_URL  — prod transaction-pooler URL (:6543, sslmode=require)
+# Optional (only to enable on-demand ISR revalidation when provided lines are live):
+#   REVALIDATE_SECRET (secret)            — same value set on the Vercel deployment
+#   NEXT_PUBLIC_SITE_URL (variable)       — public site origin, e.g. https://fantasyfire.app
+#   PROVIDED_LINES_ENABLED (variable)     — "true" to ping revalidation for moved lines
 
 on:
   schedule:
@@ -47,6 +51,13 @@ jobs:
     environment: Production
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # Optional on-demand ISR revalidation. When all three are set (and the SAME
+      # REVALIDATE_SECRET is on the Vercel deploy), the ingest pings the site to
+      # revalidate ONLY the player/stat pages whose line actually moved. All inert
+      # if unset — the run just skips the ping. See .env.example.
+      REVALIDATE_SECRET: ${{ secrets.REVALIDATE_SECRET }}
+      NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
+      PROVIDED_LINES_ENABLED: ${{ vars.PROVIDED_LINES_ENABLED }}
     steps:
       - uses: actions/checkout@v4
 
