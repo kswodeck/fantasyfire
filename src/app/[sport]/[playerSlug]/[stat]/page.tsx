@@ -22,7 +22,11 @@ import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { RelatedLinks } from '@/components/RelatedLinks';
 import { JsonLd } from '@/components/JsonLd';
 
-export const revalidate = 3600;
+// Daily, not hourly: the per-stat hit rates derive from game logs that change once
+// a day after games finish, so hourly ISR regeneration across the crawled long tail
+// just re-emitted identical HTML and burned Vercel ISR Writes. /board stays the live
+// intraday surface; see the player page note on lines + on-demand revalidation.
+export const revalidate = 86400;
 export const dynamicParams = true;
 
 export async function generateStaticParams() {

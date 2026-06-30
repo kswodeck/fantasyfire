@@ -14,7 +14,9 @@ import { STAT_DEFS, type StatKey } from '@/lib/stats';
 import { pct } from '@/lib/format';
 import { lineSchema, statKeySchema } from '@/lib/schemas';
 
-export const revalidate = 3600;
+// Daily, matching the player page: the card's hit rates change once a day after
+// games, so hourly regeneration just re-emitted identical HTML and burned ISR Writes.
+export const revalidate = 86400;
 
 const BADGE_COLOR: Record<string, string> = { High: '#15803d', Medium: '#b45309', Low: '#b91c1c' };
 
@@ -128,8 +130,8 @@ export async function GET(
   return new Response(html, {
     headers: {
       'content-type': 'text/html; charset=utf-8',
-      // Cache at the CDN; matches the player page ISR window.
-      'cache-control': 'public, s-maxage=3600, stale-while-revalidate=86400',
+      // Cache at the CDN; matches the player page ISR window (daily).
+      'cache-control': 'public, s-maxage=86400, stale-while-revalidate=86400',
     },
   });
 }
