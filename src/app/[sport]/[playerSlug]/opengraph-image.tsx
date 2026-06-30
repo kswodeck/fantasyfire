@@ -6,7 +6,7 @@ export const alt = 'FantasyFire player prop research';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 // Match the player page's ISR window so the OG image's freshness tracks the page.
-export const revalidate = 3600;
+export const revalidate = 86400;
 
 // Dynamic OG image per player. `params` is a Promise in Next 16.
 export default async function Image({

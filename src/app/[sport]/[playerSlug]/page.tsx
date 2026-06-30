@@ -21,9 +21,14 @@ import { sportMeshLinks } from '@/lib/relatedLinks';
 import { PROP_STATS } from '@/lib/propStats';
 import { STAT_DEFS, statKeysForSport } from '@/lib/stats';
 
-// ISR: statically generate the busiest players, revalidate hourly; the rest
-// render on-demand.
-export const revalidate = 3600;
+// ISR: statically generate the busiest players, revalidate daily; the rest
+// render on-demand. The page content (hit rates from game logs, season research)
+// only changes once a day after games finish, so hourly regeneration just burned
+// Vercel ISR Writes re-emitting identical HTML across the whole crawled long tail.
+// The live intraday surface is /board (30 min); provided book lines are off by
+// default. If they're enabled and you need fresher per-player lines, prefer
+// on-demand revalidation from the providedlines ingest over shrinking this window.
+export const revalidate = 86400;
 export const dynamicParams = true;
 
 export async function generateStaticParams() {
