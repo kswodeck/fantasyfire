@@ -27,6 +27,8 @@ import { SplitsPanel } from './SplitsPanel';
 import { TeammateSplitsPanel } from './TeammateSplitsPanel';
 import { LineValueTable } from './LineValueTable';
 import { SourceSelector } from './SourceSelector';
+import { VariantLadder } from './VariantLadder';
+import { PayoutBadge } from './PayoutBadge';
 import { useSelectedSource } from './SelectedSourceProvider';
 import { sourceLabel } from '@/lib/providedSources';
 
@@ -195,6 +197,9 @@ export function PlayerResearchClient({
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted">Line</span>
             <LineInput value={effectiveLine} onCommit={handleLine} />
+            {line === undefined && (
+              <PayoutBadge oddsType={data.oddsType} multiplier={data.multiplier} />
+            )}
           </div>
           {availableSources.length > 0 && (
             <SourceSelector sources={availableSources} value={source} onChange={handleSource} />
@@ -223,6 +228,16 @@ export function PlayerResearchClient({
           gameStartTime={data.matchupOpponent?.isUpcoming ? data.matchupOpponent.startTime : null}
         />
       </div>
+
+      {/* Payout-variant ladder for the chosen book (PrizePicks demon/goblin, Underdog
+          alternates) — picking a rung recomputes the read at that line. */}
+      <VariantLadder
+        variants={data.variants}
+        selectedLine={effectiveLine}
+        statShort={statDef.short}
+        sourceId={source}
+        onSelect={handleLine}
+      />
 
       {/* Injury / availability — gates the read when the player is Out */}
       {data.availability && (

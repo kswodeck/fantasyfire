@@ -8,7 +8,9 @@
 // Shape: JSON:API. `data[]` = projection { attributes:{ line_score, stat_type,
 // odds_type, start_time }, relationships:{ new_player, league } }; `included[]` =
 // new_player { attributes:{ display_name, league, combo } } + league + … We keep
-// only odds_type "standard" (skip demon/goblin alt lines) for NBA/MLB/NFL.
+// all payout variants — odds_type "standard" | "goblin" | "demon" — for
+// NBA/MLB/NFL. Goblin = easier line/reduced payout, demon = harder/boosted. PP
+// ships no numeric multiplier, so we store the label only.
 import type { Sport } from '../lib/sports';
 import type { StatKey } from '../lib/stats';
 import type { ProvidedLineRow } from './providedTypes';
@@ -27,6 +29,9 @@ const HEADERS = {
 };
 
 const PP_LEAGUE: Record<string, Sport> = { NBA: 'nba', MLB: 'mlb', NFL: 'nfl' };
+
+/** Payout variants we ingest. Anything else (promos, flash sales) is skipped. */
+const PP_ODDS_TYPES = new Set(['standard', 'goblin', 'demon']);
 
 /** PrizePicks `stat_type` display string → our StatKey, scoped by sport. */
 const PP_STAT_MAP: Record<Sport, Record<string, StatKey>> = {
@@ -101,7 +106,10 @@ function parsePpBody(body: PpResponse, out: ProvidedLineRow[]): void {
 
   for (const p of body.data ?? []) {
     const a = p.attributes;
-    if (a.odds_type !== 'standard') continue; // skip demon/goblin alt lines
+    // Keep all payout variants: "standard" | "goblin" (easier/reduced) | "demon"
+    // (harder/boosted). PP ships no per-line multiplier — the label is all we get.
+    const oddsType = typeof a.odds_type === 'string' ? a.odds_type : null;
+    if (oddsType && !PP_ODDS_TYPES.has(oddsType)) continue; // skip unknown/promo variants
     const playerId = p.relationships?.new_player?.data?.id;
     const player = playerId ? players.get(playerId) : undefined;
     if (!player) continue;
@@ -122,8 +130,10 @@ function parsePpBody(body: PpResponse, out: ProvidedLineRow[]): void {
       externalPlayerName: name,
       stat,
       line,
-      overOdds: null, // PrizePicks standard lines are fixed-payout (no American odds)
+      overOdds: null, // PrizePicks lines are fixed-payout (no American odds)
       underOdds: null,
+      oddsType, // "standard" | "goblin" | "demon"
+      multiplier: null, // PP never exposes a numeric multiplier in the feed
       gameDate: dateOnlyUtc(a.start_time),
     });
   }

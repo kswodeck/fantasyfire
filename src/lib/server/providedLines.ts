@@ -9,7 +9,9 @@
 import { db } from '@/lib/db';
 import type { Sport } from '@/lib/sports';
 import type { StatKey } from '@/lib/stats';
+import type { ProvidedVariant } from '@/lib/types';
 import { DEFAULT_PROVIDED_SOURCE, orderSources } from '@/lib/providedSources';
+import { pickRepresentative } from '@/lib/payoutVariant';
 
 /** Master switch. Anything other than "true" keeps the feature inert. */
 export function providedLinesEnabled(): boolean {
@@ -49,10 +51,56 @@ export async function getAvailableSources(sport: Sport): Promise<string[]> {
 }
 
 /**
- * Latest line for one player + stat from a SPECIFIC source, or null when the
- * feature is off / that book has no recent line. Used by the player research page.
- * Bounded to RESEARCH_WINDOW_DAYS so a stale post-game line never displays as the
- * current number (older rows fall back to the computed line, and stay prunable).
+ * One source's variant ladder (every rung — PrizePicks demon/goblin, Underdog
+ * alternate — for a player + stat), most-recent slate only. A source may offer
+ * several lines now; this returns them all so the player page can render the
+ * switcher/ladder. Empty when the feature is off or that book has no recent line.
+ * Restricted to the newest gameDate present so stale prior-slate rungs never mix in.
+ */
+export async function getProvidedVariants(
+  sport: Sport,
+  playerId: number,
+  stat: StatKey,
+  source: string = DEFAULT_PROVIDED_SOURCE,
+): Promise<ProvidedVariant[]> {
+  if (!providedLinesEnabled()) return [];
+  try {
+    const rows = await db.providedLine.findMany({
+      where: { sport, playerId, stat, source, gameDate: { gte: recentCutoff(RESEARCH_WINDOW_DAYS) } },
+      orderBy: [{ gameDate: 'desc' }, { fetchedAt: 'desc' }],
+      select: { line: true, oddsType: true, multiplier: true, overOdds: true, underOdds: true, gameDate: true },
+    });
+    const out: ProvidedVariant[] = [];
+    let day: number | null = null;
+    const seen = new Set<number>();
+    for (const r of rows) {
+      const d = r.gameDate.getTime();
+      if (day === null) day = d; // newest slate wins
+      else if (d !== day) continue; // skip older-slate rungs
+      if (seen.has(r.line)) continue; // one rung per line, newest fetch wins
+      seen.add(r.line);
+      out.push({
+        source,
+        line: r.line,
+        oddsType: r.oddsType,
+        multiplier: r.multiplier,
+        overOdds: r.overOdds,
+        underOdds: r.underOdds,
+      });
+    }
+    return out;
+  } catch (e) {
+    console.warn('[providedLines] getProvidedVariants failed:', e instanceof Error ? e.message : e);
+    return [];
+  }
+}
+
+/**
+ * Representative line for one player + stat from a SPECIFIC source, or null when the
+ * feature is off / that book has no recent line. Used by the player research page as
+ * the default line. When the source offers a ladder (PrizePicks demon/goblin), this
+ * picks the representative rung: prefer the plain line, else demon, else goblin.
+ * Bounded to RESEARCH_WINDOW_DAYS so a stale post-game line never displays as current.
  */
 export async function getProvidedLine(
   sport: Sport,
@@ -60,18 +108,8 @@ export async function getProvidedLine(
   stat: StatKey,
   source: string = DEFAULT_PROVIDED_SOURCE,
 ): Promise<number | null> {
-  if (!providedLinesEnabled()) return null;
-  try {
-    const row = await db.providedLine.findFirst({
-      where: { sport, playerId, stat, source, gameDate: { gte: recentCutoff(RESEARCH_WINDOW_DAYS) } },
-      orderBy: [{ gameDate: 'desc' }, { fetchedAt: 'desc' }],
-      select: { line: true },
-    });
-    return row?.line ?? null;
-  } catch (e) {
-    console.warn('[providedLines] getProvidedLine failed; falling back to computed line:', e instanceof Error ? e.message : e);
-    return null;
-  }
+  const variants = await getProvidedVariants(sport, playerId, stat, source);
+  return pickRepresentative(variants, null)?.line ?? null;
 }
 
 /**
@@ -132,30 +170,69 @@ export async function getProvidedQuotesBySource(
 }
 
 /**
- * Batched provided lines for a set of players from a SPECIFIC source, keyed
- * `${playerId}:${stat}` → line. One query for the whole board scan; empty map when
- * the feature is off. Newest line per key wins.
+ * Batched variant ladders for a set of players from a SPECIFIC source, keyed
+ * `${playerId}:${stat}` → every rung (PrizePicks demon/goblin, Underdog alternate).
+ * One query for the whole board scan; empty map when the feature is off. Each key is
+ * restricted to its newest slate day, deduped to one rung per line (newest fetch wins).
  */
-export async function getProvidedLineMap(
+export async function getProvidedVariantMap(
   sport: Sport,
   playerIds: number[],
   source: string = DEFAULT_PROVIDED_SOURCE,
-): Promise<Map<string, number>> {
-  const map = new Map<string, number>();
+): Promise<Map<string, ProvidedVariant[]>> {
+  const map = new Map<string, ProvidedVariant[]>();
   if (!providedLinesEnabled() || playerIds.length === 0) return map;
 
   try {
     const rows = await db.providedLine.findMany({
       where: { sport, source, playerId: { in: playerIds }, gameDate: { gte: recentCutoff() } },
       orderBy: [{ gameDate: 'desc' }, { fetchedAt: 'desc' }],
-      select: { playerId: true, stat: true, line: true },
+      select: { playerId: true, stat: true, line: true, oddsType: true, multiplier: true, overOdds: true, underOdds: true, gameDate: true },
     });
+    const dayByKey = new Map<string, number>(); // key → newest slate day epoch
     for (const r of rows) {
       const key = `${r.playerId}:${r.stat}`;
-      if (!map.has(key)) map.set(key, r.line); // rows are newest-first
+      const d = r.gameDate.getTime();
+      const chosen = dayByKey.get(key);
+      if (chosen === undefined) dayByKey.set(key, d); // rows are newest-first → newest slate
+      else if (d !== chosen) continue; // skip older-slate rungs
+      let arr = map.get(key);
+      if (!arr) {
+        arr = [];
+        map.set(key, arr);
+      }
+      if (arr.some((v) => v.line === r.line)) continue; // one rung per line
+      arr.push({
+        source,
+        line: r.line,
+        oddsType: r.oddsType,
+        multiplier: r.multiplier,
+        overOdds: r.overOdds,
+        underOdds: r.underOdds,
+      });
     }
   } catch (e) {
-    console.warn('[providedLines] getProvidedLineMap failed; falling back to computed lines:', e instanceof Error ? e.message : e);
+    console.warn('[providedLines] getProvidedVariantMap failed; treating as none:', e instanceof Error ? e.message : e);
+  }
+  return map;
+}
+
+/**
+ * Batched representative lines for a set of players from a SPECIFIC source, keyed
+ * `${playerId}:${stat}` → line. One query for the whole board scan; empty map when
+ * the feature is off. When a source offers a ladder, the representative rung wins
+ * (prefer plain line, else demon, else goblin) — see pickRepresentative.
+ */
+export async function getProvidedLineMap(
+  sport: Sport,
+  playerIds: number[],
+  source: string = DEFAULT_PROVIDED_SOURCE,
+): Promise<Map<string, number>> {
+  const variantMap = await getProvidedVariantMap(sport, playerIds, source);
+  const map = new Map<string, number>();
+  for (const [key, variants] of variantMap) {
+    const rep = pickRepresentative(variants, null);
+    if (rep) map.set(key, rep.line);
   }
   return map;
 }

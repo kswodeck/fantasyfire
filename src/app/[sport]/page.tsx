@@ -5,8 +5,9 @@ import { FlameMark } from '@/components/FlameMark';
 import { SearchForm } from '@/components/SearchForm';
 import { BoardTable } from '@/components/BoardTable';
 import { SourcedBoardTable } from '@/components/SourcedBoardTable';
+import { HomeLeadersFallback } from '@/components/HomeLeadersFallback';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
-import { getBoard, getSourcedBoards } from '@/lib/server/players';
+import { getBoard, getSourcedBoards, hasUpcomingGames } from '@/lib/server/players';
 import { getAvailableSources } from '@/lib/server/providedLines';
 import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
@@ -41,27 +42,33 @@ export default async function SportHome({ params }: PageProps) {
   const sport: Sport = raw;
   const cfg = SPORTS[sport];
 
+  // The heat-check describes upcoming/current games, so gate it on the schedule: with
+  // nothing on the board the provided lines are for games that already happened. When
+  // there are no upcoming games we show a season-leaders fallback instead of stale picks.
+  const upcoming = await hasUpcomingGames(sport).catch(() => true);
+
   // Prefer real book lines (PrizePicks / Underdog / …) with a per-book dropdown; fall
   // back to our computed median line only when no book lines are ingested.
   let sources: string[] = [];
   let boardsBySource: Record<string, BoardRow[]> = {};
   let leans: BoardRow[] = [];
   let initialSource = DEFAULT_PROVIDED_SOURCE;
-  try {
-    sources = await getAvailableSources(sport);
-    if (sources.length > 0) {
-      initialSource = sources.includes(DEFAULT_PROVIDED_SOURCE)
-        ? DEFAULT_PROVIDED_SOURCE
-        : sources[0];
-      boardsBySource = await getSourcedBoards(sport, sources, { limit: 9 });
-      leans = boardsBySource[initialSource] ?? [];
-    } else {
-      leans = await getBoard(sport, { limit: 9 });
+  if (upcoming) {
+    try {
+      sources = await getAvailableSources(sport);
+      if (sources.length > 0) {
+        initialSource = sources.includes(DEFAULT_PROVIDED_SOURCE) ? DEFAULT_PROVIDED_SOURCE : sources[0];
+        boardsBySource = await getSourcedBoards(sport, sources, { limit: 9 });
+        leans = boardsBySource[initialSource] ?? [];
+      } else {
+        leans = await getBoard(sport, { limit: 9 });
+      }
+    } catch {
+      // DB unavailable — render the hero without the leans.
     }
-  } catch {
-    // DB unavailable — render the hero without the leans.
   }
   const hasSources = sources.length > 0;
+  const hasHeatCheck = upcoming && (hasSources || leans.length > 0);
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4">
@@ -95,7 +102,7 @@ export default async function SportHome({ params }: PageProps) {
         </div>
       </section>
 
-      {(hasSources || leans.length > 0) && (
+      {hasHeatCheck ? (
         <section className="mx-auto max-w-3xl pb-10">
           {hasSources ? (
             <SourcedBoardTable
@@ -129,7 +136,11 @@ export default async function SportHome({ params }: PageProps) {
             See the full {cfg.name} board →
           </Link>
         </section>
-      )}
+      ) : !upcoming ? (
+        <section className="mx-auto max-w-3xl pb-10">
+          <HomeLeadersFallback sport={sport} />
+        </section>
+      ) : null}
     </div>
   );
 }

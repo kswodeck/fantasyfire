@@ -84,6 +84,8 @@ async function main(): Promise<number> {
     line: number;
     overOdds: number | null;
     underOdds: number | null;
+    oddsType: string | null;
+    multiplier: number | null;
   };
 
   let unmatched = 0;
@@ -105,6 +107,8 @@ async function main(): Promise<number> {
       line: r.line,
       overOdds: r.overOdds ?? null,
       underOdds: r.underOdds ?? null,
+      oddsType: r.oddsType ?? null,
+      multiplier: r.multiplier ?? null,
     });
   }
 
@@ -114,18 +118,27 @@ async function main(): Promise<number> {
   const changed = await changedPlayerStats(resolved);
 
   const ops = resolved.map((d) => () => {
-    const data = { line: d.line, overOdds: d.overOdds, underOdds: d.underOdds, fetchedAt: new Date() };
+    // Keyed by line too, so a source's alternate rungs (PrizePicks demon/goblin,
+    // Underdog alternates) coexist instead of overwriting the standard line.
+    const data = {
+      overOdds: d.overOdds,
+      underOdds: d.underOdds,
+      oddsType: d.oddsType,
+      multiplier: d.multiplier,
+      fetchedAt: new Date(),
+    };
     return db.providedLine.upsert({
       where: {
-        sport_playerId_stat_source_gameDate: {
+        sport_playerId_stat_source_gameDate_line: {
           sport: d.sport,
           playerId: d.playerId,
           stat: d.stat,
           source: d.source,
           gameDate: d.gameDate,
+          line: d.line,
         },
       },
-      create: { sport: d.sport, playerId: d.playerId, stat: d.stat, source: d.source, gameDate: d.gameDate, ...data },
+      create: { sport: d.sport, playerId: d.playerId, stat: d.stat, source: d.source, gameDate: d.gameDate, line: d.line, ...data },
       update: data,
     });
   });
@@ -169,8 +182,16 @@ async function changedPlayerStats(
   const changed = new Set<string>();
   if (resolved.length === 0) return changed;
 
-  const keyOf = (x: { sport: string; playerId: number; stat: string; source: string; gameDate: Date }) =>
-    `${x.sport}|${x.playerId}|${x.stat}|${x.source}|${x.gameDate.getTime()}`;
+  // Include `line` so each variant rung is compared to its own prior value (multiple
+  // rungs now share a player+stat+source+day); a page is flagged changed if any rung moved.
+  const keyOf = (x: {
+    sport: string;
+    playerId: number;
+    stat: string;
+    source: string;
+    gameDate: Date;
+    line: number;
+  }) => `${x.sport}|${x.playerId}|${x.stat}|${x.source}|${x.gameDate.getTime()}|${x.line}`;
 
   try {
     const sports = [...new Set(resolved.map((d) => d.sport))];

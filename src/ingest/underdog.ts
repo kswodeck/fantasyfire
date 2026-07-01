@@ -6,10 +6,11 @@
 // Source id: "underdog".
 //
 // Shape: { over_under_lines[], appearances[], players[], … }. A line carries
-// `stat_value` (the number), `over_under.appearance_stat.{stat, appearance_id}`,
-// and `options[]` ({choice: higher|lower, american_price}). Resolve the player via
-// appearance_id → appearances → players (with sport_id). We keep "balanced" (non-
-// boosted) player_prop lines for NBA/MLB/NFL.
+// `stat_value` (the number), `line_type` (balanced|alternate), `over_under.
+// appearance_stat.{stat, appearance_id}`, and `options[]` ({choice: higher|lower,
+// american_price, payout_multiplier}). Resolve the player via appearance_id →
+// appearances → players (with sport_id). We keep balanced (1.0×) AND alternate
+// (numeric payout_multiplier) player_prop lines for NBA/MLB/NFL.
 import type { Sport } from '../lib/sports';
 import type { StatKey } from '../lib/stats';
 import type { ProvidedLineRow } from './providedTypes';
@@ -27,6 +28,9 @@ const HEADERS = {
 };
 
 const UD_SPORT: Record<string, Sport> = { NBA: 'nba', MLB: 'mlb', NFL: 'nfl' };
+
+/** line_type values we ingest: the standard balanced line + numeric alternates. */
+const UD_LINE_TYPES = new Set(['balanced', 'alternate']);
 
 /** Underdog machine stat name → our StatKey, scoped by sport.
  *  MLB confirmed live; NBA/NFL are best-guess (off-season) — verify in season. */
@@ -79,6 +83,7 @@ const UD_STAT_MAP: Record<Sport, Record<string, StatKey>> = {
 interface UdOption {
   choice?: string; // 'higher' | 'lower'
   american_price?: string;
+  payout_multiplier?: string; // '1.0' balanced, e.g. '1.31' alternate
 }
 interface UdLine {
   stat_value?: number | string;
@@ -126,7 +131,10 @@ function parseUdBody(body: UdResponse, out: ProvidedLineRow[]): void {
   for (const l of body.over_under_lines ?? []) {
     const ou = l.over_under;
     if (ou?.category !== 'player_prop') continue;
-    if (l.line_type && l.line_type !== 'balanced') continue; // skip boosted/insurance lines
+    // Keep the balanced (1.0×) line AND alternates (each carrying an exact
+    // payout_multiplier, e.g. 1.31×). Skip other/promo line_types.
+    const oddsType = typeof l.line_type === 'string' ? l.line_type : null;
+    if (oddsType && !UD_LINE_TYPES.has(oddsType)) continue;
     const appId = ou.appearance_stat?.appearance_id;
     const appearance = appId ? appearances.get(appId) : undefined;
     const player = appearance?.player_id ? players.get(appearance.player_id) : undefined;
@@ -141,6 +149,9 @@ function parseUdBody(body: UdResponse, out: ProvidedLineRow[]): void {
     if (!name) continue;
     const over = l.options?.find((o) => o.choice === 'higher');
     const under = l.options?.find((o) => o.choice === 'lower');
+    // Alternates usually carry a single 'higher' option; take whichever exists.
+    const priced = over ?? under ?? l.options?.[0];
+    const multiplier = priced?.payout_multiplier != null ? parseFloat(priced.payout_multiplier) : null;
     out.push({
       sport,
       source: 'underdog',
@@ -150,6 +161,8 @@ function parseUdBody(body: UdResponse, out: ProvidedLineRow[]): void {
       line,
       overOdds: americanToInt(over?.american_price),
       underOdds: americanToInt(under?.american_price),
+      oddsType, // "balanced" | "alternate"
+      multiplier: Number.isFinite(multiplier as number) ? multiplier : null,
       gameDate,
     });
   }

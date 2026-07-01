@@ -5,6 +5,8 @@ import type { Sport } from '@/lib/sports';
 import type { BoardRow, TonightGame } from '@/lib/types';
 import { FilterableBoard } from './FilterableBoard';
 import { SourceSelector } from './SourceSelector';
+import { BoardPayoutControls } from './BoardPayoutControls';
+import { useBoardPayoutFilter } from './useBoardPayoutFilter';
 import { MatchupStrip } from './MatchupStrip';
 import { useSourced } from './useSourced';
 import { useSelectedSlate } from './SelectedSlateProvider';
@@ -84,7 +86,7 @@ export function BoardExplorer({
     ? games.filter((g) => selectedGames.has(g.externalId))
     : upcomingGames;
   const activeTeams = new Set(scopeGames.flatMap(gameTeams));
-  const filteredRows =
+  const slateRows =
     effectiveMode === 'all'
       ? rows
       : rows.filter(
@@ -93,6 +95,9 @@ export function BoardExplorer({
   // Distinguish "everything today has already started" from a genuinely empty book.
   const allStarted =
     effectiveMode === 'today' && selectedGames.size === 0 && upcomingGames.length === 0;
+  // Payout filter (PrizePicks types / Underdog multiplier range) over the slate rows.
+  const payout = useBoardPayoutFilter(slateRows);
+  const filteredRows = payout.rows;
 
   const toggleGame = (id: string) =>
     setSelectedGames((prev) => {
@@ -137,6 +142,12 @@ export function BoardExplorer({
           />
         )}
       </div>
+
+      {hasSources && payout.mode !== 'none' && (
+        <div className="mb-4">
+          <BoardPayoutControls filter={payout} />
+        </div>
+      )}
 
       {effectiveMode === 'today' && (
         <div className="mb-4">
@@ -187,6 +198,8 @@ export function BoardExplorer({
           key={`${sourced.source}-${effectiveMode}`}
           sport={sport}
           rows={filteredRows}
+          source={hasSources ? sourced.source : undefined}
+          initialLines={payout.initialLines}
           initialVisible={20}
         />
       )}

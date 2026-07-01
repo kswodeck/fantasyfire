@@ -224,24 +224,34 @@ model PlayerInjury {
 // default (gated by PROVIDED_LINES_ENABLED) — when empty or disabled, every
 // surface falls back to the computed default line, so nothing changes.
 //
-// One row per (sport, player, stat, source, day). Keyed by `source` so multiple
-// books can coexist, and by `gameDate` so lines are preserved as history rather
-// than overwritten. Populated by src/ingest/run-ingest-providedlines.ts.
+// One row per (sport, player, stat, source, day, line). Keyed by `source` so
+// multiple books can coexist, by `gameDate` so lines are preserved as history,
+// and by `line` so a source's alternate rungs (PrizePicks demon/goblin ladders,
+// Underdog alternates) coexist alongside the standard line rather than
+// overwriting it. Populated by src/ingest/run-ingest-providedlines.ts.
 model ProvidedLine {
-  id        Int      @id @default(autoincrement())
-  sport     String // "nba" | "mlb" | "nfl"
-  playerId  Int
-  stat      String // internal StatKey, e.g. "pts" | "passYds"
-  source    String // bookmakerID: "prizepicks" | "underdog" | "draftkings" | "sleeper" | ...
-  line      Float
-  overOdds  Int? // American odds for the over, when the source posts them (DFS pick'em are fixed-payout → usually null)
-  underOdds Int?
-  gameDate  DateTime // the slate/game day this line applies to (date-only, UTC midnight)
-  fetchedAt DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  sport      String // "nba" | "mlb" | "nfl"
+  playerId   Int
+  stat       String // internal StatKey, e.g. "pts" | "passYds"
+  source     String // bookmakerID: "prizepicks" | "underdog" | "draftkings" | "sleeper" | ...
+  line       Float
+  overOdds   Int? // American odds for the over, when the source posts them (DFS pick'em are fixed-payout → usually null)
+  underOdds  Int?
+  // Payout variant tag. PrizePicks: "standard" | "goblin" | "demon". Underdog:
+  // "balanced" | "alternate". null for books with no variant concept (treated as
+  // a normal line). Goblin = easier line/reduced payout, demon = harder/boosted.
+  oddsType   String?
+  // Exact payout multiplier when the source exposes one (Underdog options[].
+  // payout_multiplier — 1.0 for balanced, e.g. 1.31 for alternates). null when
+  // unavailable: PrizePicks never ships a per-line number, sportsbooks use odds.
+  multiplier Float?
+  gameDate   DateTime // the slate/game day this line applies to (date-only, UTC midnight)
+  fetchedAt  DateTime @default(now())
 
   player Player @relation(fields: [playerId], references: [id])
 
-  @@unique([sport, playerId, stat, source, gameDate])
+  @@unique([sport, playerId, stat, source, gameDate, line])
   @@index([sport, gameDate])
   @@index([playerId, stat])
 }

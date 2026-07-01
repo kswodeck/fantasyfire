@@ -41,7 +41,7 @@ export function SourcedBoardTable({
       {rows.length === 0 ? (
         <p className="px-1 py-4 text-sm text-muted">{emptyText}</p>
       ) : (
-        <BoardTable rows={rows} />
+        <BoardTable rows={rows} source={source} />
       )}
     </div>
   );

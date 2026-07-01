@@ -123,6 +123,22 @@ export interface LineValueComparison {
   best: { source: string; line: number; edge: number } | null;
 }
 
+/**
+ * One rung of a source's payout-variant ladder for a player + stat. A single source
+ * may expose several (PrizePicks demon/goblin ladders, Underdog alternates); see
+ * src/lib/payoutVariant.ts for the kind normalization + representative-rung pick.
+ */
+export interface ProvidedVariant {
+  source: string;
+  line: number;
+  /** Raw tag: "standard"|"goblin"|"demon" (PP), "balanced"|"alternate" (UD), or null. */
+  oddsType: string | null;
+  /** Exact payout multiplier when the source ships one (UD alternates); else null. */
+  multiplier: number | null;
+  overOdds: number | null;
+  underOdds: number | null;
+}
+
 export interface PlayerResearch {
   player: PlayerSummary;
   bio: PlayerBio;
@@ -131,6 +147,14 @@ export interface PlayerResearch {
   /** The book this line came from (e.g. "prizepicks"); null when it's our computed
    * line (no provided line for the chosen source, or the feature is off). */
   lineSource: string | null;
+  /** Payout tag of the current line, when it came from a source variant (goblin/
+   *  demon/alternate); null for a plain line or our computed line. */
+  oddsType: string | null;
+  /** Exact payout multiplier of the current line (UD alternates); null when none. */
+  multiplier: number | null;
+  /** The selected source's full variant ladder for this stat — powers the on-page
+   *  ladder/switcher. Empty when the feature is off or the source has no lines. */
+  variants: ProvidedVariant[];
   /** Cross-book line-value comparison for this stat (null when <2 books / feature off). */
   lineValue: LineValueComparison | null;
   seasonAverage: number | null;
@@ -231,10 +255,14 @@ export interface BoardRow {
   projection: number | null;
   fireScore: FireFactorResult;
   /** Cross-book line value vs the consensus for THIS row's book; null when <2 books. */
-  lineValue?: {
-    edge: number;
-    best: { source: string; line: number; edge: number } | null;
-  } | null;
+  lineValue?: { edge: number; best: { source: string; line: number; edge: number } | null } | null;
+  /** Payout tag of the representative rung shown (goblin/demon/alternate); null = plain line. */
+  oddsType?: string | null;
+  /** Exact payout multiplier of the shown rung (UD alternates); null when none. */
+  multiplier?: number | null;
+  /** This source's full variant ladder for the stat — powers the row's icon switcher.
+   *  Present only on the sourced (per-book) boards; omitted on the computed board. */
+  variants?: ProvidedVariant[];
 }
 
 /** One row on the trends board: how recent form has swung from the season baseline,
