@@ -57,6 +57,7 @@ import type {
   InjuryReportRow,
   BoardRow,
   LineValueComparison,
+  ProvidedVariant,
   TrendRow,
   DvpTableRow,
   LeaderRow,
@@ -65,12 +66,14 @@ import type {
 } from '@/lib/types';
 import { PROP_STATS } from '@/lib/propStats';
 import {
-  getProvidedLine,
   getProvidedLineMap,
+  getProvidedVariantMap,
+  getProvidedVariants,
   getProvidedLinesBySource,
   getProvidedQuotesBySource,
 } from '@/lib/server/providedLines';
 import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
+import { pickRepresentative, normalLine } from '@/lib/payoutVariant';
 
 /**
  * The season the app reads for a sport. Computed from today's date, falling back
@@ -1051,9 +1054,16 @@ export async function getPlayerResearch(
   // line (only when PROVIDED_LINES_ENABLED + that book has one); else the
   // book-style half-point default. lineSource records where `line` came from.
   const src = source ?? DEFAULT_PROVIDED_SOURCE;
-  const providedLine = lineParam == null ? await getProvidedLine(sport, record.id, stat, src) : null;
+  // The chosen source's variant ladder (all rungs) — powers the on-page switcher and
+  // supplies the default line. The representative rung (prefer plain line, else demon,
+  // else goblin) is the default when the caller didn't pin a line.
+  const variants = await getProvidedVariants(sport, record.id, stat, src);
+  const providedLine = lineParam == null ? (pickRepresentative(variants, null)?.line ?? null) : null;
   const line = lineParam ?? providedLine ?? defaultPropLine(games, stat);
-  const lineSource = lineParam == null && providedLine != null ? src : null;
+  // Attribute the line to its book when it matches a known rung (auto-picked, or one
+  // the user selected via the switcher); a hand-typed custom number stays sourceless.
+  const selectedVariant = variants.find((v) => v.line === line) ?? null;
+  const lineSource = selectedVariant ? src : null;
 
   const windows: WindowResult[] = STAT_WINDOWS.map((w) => {
     const hitRate = computeHitRate(games, stat, line, w);
@@ -1259,6 +1269,9 @@ export async function getPlayerResearch(
     stat,
     line,
     lineSource,
+    oddsType: selectedVariant?.oddsType ?? null,
+    multiplier: selectedVariant?.multiplier ?? null,
+    variants,
     lineValue,
     seasonAverage: seasonResult.mean,
     gamesPlayed: games.length,
@@ -1382,21 +1395,43 @@ export async function getSourcedBoards(
     return result;
   }
   const ids = players.map((p) => p.id);
-  // Load every book's lines once, then a consensus (median per key) so each row can be
-  // scored against the market for the line-value boost + "best price" badge.
-  const allMaps: Record<string, Map<string, number>> = {};
-  for (const s of sources) allMaps[s] = await getProvidedLineMap(sport, ids, s);
-  const consensus = consensusLineMap(allMaps);
+  // Load every book's full variant ladder once. From it derive two per-book line maps:
+  //  • normalMaps — the plain/market line only (feeds consensus + "best price" so a
+  //    demon/goblin rung never skews line value), and
+  //  • repMaps — the representative rung to actually show/score (prefer plain, else
+  //    demon, else goblin), picked nearest the cross-book consensus.
+  const variantMaps: Record<string, Map<string, ProvidedVariant[]>> = {};
+  for (const s of sources) variantMaps[s] = await getProvidedVariantMap(sport, ids, s);
+  const normalMaps: Record<string, Map<string, number>> = {};
+  for (const s of sources) {
+    const nm = new Map<string, number>();
+    for (const [key, variants] of variantMaps[s]) {
+      const nl = normalLine(variants);
+      if (nl != null) nm.set(key, nl);
+    }
+    normalMaps[s] = nm;
+  }
+  const consensus = consensusLineMap(normalMaps);
+  const repMaps: Record<string, Map<string, number>> = {};
+  for (const s of sources) {
+    const rm = new Map<string, number>();
+    for (const [key, variants] of variantMaps[s]) {
+      const rep = pickRepresentative(variants, consensus.get(key) ?? null);
+      if (rep) rm.set(key, rep.line);
+    }
+    repMaps[s] = rm;
+  }
   const season = await getActiveSeason(sport);
   const ctx = await boardMatchupContext(sport, players, season);
   const availability = await getBoardAvailability(sport, ids);
   for (const s of sources) {
-    result[s] = computeBoardRows(sport, players, gamesByPlayer, allMaps[s], {
+    result[s] = computeBoardRows(sport, players, gamesByPlayer, repMaps[s], {
       limit,
       perPlayerCap,
       perStatCap,
       requireProvided: true,
-      lineValue: { allMaps, consensus },
+      lineValue: { allMaps: normalMaps, consensus },
+      variantMap: variantMaps[s],
       matchupGrades: ctx.grades,
       opponentMults: ctx.opponentMults,
       paceMultByPlayer: ctx.paceMultByPlayer,
@@ -1576,6 +1611,9 @@ function computeBoardRows(
     /** Present only for the multi-book sourced boards: every book's line map + the
      *  consensus (median per key), so each row can score its book vs the market. */
     lineValue?: { allMaps: Record<string, Map<string, number>>; consensus: Map<string, number> };
+    /** This source's variant ladders per `${playerId}:${stat}` — attaches the shown
+     *  rung's payout tag/multiplier and the full ladder for the row's icon switcher. */
+    variantMap?: Map<string, ProvidedVariant[]>;
     /** Next-opponent DvP grade per `${playerId}:${stat}`, so the board's FireFactor
      *  includes the same matchup component as the player page. */
     matchupGrades?: Map<string, MatchupGrade>;
@@ -1675,6 +1713,11 @@ function computeBoardRows(
         }
       }
 
+      // Attach the shown rung's payout tag/multiplier + the full ladder for the row's
+      // icon switcher (sourced boards only; the computed board has no variantMap).
+      const variants = opts.variantMap?.get(`${p.id}:${stat}`);
+      const shownRung = variants?.find((v) => v.line === line) ?? null;
+
       out.push({
         player: listItem,
         stat,
@@ -1683,6 +1726,9 @@ function computeBoardRows(
         projection: projection.projection,
         fireScore,
         lineValue: rowLineValue,
+        oddsType: shownRung?.oddsType ?? null,
+        multiplier: shownRung?.multiplier ?? null,
+        variants,
       });
     }
   }
@@ -2135,10 +2181,30 @@ export async function analyzeSlate(sport: Sport, text: string): Promise<SlateRes
  * nightly schedule feed; cheap COUNT, no joins.
  */
 export async function hasUpcomingGames(sport: Sport): Promise<boolean> {
+  const now = new Date();
   const todayUtc = new Date();
   todayUtc.setUTCHours(0, 0, 0, 0);
-  const count = await db.scheduledGame.count({ where: { sport, date: { gte: todayUtc } } });
-  return count > 0;
+  // Anchor on the soonest scheduled slate day (>= today), then ask whether that slate
+  // still has a game that HASN'T STARTED. A game counts as unstarted when its startTime
+  // is in the future, or (time unknown) it's on the slate at all. Once every game on the
+  // soonest slate has begun, callers roll to their no-games fallback instead of showing
+  // lines for games already underway/finished — rather than lingering until midnight.
+  const next = await db.scheduledGame.findFirst({
+    where: { sport, date: { gte: todayUtc } },
+    orderBy: { date: 'asc' },
+    select: { date: true },
+  });
+  if (!next) return false;
+  const windowDays = sport === 'nfl' ? 7 : 1;
+  const dayEnd = new Date(next.date.getTime() + windowDays * 86_400_000);
+  const unstarted = await db.scheduledGame.count({
+    where: {
+      sport,
+      date: { gte: next.date, lt: dayEnd },
+      OR: [{ startTime: { gt: now } }, { startTime: null }],
+    },
+  });
+  return unstarted > 0;
 }
 
 /**

@@ -13,11 +13,17 @@ import { useListFilter } from './useListFilter';
 export function FilterableBoard({
   sport,
   rows,
+  source,
+  initialLines,
   initialVisible = 25,
   step = 25,
 }: {
   sport: Sport;
   rows: BoardRow[];
+  /** Book the shown board belongs to — needed for a row's on-click FireFactor recompute. */
+  source?: string;
+  /** Per `${slug}:${stat}` opening rung from the payout filter. */
+  initialLines?: Map<string, number>;
   initialVisible?: number;
   step?: number;
 }) {
@@ -43,7 +49,7 @@ export function FilterableBoard({
         </p>
       ) : (
         <>
-          <BoardTable sport={sport} rows={f.shown} />
+          <BoardTable sport={sport} rows={f.shown} source={source} initialLines={initialLines} />
           {f.visible < f.filtered.length && (
             <button
               type="button"

@@ -82,19 +82,26 @@ async function main(): Promise<number> {
       continue;
     }
     perSource.set(r.source, (perSource.get(r.source) ?? 0) + 1);
-    const data = { line: r.line, overOdds: r.overOdds, underOdds: r.underOdds, fetchedAt: new Date() };
+    const data = {
+      overOdds: r.overOdds,
+      underOdds: r.underOdds,
+      oddsType: r.oddsType ?? null,
+      multiplier: r.multiplier ?? null,
+      fetchedAt: new Date(),
+    };
     ops.push(() =>
       db.providedLine.upsert({
         where: {
-          sport_playerId_stat_source_gameDate: {
+          sport_playerId_stat_source_gameDate_line: {
             sport: r.sport,
             playerId,
             stat: r.stat,
             source: r.source,
             gameDate: r.gameDate,
+            line: r.line,
           },
         },
-        create: { sport: r.sport, playerId, stat: r.stat, source: r.source, gameDate: r.gameDate, ...data },
+        create: { sport: r.sport, playerId, stat: r.stat, source: r.source, gameDate: r.gameDate, line: r.line, ...data },
         update: data,
       }),
     );

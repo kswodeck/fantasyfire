@@ -18,6 +18,17 @@ export interface ProvidedLineRow {
   /** American odds for over/under when the source posts them (DFS pick'em often null). */
   overOdds: number | null;
   underOdds: number | null;
+  /**
+   * Payout variant tag. PrizePicks: "standard" | "goblin" | "demon". Underdog:
+   * "balanced" | "alternate". Omitted/null for books with no variant concept.
+   */
+  oddsType?: string | null;
+  /**
+   * Exact payout multiplier when the source exposes one (Underdog: 1.0 balanced,
+   * e.g. 1.31 alternate). null/omitted when unavailable — PrizePicks never ships a
+   * per-line number, sportsbooks price via odds instead.
+   */
+  multiplier?: number | null;
   /** Date-only (UTC midnight) the line applies to. */
   gameDate: Date;
 }

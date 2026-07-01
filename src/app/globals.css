@@ -58,6 +58,12 @@
   --ice-1: light-dark(#0369a1, #38bdf8); /* sky — Cool (slight under) */
   --ice-2: light-dark(#1d4ed8, #60a5fa); /* blue — Cold (under lean) */
   --ice-3: light-dark(#4338ca, #818cf8); /* indigo — Frozen (strong under) */
+
+  /* PrizePicks payout variants: red demon (harder line / boosted payout) and
+     green goblin (easier line / reduced payout), matching PP's own marks. AA in
+     both modes. Underdog alternates carry a numeric multiplier and reuse heat-1. */
+  --demon: light-dark(#b91c1c, #f87171); /* red */
+  --goblin: light-dark(#15803d, #86efac); /* green */
 }
 
 :root[data-theme='light'] {
@@ -104,6 +110,8 @@
   --color-ice-1: var(--ice-1);
   --color-ice-2: var(--ice-2);
   --color-ice-3: var(--ice-3);
+  --color-demon: var(--demon);
+  --color-goblin: var(--goblin);
 
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;

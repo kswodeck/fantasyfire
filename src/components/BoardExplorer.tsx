@@ -5,6 +5,8 @@ import type { Sport } from '@/lib/sports';
 import type { BoardRow, TonightGame } from '@/lib/types';
 import { FilterableBoard } from './FilterableBoard';
 import { SourceSelector } from './SourceSelector';
+import { BoardPayoutControls } from './BoardPayoutControls';
+import { useBoardPayoutFilter } from './useBoardPayoutFilter';
 import { MatchupStrip } from './MatchupStrip';
 import { useSourced } from './useSourced';
 import { useSelectedSlate } from './SelectedSlateProvider';
@@ -56,12 +58,15 @@ export function BoardExplorer({
       gameTeams,
     ),
   );
-  const filteredRows =
+  const slateRows =
     effectiveMode === 'all'
       ? rows
       : rows.filter(
           (r) => r.player.teamAbbreviation && activeTeams.has(r.player.teamAbbreviation),
         );
+  // Payout filter (PrizePicks types / Underdog multiplier range) over the slate rows.
+  const payout = useBoardPayoutFilter(slateRows);
+  const filteredRows = payout.rows;
 
   const toggleGame = (id: string) =>
     setSelectedGames((prev) => {
@@ -105,6 +110,12 @@ export function BoardExplorer({
         )}
       </div>
 
+      {hasSources && payout.mode !== 'none' && (
+        <div className="mb-4">
+          <BoardPayoutControls filter={payout} />
+        </div>
+      )}
+
       {effectiveMode === 'today' && (
         <div className="mb-4">
           <div className="mb-2 flex items-center justify-between gap-2">
@@ -144,6 +155,8 @@ export function BoardExplorer({
           key={`${sourced.source}-${effectiveMode}`}
           sport={sport}
           rows={filteredRows}
+          source={hasSources ? sourced.source : undefined}
+          initialLines={payout.initialLines}
           initialVisible={20}
         />
       )}
