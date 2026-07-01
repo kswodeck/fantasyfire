@@ -14,6 +14,7 @@ import { tierTextClass, heatLabel } from '@/lib/tierStyle';
 import { LeanArrow } from './LeanArrow';
 import { SideArrow } from './SideArrow';
 import { BookLogo } from './BookLogo';
+import { PayoutBadge } from './PayoutBadge';
 import { orderSources, sourceLabel } from '@/lib/providedSources';
 import { normalizeName } from '@/lib/slate';
 
@@ -301,6 +302,7 @@ function PlayerCard({ entry }: { entry: PlayerEntry }) {
                   <SideArrow side={p.side} size={10} />
                   {p.line}
                 </span>
+                <PayoutBadge oddsType={p.oddsType} multiplier={p.multiplier} showLabel={false} glyphSize={10} />
               </span>
             ))}
             {props.length > 4 && (
@@ -346,7 +348,8 @@ function PlayerCard({ entry }: { entry: PlayerEntry }) {
 function PropRow({ prop }: { prop: SavedProp }) {
   const { sport, slug, stat, line, side, source, savedAt } = prop;
   const def = STAT_DEFS[stat];
-  const query = useHitRate({ sport, slug, stat, line });
+  // Read vs the SAVED book, so line attribution (and the payout tag) match the save.
+  const query = useHitRate({ sport, slug, stat, line, source });
   const research = query.data;
 
   const season = research?.windows.find((w) => w.window === 'season')?.hitRate;
@@ -358,11 +361,14 @@ function PropRow({ prop }: { prop: SavedProp }) {
   return (
     <li className="flex flex-col gap-1.5 border-b border-line px-4 py-3 last:border-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
       <div className="min-w-0">
-        <div className="text-sm font-medium">
-          {def.label}{' '}
-          <span className={`tabular-nums ${side === 'over' ? 'text-over' : 'text-under'}`}>
-            {side === 'over' ? 'Over' : 'Under'} {line}
+        <div className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
+          <span>
+            {def.label}{' '}
+            <span className={`tabular-nums ${side === 'over' ? 'text-over' : 'text-under'}`}>
+              {side === 'over' ? 'Over' : 'Under'} {line}
+            </span>
           </span>
+          <PayoutBadge oddsType={prop.oddsType} multiplier={prop.multiplier} showLabel={false} />
         </div>
         <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted">
           <BookLogo source={source} size={13} />
@@ -402,7 +408,7 @@ function PropRow({ prop }: { prop: SavedProp }) {
           </div>
         )}
         <Link
-          href={`/${sport}/${slug}/${stat}?line=${line}`}
+          href={`/${sport}/${slug}/${stat}?line=${line}&source=${source}`}
           className="font-medium text-brand hover:text-brand-strong"
         >
           View →

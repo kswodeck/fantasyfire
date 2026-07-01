@@ -239,9 +239,12 @@ model ProvidedLine {
   overOdds   Int? // American odds for the over, when the source posts them (DFS pick'em are fixed-payout → usually null)
   underOdds  Int?
   // Payout variant tag. PrizePicks: "standard" | "goblin" | "demon". Underdog:
-  // "balanced" | "alternate". null for books with no variant concept (treated as
-  // a normal line). Goblin = easier line/reduced payout, demon = harder/boosted.
-  oddsType   String?
+  // "balanced" | "alternate". Books with no variant concept store the default
+  // "standard" (treated as a normal line). Part of the unique key so a variant
+  // can legitimately share a line number with the standard line without one
+  // silently overwriting the other. Goblin = easier line/reduced payout,
+  // demon = harder/boosted.
+  oddsType   String   @default("standard")
   // Exact payout multiplier when the source exposes one (Underdog options[].
   // payout_multiplier — 1.0 for balanced, e.g. 1.31 for alternates). null when
   // unavailable: PrizePicks never ships a per-line number, sportsbooks use odds.
@@ -251,7 +254,7 @@ model ProvidedLine {
 
   player Player @relation(fields: [playerId], references: [id])
 
-  @@unique([sport, playerId, stat, source, gameDate, line])
+  @@unique([sport, playerId, stat, source, gameDate, line, oddsType])
   @@index([sport, gameDate])
   @@index([playerId, stat])
 }

@@ -34,12 +34,12 @@ function nearest(rungs: ProvidedVariant[], to: number): ProvidedVariant {
  * so clicking one switches the shown rung WITHOUT navigating. Switching recomputes
  * the FireFactor on click via the hitrate API (React Query caches per line).
  *
- * Chips exist only for the SPECIAL kinds — a demon chip, a goblin chip, and one chip
- * per Underdog alternate rung (labelled with its multiplier). The standard line is the
- * no-chip-highlighted state: clicking an active chip funnels back to the plain line
- * (when the book has one), and cycling an active demon/goblin walks its rungs before
- * returning to standard. `enabledKinds` (from the board's payout filter) hides chips
- * for de-selected kinds. A source with a single plain line renders with no chips.
+ * Chips exist only for the SPECIAL kinds — a demon chip, a goblin chip, and a single
+ * alternate chip (labelled with the shown rung's multiplier). The standard line is the
+ * no-chip-highlighted state: clicking an active chip cycles that kind's whole ladder
+ * (demon rungs, goblin rungs, or every alternate) and then funnels back to the plain
+ * line when the book has one. `enabledKinds` (from the board's payout filter) hides
+ * chips for de-selected kinds. A source with a single plain line renders with no chips.
  */
 export function BoardRowCard({
   sport,
@@ -141,29 +141,39 @@ export function BoardRowCard({
     );
   };
 
-  // One chip per alternate rung, labelled with its multiplier — click to funnel through
-  // that exact line; click the active one to return to the standard line.
-  const alternateChips = () =>
-    rungsOfKind(variants, 'alternate').map((v) => {
-      const active = v.line === line;
-      const tone = active
-        ? 'border-heat-1/40 bg-heat-1/12 text-heat-1'
-        : 'border-line text-muted hover:text-foreground';
-      return (
-        <button
-          key={`alt-${v.line}`}
-          type="button"
-          onClick={() => (active ? toNormal() : setLine(v.line))}
-          aria-pressed={active}
-          title={`Alternate line ${v.line}${v.multiplier != null ? ` — ${formatMultiplier(v.multiplier)} payout` : ''} (over only). Click again for the standard line.`}
-          className={`${CHIP} ${tone}`}
-        >
-          <span className="tabular-nums">
-            {v.multiplier != null ? formatMultiplier(v.multiplier) : v.line}
+  // ONE alternate chip that works like the demon/goblin ones: click to jump to the
+  // nearest alternate rung, keep clicking to walk the whole alternate ladder, then
+  // funnel back to the standard line. The label is the shown (or next-up) rung's
+  // multiplier, so the payout is visible before and after switching.
+  const alternateChip = () => {
+    const rungs = rungsOfKind(variants, 'alternate');
+    if (rungs.length === 0) return null;
+    const active = activeKind === 'alternate';
+    const shown = active ? currentRung : nearest(rungs, line);
+    const tone = active
+      ? 'border-heat-1/40 bg-heat-1/12 text-heat-1'
+      : 'border-line text-muted hover:text-foreground';
+    return (
+      <button
+        type="button"
+        onClick={() => pickKind('alternate')}
+        aria-pressed={active}
+        title={`Alternate line${shown?.multiplier != null ? ` — ${formatMultiplier(shown.multiplier)} payout` : ''} (over only). ${
+          rungs.length > 1 ? 'Click to cycle the alternate ladder, then back to the standard line.' : 'Click again for the standard line.'
+        }`}
+        className={`${CHIP} ${tone}`}
+      >
+        <span className="tabular-nums">
+          {shown?.multiplier != null ? formatMultiplier(shown.multiplier) : 'alt'}
+        </span>
+        {active && rungs.length > 1 && (
+          <span className="text-[9px] font-normal opacity-70">
+            {rungs.findIndex((r) => r.line === line) + 1}/{rungs.length}
           </span>
-        </button>
-      );
-    });
+        )}
+      </button>
+    );
+  };
 
   const href = `/${sport}/${row.player.slug}?stat=${row.stat}&line=${line}${source ? `&source=${source}` : ''}`;
 
@@ -192,7 +202,7 @@ export function BoardRowCard({
             <span className="flex flex-wrap items-center gap-1">
               {specialKinds.includes('demon') && glyphChip('demon')}
               {specialKinds.includes('goblin') && glyphChip('goblin')}
-              {specialKinds.includes('alternate') && alternateChips()}
+              {specialKinds.includes('alternate') && alternateChip()}
             </span>
           )}
         </div>

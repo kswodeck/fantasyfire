@@ -6,14 +6,20 @@ import { PlayerAvatar } from './PlayerAvatar';
 import { InjuryBadge } from './InjuryBadge';
 import { SportTag } from './SportTag';
 import { LeanArrow } from './LeanArrow';
+import { PayoutBadge } from './PayoutBadge';
 
 /** Ranked recent-form trend board: L10 rate + swing vs the season baseline. Sport is
- *  read per-row, so it renders single- or mixed-sport boards; `showSport` adds a chip. */
+ *  read per-row, so it renders single- or mixed-sport boards; `showSport` adds a chip.
+ *  Rows computed against a payout variant (goblin/demon/alternate) carry its badge;
+ *  `source` threads the book into the player-page link so the read matches. */
 export function TrendBoardTable({
   rows,
+  source,
   showSport = false,
 }: {
   rows: TrendRow[];
+  /** Book the shown trends belong to — carried into each row's player-page link. */
+  source?: string;
   showSport?: boolean;
 }) {
   return (
@@ -25,7 +31,7 @@ export function TrendBoardTable({
         return (
           <li key={`${sport}-${r.player.slug}-${r.stat}`}>
             <Link
-              href={`/${sport}/${r.player.slug}?stat=${r.stat}&line=${r.line}`}
+              href={`/${sport}/${r.player.slug}?stat=${r.stat}&line=${r.line}${source ? `&source=${source}` : ''}`}
               className="flex items-center gap-2 px-3 py-2.5 transition-colors hover:bg-surface-2 sm:gap-3"
             >
               <span className="w-5 shrink-0 text-right text-xs tabular-nums text-muted">
@@ -46,9 +52,12 @@ export function TrendBoardTable({
                   </span>
                   <InjuryBadge injury={r.player.availability} />
                 </div>
-                <div className="truncate text-xs text-muted">
-                  {r.player.teamAbbreviation} · {r.side === 'over' ? 'Over' : 'Under'}{' '}
-                  {r.line} {r.statShort}
+                <div className="flex items-center gap-1.5 truncate text-xs text-muted">
+                  <span className="truncate">
+                    {r.player.teamAbbreviation} · {r.side === 'over' ? 'Over' : 'Under'}{' '}
+                    {r.line} {r.statShort}
+                  </span>
+                  <PayoutBadge oddsType={r.oddsType} multiplier={r.multiplier} showLabel={false} glyphSize={11} />
                 </div>
               </div>
               <div className="shrink-0 text-right">

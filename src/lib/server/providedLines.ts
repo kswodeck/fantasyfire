@@ -11,7 +11,7 @@ import type { Sport } from '@/lib/sports';
 import type { StatKey } from '@/lib/stats';
 import type { ProvidedVariant } from '@/lib/types';
 import { DEFAULT_PROVIDED_SOURCE, orderSources } from '@/lib/providedSources';
-import { pickRepresentative } from '@/lib/payoutVariant';
+import { pickRepresentative, isNormalKind } from '@/lib/payoutVariant';
 
 /** Master switch. Anything other than "true" keeps the feature inert. */
 export function providedLinesEnabled(): boolean {
@@ -72,21 +72,29 @@ export async function getProvidedVariants(
     });
     const out: ProvidedVariant[] = [];
     let day: number | null = null;
-    const seen = new Set<number>();
+    // One rung per line (the UI selects rungs by line): newest fetch wins, except a
+    // NORMAL rung beats a variant that shares its number — the plain line must stay
+    // the plain line for consensus math and the switcher's "back to standard" funnel.
+    const idxByLine = new Map<number, number>();
     for (const r of rows) {
       const d = r.gameDate.getTime();
       if (day === null) day = d; // newest slate wins
       else if (d !== day) continue; // skip older-slate rungs
-      if (seen.has(r.line)) continue; // one rung per line, newest fetch wins
-      seen.add(r.line);
-      out.push({
+      const variant: ProvidedVariant = {
         source,
         line: r.line,
         oddsType: r.oddsType,
         multiplier: r.multiplier,
         overOdds: r.overOdds,
         underOdds: r.underOdds,
-      });
+      };
+      const at = idxByLine.get(r.line);
+      if (at === undefined) {
+        idxByLine.set(r.line, out.length);
+        out.push(variant);
+      } else if (isNormalKind(r.oddsType) && !isNormalKind(out[at].oddsType)) {
+        out[at] = variant;
+      }
     }
     return out;
   } catch (e) {
@@ -201,15 +209,19 @@ export async function getProvidedVariantMap(
         arr = [];
         map.set(key, arr);
       }
-      if (arr.some((v) => v.line === r.line)) continue; // one rung per line
-      arr.push({
+      const variant: ProvidedVariant = {
         source,
         line: r.line,
         oddsType: r.oddsType,
         multiplier: r.multiplier,
         overOdds: r.overOdds,
         underOdds: r.underOdds,
-      });
+      };
+      // One rung per line (the UI selects rungs by line); a NORMAL rung beats a
+      // variant sharing its number — see getProvidedVariants.
+      const at = arr.findIndex((v) => v.line === r.line);
+      if (at === -1) arr.push(variant);
+      else if (isNormalKind(r.oddsType) && !isNormalKind(arr[at].oddsType)) arr[at] = variant;
     }
   } catch (e) {
     console.warn('[providedLines] getProvidedVariantMap failed; treating as none:', e instanceof Error ? e.message : e);

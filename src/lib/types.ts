@@ -288,6 +288,13 @@ export interface TrendRow {
   /** Current consecutive run for this stat+line (length ≥3), or null when there
    *  isn't one. Its side may differ from the L10 lean (a recent blip vs the trend). */
   streak: { side: 'over' | 'under'; length: number } | null;
+  /** Payout tag of the line the trend was computed against (goblin/demon/alternate);
+   *  null = plain line. Present only on the sourced (per-book) trends. */
+  oddsType?: string | null;
+  /** Exact payout multiplier of that line (UD alternates); null when none. */
+  multiplier?: number | null;
+  /** This source's full variant ladder for the stat — powers the kind filter. */
+  variants?: ProvidedVariant[];
 }
 
 /** One row on a defense-vs-position / pitching-allowed reference table. */

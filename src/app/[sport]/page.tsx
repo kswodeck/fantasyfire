@@ -11,14 +11,14 @@ import { Breadcrumbs } from '@/components/Breadcrumbs';
 import {
   getBoard,
   getInjuryReport,
-  getSourcedBoards,
+  getSourcedBoardsAndTrends,
   getTonightSlate,
   hasUpcomingGames,
 } from '@/lib/server/players';
 import { getAvailableSources } from '@/lib/server/providedLines';
 import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
-import type { BoardRow, InjuryReportRow, TonightGame } from '@/lib/types';
+import type { BoardRow, InjuryReportRow, TonightGame, TrendRow } from '@/lib/types';
 
 export const revalidate = 1800; // 30 min — keep the leans close to the ~15-min lines ingest (prod is on Pro; board reads are optimized)
 export const dynamicParams = false;
@@ -65,13 +65,23 @@ export default async function SportHome({ params }: PageProps) {
   let initialSource = DEFAULT_PROVIDED_SOURCE;
   let games: TonightGame[] = [];
   let injuries: InjuryReportRow[] = [];
+  let topTrend: TrendRow | null = null;
   if (upcoming) {
     try {
       sources = await getAvailableSources(sport);
       if (sources.length > 0) {
         initialSource = sources.includes(DEFAULT_PROVIDED_SOURCE) ? DEFAULT_PROVIDED_SOURCE : sources[0];
-        boardsBySource = await getSourcedBoards(sport, sources, { limit: 5 });
+        // Board teaser + the Trends tile's headline row from ONE pool load — the
+        // heavy players+games query is shared, so the tile costs no extra egress.
+        const { boards, trends } = await getSourcedBoardsAndTrends(
+          sport,
+          sources,
+          { limit: 5 },
+          { limit: 3 },
+        );
+        boardsBySource = boards;
         leans = boardsBySource[initialSource] ?? [];
+        topTrend = trends[initialSource]?.[0] ?? null;
       } else {
         leans = await getBoard(sport, { limit: 5 });
       }
@@ -168,7 +178,13 @@ export default async function SportHome({ params }: PageProps) {
         >
           Explore {cfg.name}
         </h2>
-        <SportHubTiles sport={sport} games={games} slateWord={slateWord} injuries={injuries} />
+        <SportHubTiles
+          sport={sport}
+          games={games}
+          slateWord={slateWord}
+          injuries={injuries}
+          topTrend={topTrend}
+        />
       </section>
     </div>
   );

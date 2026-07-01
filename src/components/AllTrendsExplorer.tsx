@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import type { TrendRow } from '@/lib/types';
 import { TrendBoardTable } from './TrendBoardTable';
 import { SourceSelector } from './SourceSelector';
+import { BoardPayoutControls } from './BoardPayoutControls';
+import { useBoardPayoutFilter } from './useBoardPayoutFilter';
 import { useSourced } from './useSourced';
 import { normalizeName } from '@/lib/slate';
 
@@ -28,6 +30,8 @@ export function AllTrendsExplorer({
   const hasSources = sources.length > 0;
   const sourced = useSourced(bySource, sources, defaultSource);
   const rows = hasSources ? sourced.rows : medianRows;
+  // Payout filter (variant kinds) over the current book's trend rows.
+  const payout = useBoardPayoutFilter(rows);
 
   const [query, setQuery] = useState('');
   const [visible, setVisible] = useState(STEP);
@@ -35,9 +39,9 @@ export function AllTrendsExplorer({
   const filtered = useMemo(
     () =>
       nq === ''
-        ? rows
-        : rows.filter((r) => normalizeName(r.player.fullName).includes(nq)),
-    [rows, nq],
+        ? payout.rows
+        : payout.rows.filter((r) => normalizeName(r.player.fullName).includes(nq)),
+    [payout.rows, nq],
   );
   const shown = filtered.slice(0, visible);
 
@@ -64,13 +68,19 @@ export function AllTrendsExplorer({
         )}
       </div>
 
+      {hasSources && (payout.kindOptions.length >= 2 || payout.hasMult) && (
+        <div className="mb-4">
+          <BoardPayoutControls filter={payout} />
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
           No trends match right now.
         </p>
       ) : (
         <>
-          <TrendBoardTable rows={shown} showSport />
+          <TrendBoardTable rows={shown} source={hasSources ? sourced.source : undefined} showSport />
           {visible < filtered.length && (
             <button
               type="button"

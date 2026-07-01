@@ -25,6 +25,11 @@ export interface SavedProp {
   /** The book/source this save is for (e.g. "prizepicks"). Saves are per-source: the
    *  same (player, stat, line, side) at two books are two distinct saves. */
   source: string;
+  /** Payout-variant tag of the saved line ("goblin"/"demon"/"alternate"…) so the
+   *  Playbook shows WHICH rung was saved; null/absent for a plain line. */
+  oddsType?: string | null;
+  /** Exact payout multiplier of the saved line (Underdog alternates); null when none. */
+  multiplier?: number | null;
   /** Epoch ms the prop was saved — for "saved 2d ago" + newest-first sorting. */
   savedAt: number;
   /**
@@ -109,13 +114,15 @@ export function isPropExpired(p: SavedProp, now: number = Date.now()): boolean {
   return false;
 }
 
-/** Back-compat: older entries predate the game + source fields; default them. */
+/** Back-compat: older entries predate the game + source + variant fields; default them. */
 function normalize(p: SavedProp): SavedProp {
   return {
     ...p,
     gameDate: p.gameDate ?? null,
     gameStartTime: p.gameStartTime ?? null,
     source: p.source ?? DEFAULT_PROVIDED_SOURCE,
+    oddsType: p.oddsType ?? null,
+    multiplier: p.multiplier ?? null,
   };
 }
 
