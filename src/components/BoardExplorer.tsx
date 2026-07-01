@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Sport } from '@/lib/sports';
 import type { BoardRow, TonightGame } from '@/lib/types';
 import { FilterableBoard } from './FilterableBoard';
@@ -42,7 +42,10 @@ export function BoardExplorer({
 }) {
   const hasSources = sources.length > 0;
   const sourced = useSourced(boardsBySource, sources, defaultSource);
-  const rows = hasSources ? sourced.rows : medianRows;
+  // Drop true coin-flip reads (FireFactor 0) — a 50/50 isn't a play worth surfacing.
+  const rows = (hasSources ? sourced.rows : medianRows).filter(
+    (r) => r.fireScore.score > 0,
+  );
 
   const hasSlate = games.length > 0;
   const { mode, setMode } = useSelectedSlate();
@@ -50,20 +53,48 @@ export function BoardExplorer({
   const effectiveMode = hasSlate ? mode : 'all';
   const [selectedGames, setSelectedGames] = useState<Set<string>>(new Set());
 
+  // Local clock, set after mount (null on the server + first render so SSR and
+  // hydration agree — nothing counts as "started" until the client takes over).
+  // Ticks each minute so a game drops out of the default scope as it begins.
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // A game has started once its first pitch / tip-off / kickoff is in the past.
+  const startedIds = useMemo(
+    () =>
+      new Set(
+        now == null
+          ? []
+          : games
+              .filter((g) => g.startTime && Date.parse(g.startTime) <= now)
+              .map((g) => g.externalId),
+      ),
+    [games, now],
+  );
+  const upcomingGames = games.filter((g) => !startedIds.has(g.externalId));
+
   const gameTeams = (g: TonightGame) =>
     [g.home.abbr, g.away.abbr].filter((a): a is string => !!a);
-  // Teams in scope: the selected matchups, or the whole slate when none are picked.
-  const activeTeams = new Set(
-    (selectedGames.size ? games.filter((g) => selectedGames.has(g.externalId)) : games).flatMap(
-      gameTeams,
-    ),
-  );
+  // Teams in scope: the explicitly selected matchups, or — by default — only the games
+  // that haven't started yet. Started games are excluded until the user taps them in.
+  const scopeGames = selectedGames.size
+    ? games.filter((g) => selectedGames.has(g.externalId))
+    : upcomingGames;
+  const activeTeams = new Set(scopeGames.flatMap(gameTeams));
   const slateRows =
     effectiveMode === 'all'
       ? rows
       : rows.filter(
           (r) => r.player.teamAbbreviation && activeTeams.has(r.player.teamAbbreviation),
         );
+  // Distinguish "everything today has already started" from a genuinely empty book.
+  const allStarted =
+    effectiveMode === 'today' && selectedGames.size === 0 && upcomingGames.length === 0;
   // Payout filter (PrizePicks types / Underdog multiplier range) over the slate rows.
   const payout = useBoardPayoutFilter(slateRows);
   const filteredRows = payout.rows;
@@ -83,7 +114,9 @@ export function BoardExplorer({
       aria-pressed={mode === m}
       className={
         'cursor-pointer rounded-md px-3 py-1.5 transition-colors sm:py-1 ' +
-        (mode === m ? 'bg-brand text-brand-foreground' : 'text-muted hover:text-foreground')
+        (mode === m
+          ? 'bg-brand text-brand-foreground'
+          : 'text-muted hover:text-foreground')
       }
     >
       {text}
@@ -137,18 +170,28 @@ export function BoardExplorer({
               </button>
             )}
           </div>
-          <MatchupStrip sport={sport} games={games} selected={selectedGames} onToggle={toggleGame} />
+          <MatchupStrip
+            sport={sport}
+            games={games}
+            selected={selectedGames}
+            startedIds={startedIds}
+            onToggle={toggleGame}
+          />
           <p className="mt-1.5 text-[11px] text-muted">
-            Tap a game to filter the reads to that matchup.
+            {startedIds.size > 0
+              ? 'Games already underway are dimmed and hidden by default — tap one to include its players.'
+              : 'Tap a game to filter the reads to that matchup.'}
           </p>
         </div>
       )}
 
       {filteredRows.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
-          {effectiveMode === 'today'
-            ? 'No reads for this selection right now.'
-            : 'No props for this book right now.'}
+          {allStarted
+            ? 'Every game today has already started. Tap a game above to see its players, or switch to All players.'
+            : effectiveMode === 'today'
+              ? 'No reads for this selection right now.'
+              : 'No props for this book right now.'}
         </p>
       ) : (
         <FilterableBoard

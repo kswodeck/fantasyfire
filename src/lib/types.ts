@@ -35,8 +35,19 @@ export interface PlayerSummary {
   teamExternalId: number | null;
 }
 
+/** Slim availability for the small injury badge on list rows / cards — a subset of
+ *  PlayerAvailability that's cheap to batch-load alongside a roster. */
+export interface CardAvailability {
+  status: PlayerAvailability['status'];
+  fantasyStatus: string | null;
+  detail: string | null;
+  returnDate: string | null;
+}
+
 export interface PlayerListItem extends PlayerSummary {
   gamesPlayed: number;
+  /** Current injury designation for the row badge; absent/null when the player is clear. */
+  availability?: CardAvailability | null;
 }
 
 /** A game line enriched with display context. */

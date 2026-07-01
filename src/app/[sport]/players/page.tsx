@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { PlayerBrowser } from '@/components/PlayerBrowser';
+import { SportSelect } from '@/components/SportSelect';
 import { searchPlayers } from '@/lib/server/players';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
 import type { PlayerListItem } from '@/lib/types';
@@ -61,7 +62,10 @@ export default async function PlayersPage({ params, searchParams }: PageProps) {
           { label: 'Players' },
         ]}
       />
-      <h1 className="mb-1 text-2xl font-bold tracking-tight">{cfg.name} players</h1>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h1 className="mb-1 text-2xl font-bold tracking-tight">{cfg.name} players</h1>
+        <SportSelect section="players" value={sport} />
+      </div>
       <p className="mb-5 text-sm text-muted">
         {players.length > 0
           ? `Search and filter all ${players.length} ${cfg.name} players by team, position, or name.`

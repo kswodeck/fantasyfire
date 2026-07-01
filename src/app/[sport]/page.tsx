@@ -106,7 +106,6 @@ export default async function SportHome({ params }: PageProps) {
         <section className="mx-auto max-w-3xl pb-10">
           {hasSources ? (
             <SourcedBoardTable
-              sport={sport}
               boardsBySource={boardsBySource}
               sources={sources}
               defaultSource={initialSource}
@@ -127,7 +126,7 @@ export default async function SportHome({ params }: PageProps) {
                   experimental
                 </span>
               </h2>
-              <BoardTable sport={sport} rows={leans} />
+              <BoardTable rows={leans} />
             </>
           )}
           <Link

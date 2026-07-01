@@ -22,6 +22,9 @@ import { fetchRotowireLines } from './rotowire';
 import type { ProvidedLineRow } from './providedTypes';
 import { normalizeName } from '../lib/slate';
 import type { Sport } from '../lib/sports';
+import { isPropStat } from '../lib/propStats';
+import { SITE } from '../lib/site';
+import { submitRevalidate } from '../lib/revalidate';
 
 const SOURCES: Array<{ id: string; fetch: () => Promise<ProvidedLineRow[]> }> = [
   { id: 'prizepicks', fetch: fetchPrizePicksLines },
@@ -72,8 +75,21 @@ async function main(): Promise<number> {
     indexBySport.set(sport, await playerIndex(sport));
   }
 
+  type Resolved = {
+    sport: Sport;
+    playerId: number;
+    stat: string;
+    source: string;
+    gameDate: Date;
+    line: number;
+    overOdds: number | null;
+    underOdds: number | null;
+    oddsType: string | null;
+    multiplier: number | null;
+  };
+
   let unmatched = 0;
-  const ops: Array<() => Promise<unknown>> = [];
+  const resolved: Resolved[] = [];
   const perSource = new Map<string, number>();
   for (const r of rows) {
     const playerId = indexBySport.get(r.sport)?.get(normalizeName(r.externalPlayerName));
@@ -82,30 +98,50 @@ async function main(): Promise<number> {
       continue;
     }
     perSource.set(r.source, (perSource.get(r.source) ?? 0) + 1);
-    const data = {
-      overOdds: r.overOdds,
-      underOdds: r.underOdds,
+    resolved.push({
+      sport: r.sport,
+      playerId,
+      stat: r.stat,
+      source: r.source,
+      gameDate: r.gameDate,
+      line: r.line,
+      overOdds: r.overOdds ?? null,
+      underOdds: r.underOdds ?? null,
       oddsType: r.oddsType ?? null,
       multiplier: r.multiplier ?? null,
+    });
+  }
+
+  // Which player+stat lines actually MOVED this run — computed against the current
+  // rows BEFORE we overwrite them, so on-demand revalidation touches only the pages
+  // whose number changed (the whole point: don't regenerate identical HTML).
+  const changed = await changedPlayerStats(resolved);
+
+  const ops = resolved.map((d) => () => {
+    // Keyed by line too, so a source's alternate rungs (PrizePicks demon/goblin,
+    // Underdog alternates) coexist instead of overwriting the standard line.
+    const data = {
+      overOdds: d.overOdds,
+      underOdds: d.underOdds,
+      oddsType: d.oddsType,
+      multiplier: d.multiplier,
       fetchedAt: new Date(),
     };
-    ops.push(() =>
-      db.providedLine.upsert({
-        where: {
-          sport_playerId_stat_source_gameDate_line: {
-            sport: r.sport,
-            playerId,
-            stat: r.stat,
-            source: r.source,
-            gameDate: r.gameDate,
-            line: r.line,
-          },
+    return db.providedLine.upsert({
+      where: {
+        sport_playerId_stat_source_gameDate_line: {
+          sport: d.sport,
+          playerId: d.playerId,
+          stat: d.stat,
+          source: d.source,
+          gameDate: d.gameDate,
+          line: d.line,
         },
-        create: { sport: r.sport, playerId, stat: r.stat, source: r.source, gameDate: r.gameDate, line: r.line, ...data },
-        update: data,
-      }),
-    );
-  }
+      },
+      create: { sport: d.sport, playerId: d.playerId, stat: d.stat, source: d.source, gameDate: d.gameDate, line: d.line, ...data },
+      update: data,
+    });
+  });
 
   // Concurrent batches (no $transaction — it times out over a remote pooler).
   // Each batch retries transient pooler blips so one ETIMEDOUT doesn't fail the run.
@@ -117,7 +153,110 @@ async function main(): Promise<number> {
 
   const summary = [...perSource.entries()].map(([s, n]) => `${s}=${n}`).join(', ');
   console.log(`[providedlines] upserted ${ops.length} (${summary}); ${unmatched} skipped (unmatched/ambiguous).`);
+
+  // Revalidate the changed pages — best-effort, only when the site actually shows
+  // these lines (PROVIDED_LINES_ENABLED). Never fail the ingest on a revalidate blip.
+  await revalidateChanged(changed);
+
   return ops.length;
+}
+
+/**
+ * Set of `${sport}|${playerId}|${stat}` whose line/odds differ from what's already
+ * stored (or are brand new). Reads existing rows once for the sports + game days in
+ * play; `fetchedAt` is ignored (it always moves). Best-effort: a read failure just
+ * means we revalidate nothing rather than failing the run.
+ */
+async function changedPlayerStats(
+  resolved: Array<{
+    sport: Sport;
+    playerId: number;
+    stat: string;
+    source: string;
+    gameDate: Date;
+    line: number;
+    overOdds: number | null;
+    underOdds: number | null;
+  }>,
+): Promise<Set<string>> {
+  const changed = new Set<string>();
+  if (resolved.length === 0) return changed;
+
+  // Include `line` so each variant rung is compared to its own prior value (multiple
+  // rungs now share a player+stat+source+day); a page is flagged changed if any rung moved.
+  const keyOf = (x: {
+    sport: string;
+    playerId: number;
+    stat: string;
+    source: string;
+    gameDate: Date;
+    line: number;
+  }) => `${x.sport}|${x.playerId}|${x.stat}|${x.source}|${x.gameDate.getTime()}|${x.line}`;
+
+  try {
+    const sports = [...new Set(resolved.map((d) => d.sport))];
+    const gameDates = [...new Set(resolved.map((d) => d.gameDate.getTime()))].map((t) => new Date(t));
+    const existing = await withDbRetry(
+      () =>
+        db.providedLine.findMany({
+          where: { sport: { in: sports }, gameDate: { in: gameDates } },
+          select: { sport: true, playerId: true, stat: true, source: true, gameDate: true, line: true, overOdds: true, underOdds: true },
+        }),
+      'providedLine.findMany(existing)',
+    );
+    const prev = new Map(existing.map((e) => [keyOf(e), e] as const));
+
+    for (const d of resolved) {
+      const p = prev.get(keyOf(d));
+      if (!p || p.line !== d.line || (p.overOdds ?? null) !== d.overOdds || (p.underOdds ?? null) !== d.underOdds) {
+        changed.add(`${d.sport}|${d.playerId}|${d.stat}`);
+      }
+    }
+  } catch (e) {
+    console.warn('[providedlines] change detection failed (skipping revalidate):', (e as Error).message);
+    return new Set();
+  }
+  return changed;
+}
+
+/** POST the changed player/stat paths to the site's on-demand revalidation route. */
+async function revalidateChanged(changed: Set<string>): Promise<void> {
+  if (changed.size === 0) return;
+  // Only meaningful when the site renders these lines; otherwise revalidating would
+  // just burn ISR Writes regenerating pages that show our daily computed line.
+  if (process.env.PROVIDED_LINES_ENABLED !== 'true') {
+    console.log(`[providedlines] ${changed.size} player/stat lines moved; PROVIDED_LINES_ENABLED off — skipping revalidate.`);
+    return;
+  }
+
+  try {
+    const ids = [...new Set([...changed].map((k) => Number(k.split('|')[1])))];
+    const players = await withDbRetry(
+      () => db.player.findMany({ where: { id: { in: ids } }, select: { id: true, slug: true } }),
+      'player slugs for revalidate',
+    );
+    const slugById = new Map(players.map((p) => [p.id, p.slug] as const));
+
+    const paths = new Set<string>();
+    for (const key of changed) {
+      const [sport, idStr, stat] = key.split('|');
+      const slug = slugById.get(Number(idStr));
+      if (!slug) continue;
+      paths.add(`/${sport}/${slug}`); // player page (default view)
+      if (isPropStat(sport as Sport, stat)) paths.add(`/${sport}/${slug}/${stat}`); // per-stat page
+    }
+
+    const result = await submitRevalidate([...paths], SITE.url);
+    if (result.skippedReason) {
+      console.log(`[providedlines] revalidate skipped: ${result.skippedReason} (${paths.size} paths).`);
+    } else if (result.ok) {
+      console.log(`[providedlines] revalidated ${result.submitted} paths (${changed.size} lines moved).`);
+    } else {
+      console.warn(`[providedlines] revalidate not accepted (HTTP ${result.status}, ${paths.size} paths).`);
+    }
+  } catch (e) {
+    console.warn('[providedlines] revalidate error (non-fatal):', (e as Error).message);
+  }
 }
 
 recordIngestRun('providedlines', main)

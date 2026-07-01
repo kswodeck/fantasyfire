@@ -6,6 +6,8 @@ import { useQuery } from '@tanstack/react-query';
 import type { BoardRow, PlayerResearch, ProvidedVariant } from '@/lib/types';
 import type { Sport } from '@/lib/sports';
 import { PlayerAvatar } from './PlayerAvatar';
+import { InjuryBadge } from './InjuryBadge';
+import { SportTag } from './SportTag';
 import { LeanArrow } from './LeanArrow';
 import { PayoutBadge, PayoutGlyph, formatMultiplier } from './PayoutBadge';
 import { getTeam } from '@/lib/teams';
@@ -35,12 +37,15 @@ export function BoardRowCard({
   row,
   source,
   initialLine,
+  showSport = false,
 }: {
   sport: Sport;
   row: BoardRow;
   source?: string;
   /** Rung to open on when a board filter re-picks it (else the server representative). */
   initialLine?: number;
+  /** Prefix the name with a league chip — for the cross-sport ("All") board. */
+  showSport?: boolean;
 }) {
   const [line, setLine] = useState(initialLine ?? row.line);
   const variants = row.variants ?? [];
@@ -145,7 +150,11 @@ export function BoardRowCard({
       <Link href={href} aria-label={`${row.player.fullName} ${dir} ${line} ${row.statShort}`} className="absolute inset-0" />
       <PlayerAvatar sport={sport} externalId={row.player.externalId} name={row.player.fullName} size={36} ring={team.primary} />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-semibold">{row.player.fullName}</div>
+        <div className="flex items-center gap-1.5">
+          {showSport && <SportTag sport={sport} />}
+          <span className="truncate text-sm font-semibold">{row.player.fullName}</span>
+          <InjuryBadge injury={row.player.availability} />
+        </div>
         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted">
           <span className="truncate">
             {row.player.teamAbbreviation} · {dir ? `${dir} ` : ''}

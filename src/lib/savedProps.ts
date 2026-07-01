@@ -76,11 +76,23 @@ function isValid(x: unknown): x is SavedProp {
   );
 }
 
+/** The viewer's local calendar day (YYYY-MM-DD) for an epoch ms — the end-of-day sweep. */
+function localDay(ms: number): string {
+  const d = new Date(ms);
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
 /**
- * Whether a pick's game is over (so it should drop off the Playbook). Uses the
- * known start time + a generous sport duration; falls back to the game's calendar
- * day (+36h to cover late local-night starts) when no start time was captured.
- * Picks with no game (off-season saves) never expire.
+ * Whether a pick's game is over (so it should drop off the Playbook).
+ *
+ * A pick with a known start time clears once its game is safely over (start + a
+ * generous sport duration) — this also correctly handles late games that finish
+ * after midnight, without clearing them mid-game. A pick with only a calendar date
+ * (no start time captured) clears via the end-of-day sweep: once the viewer's local
+ * day has rolled past the game's date, with a 36h UTC fallback as a backstop. Picks
+ * with no game at all (off-season saves) never expire.
  */
 export function isPropExpired(p: SavedProp, now: number = Date.now()): boolean {
   if (p.gameStartTime) {
@@ -90,6 +102,7 @@ export function isPropExpired(p: SavedProp, now: number = Date.now()): boolean {
     }
   }
   if (p.gameDate) {
+    if (p.gameDate < localDay(now)) return true;
     const dayStart = Date.parse(`${p.gameDate}T00:00:00Z`);
     if (!Number.isNaN(dayStart)) return now > dayStart + 36 * HOUR_MS;
   }
@@ -152,7 +165,14 @@ function persist(list: SavedProp[]): void {
 
 export function isPropSaved(
   list: SavedProp[],
-  p: { sport: Sport; slug: string; stat: StatKey; line: number; side: PropSide; source: string },
+  p: {
+    sport: Sport;
+    slug: string;
+    stat: StatKey;
+    line: number;
+    side: PropSide;
+    source: string;
+  },
 ): boolean {
   const k = propKey(p);
   return list.some((s) => propKey(s) === k);

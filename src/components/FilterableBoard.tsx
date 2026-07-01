@@ -49,7 +49,7 @@ export function FilterableBoard({
         </p>
       ) : (
         <>
-          <BoardTable sport={sport} rows={f.shown} source={source} initialLines={initialLines} />
+          <BoardTable rows={f.shown} source={source} initialLines={initialLines} />
           {f.visible < f.filtered.length && (
             <button
               type="button"

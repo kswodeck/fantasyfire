@@ -3,6 +3,7 @@ import type { PlayerListItem } from '@/lib/types';
 import { getTeam } from '@/lib/teams';
 import { PlayerAvatar } from './PlayerAvatar';
 import { TeamLogo } from './TeamLogo';
+import { InjuryBadge } from './InjuryBadge';
 
 /** Compact, linkable player card: headshot + team-color accent + logo + games. */
 export function PlayerCard({ player }: { player: PlayerListItem }) {
@@ -20,7 +21,10 @@ export function PlayerCard({ player }: { player: PlayerListItem }) {
         size={44}
       />
       <div className="min-w-0 flex-1">
-        <div className="truncate font-medium">{player.fullName}</div>
+        <div className="flex items-center gap-1.5">
+          <span className="truncate font-medium">{player.fullName}</span>
+          <InjuryBadge injury={player.availability} />
+        </div>
         <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted">
           <TeamLogo
             sport={player.sport}

@@ -31,9 +31,9 @@ export async function OffSeasonFallback({ sport, what }: { sport: Sport; what: s
   return (
     <div className="mt-6">
       <p className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
-        No {cfg.name} games are on the schedule right now (likely the off-season), so {what}{' '}
-        aren&rsquo;t available — they track upcoming and current games. Here are the season&rsquo;s{' '}
-        {cfg.name} leaders instead, or browse{' '}
+        No {cfg.name} games are scheduled right now (likely the off-season), so {what}{' '}
+        aren&rsquo;t available. Here are the season&rsquo;s {cfg.name} leaders instead, or
+        browse{' '}
         <Link href={`/${sport}/players`} className="text-brand hover:text-brand-strong">
           all {cfg.name} players
         </Link>

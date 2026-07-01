@@ -3,7 +3,13 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { BoardExplorer } from '@/components/BoardExplorer';
-import { getBoard, getSourcedBoards, getTonightSlate, hasUpcomingGames } from '@/lib/server/players';
+import { SportSelect } from '@/components/SportSelect';
+import {
+  getBoard,
+  getSourcedBoards,
+  getTonightSlate,
+  hasUpcomingGames,
+} from '@/lib/server/players';
 import { getAvailableSources } from '@/lib/server/providedLines';
 import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
@@ -49,7 +55,9 @@ export default async function BoardPage({ params }: PageProps) {
 
   // Real book lines available for this sport (PrizePicks, Underdog, …). Empty when
   // the feature is off / nothing's ingested — then we fall back to our median line.
-  const sources = upcoming ? await getAvailableSources(sport).catch((): string[] => []) : [];
+  const sources = upcoming
+    ? await getAvailableSources(sport).catch((): string[] => [])
+    : [];
   const hasSources = sources.length > 0;
   const initialSource = sources.includes(DEFAULT_PROVIDED_SOURCE)
     ? DEFAULT_PROVIDED_SOURCE
@@ -92,17 +100,24 @@ export default async function BoardPage({ params }: PageProps) {
           { label: 'Heat Check' },
         ]}
       />
-      <h1 className="text-3xl font-bold tracking-tight">{cfg.name} Heat Check</h1>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h1 className="text-3xl font-bold tracking-tight">{cfg.name} Heat Check</h1>
+        <SportSelect section="board" value={sport} includeAll />
+      </div>
       <p className="mt-2 max-w-2xl text-sm text-muted">
-        The strongest recent-form reads across the most active {cfg.name} players, ranked by our
-        sample-size-adjusted <strong className="text-foreground">FireFactor</strong>.{' '}
+        The strongest recent-form reads across the most active {cfg.name} players, ranked
+        by our sample-size-adjusted{' '}
+        <strong className="text-foreground">FireFactor</strong>.{' '}
         {hasSources ? (
           <>Lines are the real book numbers — switch books with the selector. </>
         ) : (
-          <>The lines shown are our own typical-game (median) line, not a sportsbook line. </>
+          <>
+            The lines shown are our own typical-game (median) line, not a sportsbook
+            line.{' '}
+          </>
         )}
-        Filter to {slateWord.toLowerCase()}&rsquo;s slate or a single matchup, and open a player to
-        enter your own line and odds.
+        Filter to {slateWord.toLowerCase()}&rsquo;s slate or a single matchup, and open a
+        player to enter your own line and odds.
       </p>
 
       {!upcoming ? (
@@ -135,10 +150,10 @@ export default async function BoardPage({ params }: PageProps) {
       <RelatedLinks links={sportMeshLinks(sport, 'board')} />
 
       <p className="mt-4 text-xs leading-relaxed text-muted">
-        Descriptive research from public game logs, ranked by a sample-size–adjusted FireFactor (recent
-        hit rate vs the line, discounted for thin samples via a 95% Wilson interval) — not
-        predictions, picks, or betting advice. We don&rsquo;t track who&rsquo;s active; confirm
-        lineups, scratches, and injuries yourself.
+        Descriptive research from public game logs, ranked by a sample-size–adjusted
+        FireFactor (recent hit rate vs the line, discounted for thin samples via a 95%
+        Wilson interval) — not predictions, picks, or betting advice. We don&rsquo;t track
+        who&rsquo;s active; confirm lineups, scratches, and injuries yourself.
       </p>
     </div>
   );

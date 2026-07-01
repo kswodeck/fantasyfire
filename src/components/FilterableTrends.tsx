@@ -40,7 +40,7 @@ export function FilterableTrends({
         </p>
       ) : (
         <>
-          <TrendBoardTable sport={sport} rows={f.shown} />
+          <TrendBoardTable rows={f.shown} />
           {f.visible < f.filtered.length && (
             <button
               type="button"

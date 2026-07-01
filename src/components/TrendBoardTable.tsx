@@ -1,25 +1,36 @@
 import Link from 'next/link';
 import type { TrendRow } from '@/lib/types';
-import type { Sport } from '@/lib/sports';
 import { getTeam } from '@/lib/teams';
 import { pct } from '@/lib/format';
 import { PlayerAvatar } from './PlayerAvatar';
+import { InjuryBadge } from './InjuryBadge';
+import { SportTag } from './SportTag';
 import { LeanArrow } from './LeanArrow';
 
-/** Ranked recent-form trend board: L10 rate + swing vs the season baseline. */
-export function TrendBoardTable({ sport, rows }: { sport: Sport; rows: TrendRow[] }) {
+/** Ranked recent-form trend board: L10 rate + swing vs the season baseline. Sport is
+ *  read per-row, so it renders single- or mixed-sport boards; `showSport` adds a chip. */
+export function TrendBoardTable({
+  rows,
+  showSport = false,
+}: {
+  rows: TrendRow[];
+  showSport?: boolean;
+}) {
   return (
     <ol className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
       {rows.map((r) => {
+        const sport = r.player.sport;
         const team = getTeam(sport, r.player.teamAbbreviation);
         const sideCls = r.side === 'over' ? 'text-over' : 'text-under';
         return (
-          <li key={`${r.player.slug}-${r.stat}`}>
+          <li key={`${sport}-${r.player.slug}-${r.stat}`}>
             <Link
               href={`/${sport}/${r.player.slug}?stat=${r.stat}&line=${r.line}`}
               className="flex items-center gap-2 px-3 py-2.5 transition-colors hover:bg-surface-2 sm:gap-3"
             >
-              <span className="w-5 shrink-0 text-right text-xs tabular-nums text-muted">{r.rank}</span>
+              <span className="w-5 shrink-0 text-right text-xs tabular-nums text-muted">
+                {r.rank}
+              </span>
               <PlayerAvatar
                 sport={sport}
                 externalId={r.player.externalId}
@@ -28,14 +39,22 @@ export function TrendBoardTable({ sport, rows }: { sport: Sport; rows: TrendRow[
                 ring={team.primary}
               />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-semibold">{r.player.fullName}</div>
+                <div className="flex items-center gap-1.5">
+                  {showSport && <SportTag sport={sport} />}
+                  <span className="truncate text-sm font-semibold">
+                    {r.player.fullName}
+                  </span>
+                  <InjuryBadge injury={r.player.availability} />
+                </div>
                 <div className="truncate text-xs text-muted">
-                  {r.player.teamAbbreviation} · {r.side === 'over' ? 'Over' : 'Under'} {r.line}{' '}
-                  {r.statShort}
+                  {r.player.teamAbbreviation} · {r.side === 'over' ? 'Over' : 'Under'}{' '}
+                  {r.line} {r.statShort}
                 </div>
               </div>
               <div className="shrink-0 text-right">
-                <div className={`flex items-center justify-end gap-1 text-sm font-semibold ${sideCls}`}>
+                <div
+                  className={`flex items-center justify-end gap-1 text-sm font-semibold ${sideCls}`}
+                >
                   <LeanArrow tier="Lean" side={r.side} size={14} />
                   {Math.round(r.recentRate * r.recentGames)} of {r.recentGames}{' '}
                   <span className="text-xs font-normal text-muted">L10</span>

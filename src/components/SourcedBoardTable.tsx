@@ -1,7 +1,6 @@
 'use client';
 
 import { type ReactNode } from 'react';
-import type { Sport } from '@/lib/sports';
 import type { BoardRow } from '@/lib/types';
 import { BoardTable } from './BoardTable';
 import { SourceSelector } from './SourceSelector';
@@ -15,14 +14,12 @@ import { useSourced } from './useSourced';
  * Mirrors SourcedBoard, but renders the small read-only BoardTable.
  */
 export function SourcedBoardTable({
-  sport,
   boardsBySource,
   sources,
   defaultSource,
   heading,
   emptyText = 'No props for this book right now.',
 }: {
-  sport: Sport;
   boardsBySource: Record<string, BoardRow[]>;
   sources: string[];
   defaultSource: string;
@@ -30,7 +27,11 @@ export function SourcedBoardTable({
   heading?: ReactNode;
   emptyText?: string;
 }) {
-  const { source, setSource, liveSources, rows } = useSourced(boardsBySource, sources, defaultSource);
+  const { source, setSource, liveSources, rows } = useSourced(
+    boardsBySource,
+    sources,
+    defaultSource,
+  );
   return (
     <div>
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -40,7 +41,7 @@ export function SourcedBoardTable({
       {rows.length === 0 ? (
         <p className="px-1 py-4 text-sm text-muted">{emptyText}</p>
       ) : (
-        <BoardTable sport={sport} rows={rows} />
+        <BoardTable rows={rows} source={source} />
       )}
     </div>
   );

@@ -8,7 +8,9 @@ import { pct } from '@/lib/format';
 export const alt = 'FantasyFire hit-rate card';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
-export const revalidate = 3600;
+// Match the stat page's ISR window (daily) so the OG card tracks the page and
+// stops re-emitting identical PNGs hourly across the crawled long tail.
+export const revalidate = 86400;
 
 const BADGE_COLOR: Record<string, string> = {
   High: '#4ade80',
