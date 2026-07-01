@@ -2,16 +2,20 @@
 
 import type { Sport } from '@/lib/sports';
 import type { BoardRow, TonightGame } from '@/lib/types';
+import type { PayoutKind } from '@/lib/payoutVariant';
 import { BoardTable } from './BoardTable';
 import { SourceSelector } from './SourceSelector';
+import { BoardPayoutControls } from './BoardPayoutControls';
+import { useBoardPayoutFilter } from './useBoardPayoutFilter';
 import { TeamLogo } from './TeamLogo';
 import { useSourced } from './useSourced';
 
 /**
  * The leans for a single game, split into the two teams and ranked by FireFactor within
  * each. Book selection comes from the shared, persisted selector (same as the board), so
- * switching books re-ranks both teams instantly. Rows are already filtered to this game's
- * two teams on the server; this just picks the book and groups them.
+ * switching books re-ranks both teams instantly, and the same payout-variant filter
+ * (demons/goblins/alternates) applies across both teams. Rows are already filtered to
+ * this game's two teams on the server; this just picks the book and groups them.
  */
 export function GameLeans({
   sport,
@@ -32,11 +36,13 @@ export function GameLeans({
   const hasSources = sources.length > 0;
   const sourced = useSourced(boardsBySource, sources, defaultSource);
   const rows = hasSources ? sourced.rows : medianRows;
+  const payout = useBoardPayoutFilter(rows);
 
   return (
     <div>
       {hasSources && (
-        <div className="mb-4 flex justify-end">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <BoardPayoutControls filter={payout} />
           <SourceSelector
             sources={sourced.liveSources}
             value={sourced.source}
@@ -44,14 +50,28 @@ export function GameLeans({
           />
         </div>
       )}
-      {rows.length === 0 ? (
+      {payout.rows.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
           No reads for this matchup on this book right now.
         </p>
       ) : (
         <div className="space-y-6">
-          <TeamSection sport={sport} team={game.away} rows={rows} />
-          <TeamSection sport={sport} team={game.home} rows={rows} />
+          <TeamSection
+            sport={sport}
+            team={game.away}
+            rows={payout.rows}
+            source={hasSources ? sourced.source : undefined}
+            initialLines={payout.initialLines}
+            enabledKinds={payout.enabledKinds}
+          />
+          <TeamSection
+            sport={sport}
+            team={game.home}
+            rows={payout.rows}
+            source={hasSources ? sourced.source : undefined}
+            initialLines={payout.initialLines}
+            enabledKinds={payout.enabledKinds}
+          />
         </div>
       )}
     </div>
@@ -62,10 +82,16 @@ function TeamSection({
   sport,
   team,
   rows,
+  source,
+  initialLines,
+  enabledKinds,
 }: {
   sport: Sport;
   team: TonightGame['home'];
   rows: BoardRow[];
+  source?: string;
+  initialLines?: Map<string, number>;
+  enabledKinds?: Set<PayoutKind>;
 }) {
   const teamRows = rows.filter((r) => r.player.teamAbbreviation === team.abbr);
   return (
@@ -82,7 +108,12 @@ function TeamSection({
           No qualifying reads for {team.abbr} on this book right now.
         </p>
       ) : (
-        <BoardTable rows={teamRows} />
+        <BoardTable
+          rows={teamRows}
+          source={source}
+          initialLines={initialLines}
+          enabledKinds={enabledKinds}
+        />
       )}
     </section>
   );

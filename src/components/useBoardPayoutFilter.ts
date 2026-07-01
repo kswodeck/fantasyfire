@@ -4,17 +4,18 @@ import { useMemo, useState } from 'react';
 import type { BoardRow, ProvidedVariant } from '@/lib/types';
 import { payoutKind, type PayoutKind } from '@/lib/payoutVariant';
 
-// The board's payout filter has two mutually-exclusive modes, chosen by what the
-// current book offers:
-//   • 'type'  — PrizePicks: a multiselect of Standard / Demons / Goblins. Default is
-//               all on (prefer-normal-fallback), so every player shows once; narrowing
-//               keeps only rows with a rung of a selected kind, re-shown at that kind.
-//   • 'mult'  — a book with numeric multipliers (Underdog alternates): a min–max range;
-//               keep rows with a rung whose multiplier falls in range.
-//   • 'none'  — no variants to filter (plain sportsbook board).
-export type PayoutFilterMode = 'type' | 'mult' | 'none';
+// The board's payout filter, driven by what the current book offers:
+//   • Kind chips — a multiselect of Standard / Demons / Goblins / Alternates (only the
+//     kinds present on this board). Default is all on (prefer-normal fallback), so every
+//     player shows once; narrowing keeps only rows with a rung of a selected kind,
+//     re-shown at that kind. PrizePicks gets Standard/Demons/Goblins, Underdog gets
+//     Standard/Alternates.
+//   • Multiplier range — when the book posts numeric multipliers (Underdog): a min–max
+//     window that constrains which ALTERNATE rungs qualify (the standard line is never
+//     range-gated — deselect Standard to see alternates only).
+// Both render nothing for a plain sportsbook board with no variants.
 
-const TYPE_ORDER: PayoutKind[] = ['normal', 'demon', 'goblin'];
+const KIND_ORDER: PayoutKind[] = ['normal', 'demon', 'goblin', 'alternate'];
 
 function rungKinds(row: BoardRow): PayoutKind[] {
   const set = new Set<PayoutKind>();
@@ -27,13 +28,15 @@ function nearest(rungs: ProvidedVariant[], to: number): ProvidedVariant {
 }
 
 export interface BoardPayoutFilter {
-  mode: PayoutFilterMode;
-  /** Type mode: kinds present across the board (for the chip options), in display order. */
+  /** Kinds present across the board (for the chip options), in display order.
+   *  Chips are worth showing when there are 2+ (i.e. the book has variants). */
   kindOptions: PayoutKind[];
-  /** Type mode: currently-selected kinds. */
+  /** Currently-selected kinds. */
   selectedKinds: Set<PayoutKind>;
   toggleKind: (k: PayoutKind) => void;
-  /** Mult mode: full data bounds + the active [min,max] window. */
+  /** True when any rung posts a numeric multiplier (Underdog) → show the range. */
+  hasMult: boolean;
+  /** Full data bounds + the active [min,max] window over alternate multipliers. */
   multBounds: [number, number];
   multRange: [number, number];
   setMultRange: (r: [number, number]) => void;
@@ -42,36 +45,41 @@ export interface BoardPayoutFilter {
   /** Per `${slug}:${stat}` → the rung line to open the row on (when it differs from the
    *  server representative), so a filtered row shows its selected-kind/in-range rung. */
   initialLines: Map<string, number>;
+  /** Kinds each row's inline chips should offer — mirrors the chip multiselect so a
+   *  de-selected kind's buttons disappear from the rows too. undefined = no kind
+   *  filter on this board (plain book) → rows show every kind they have. */
+  enabledKinds: Set<PayoutKind> | undefined;
   /** True when the filter is doing something (for a "clear" affordance). */
   active: boolean;
 }
 
-/** Board payout filtering (PrizePicks types / Underdog multiplier range). Pure over the
- *  already-fetched rows — no refetch here; the row card recomputes lazily if its opening
- *  rung differs from the server one. */
+/** Board payout filtering (variant-kind multiselect + Underdog multiplier range). Pure
+ *  over the already-fetched rows — no refetch here; the row card recomputes lazily if
+ *  its opening rung differs from the server one. */
 export function useBoardPayoutFilter(rows: BoardRow[]): BoardPayoutFilter {
-  const hasTypes = useMemo(
-    () => rows.some((r) => rungKinds(r).some((k) => k === 'demon' || k === 'goblin')),
-    [rows],
-  );
-  const hasMult = useMemo(
-    () => rows.some((r) => (r.variants ?? []).some((v) => payoutKind(v.oddsType) === 'alternate' && v.multiplier != null)),
-    [rows],
-  );
-  const mode: PayoutFilterMode = hasTypes ? 'type' : hasMult ? 'mult' : 'none';
-
   const kindOptions = useMemo(() => {
     const present = new Set<PayoutKind>();
-    for (const r of rows) for (const k of rungKinds(r)) if (k !== 'alternate') present.add(k);
-    return TYPE_ORDER.filter((k) => present.has(k));
+    for (const r of rows) for (const k of rungKinds(r)) present.add(k);
+    return KIND_ORDER.filter((k) => present.has(k));
   }, [rows]);
+  const hasKinds = kindOptions.length >= 2;
+
+  const hasMult = useMemo(
+    () =>
+      rows.some((r) =>
+        (r.variants ?? []).some(
+          (v) => payoutKind(v.oddsType) === 'alternate' && v.multiplier != null,
+        ),
+      ),
+    [rows],
+  );
 
   const multBounds = useMemo<[number, number]>(() => {
     let lo = Infinity;
     let hi = -Infinity;
     for (const r of rows)
       for (const v of r.variants ?? [])
-        if (v.multiplier != null) {
+        if (payoutKind(v.oddsType) === 'alternate' && v.multiplier != null) {
           lo = Math.min(lo, v.multiplier);
           hi = Math.max(hi, v.multiplier);
         }
@@ -82,8 +90,21 @@ export function useBoardPayoutFilter(rows: BoardRow[]): BoardPayoutFilter {
   const [selected, setSelected] = useState<Set<PayoutKind> | null>(null);
   const [range, setRange] = useState<[number, number] | null>(null);
 
-  const selectedKinds = useMemo(() => selected ?? new Set(kindOptions), [selected, kindOptions]);
-  const multRange = useMemo<[number, number]>(() => range ?? multBounds, [range, multBounds]);
+  // Intersect the saved picks with what the CURRENT book offers — switching books
+  // (PrizePicks → Underdog) must never strand the board on a kind that no longer
+  // exists. An empty intersection falls back to "all on".
+  const selectedKinds = useMemo(() => {
+    if (!selected) return new Set(kindOptions);
+    const inter = new Set(kindOptions.filter((k) => selected.has(k)));
+    return inter.size > 0 ? inter : new Set(kindOptions);
+  }, [selected, kindOptions]);
+  const multRange = useMemo<[number, number]>(() => {
+    if (!range) return multBounds;
+    const lo = Math.min(Math.max(range[0], multBounds[0]), multBounds[1]);
+    const hi = Math.max(Math.min(range[1], multBounds[1]), lo);
+    return [lo, hi];
+  }, [range, multBounds]);
+  const rangeNarrowed = multRange[0] !== multBounds[0] || multRange[1] !== multBounds[1];
 
   const toggleKind = (k: PayoutKind) => {
     setSelected((prev) => {
@@ -98,56 +119,56 @@ export function useBoardPayoutFilter(rows: BoardRow[]): BoardPayoutFilter {
 
   const { filtered, initialLines } = useMemo(() => {
     const initialLines = new Map<string, number>();
-    if (mode === 'none') return { filtered: rows, initialLines };
+    if (!hasKinds && !hasMult) return { filtered: rows, initialLines };
+
+    // An alternate rung qualifies only inside the multiplier window (when narrowed);
+    // other kinds are never range-gated.
+    const [lo, hi] = multRange;
+    const eligible = (v: ProvidedVariant, kind: PayoutKind) =>
+      kind !== 'alternate' ||
+      !rangeNarrowed ||
+      (v.multiplier != null && v.multiplier >= lo - 1e-9 && v.multiplier <= hi + 1e-9);
+
+    // Narrowing the multiplier window is an explicit ask for alternates — surface the
+    // in-range alternate rung first, falling back to the other selected kinds for rows
+    // without one (deselect Standard to keep only in-range alternates).
+    const order: PayoutKind[] = rangeNarrowed
+      ? ['alternate', 'normal', 'demon', 'goblin']
+      : KIND_ORDER;
 
     const out: BoardRow[] = [];
     for (const r of rows) {
       const variants = r.variants ?? [];
-      if (mode === 'type') {
-        // Highest-priority selected kind the row actually has → its nearest rung.
-        let chosen: ProvidedVariant | null = null;
-        for (const k of TYPE_ORDER) {
-          if (!selectedKinds.has(k)) continue;
-          const rungs = variants.filter((v) => payoutKind(v.oddsType) === k);
-          if (rungs.length) {
-            chosen = nearest(rungs, r.line);
-            break;
-          }
+      // Highest-priority selected kind the row actually has → its nearest rung.
+      let chosen: ProvidedVariant | null = null;
+      for (const k of order) {
+        if (!selectedKinds.has(k)) continue;
+        const rungs = variants.filter((v) => payoutKind(v.oddsType) === k && eligible(v, k));
+        if (rungs.length) {
+          chosen = nearest(rungs, r.line);
+          break;
         }
-        if (!chosen) continue; // row has no rung of any selected kind → hide
-        out.push(r);
-        if (chosen.line !== r.line) initialLines.set(`${r.player.slug}:${r.stat}`, chosen.line);
-      } else {
-        // mult mode: keep rows with a rung whose multiplier is in range; open on the
-        // nearest such rung to the server line.
-        const [lo, hi] = multRange;
-        const inRange = variants.filter((v) => v.multiplier != null && v.multiplier >= lo - 1e-9 && v.multiplier <= hi + 1e-9);
-        if (!inRange.length) continue;
-        out.push(r);
-        const chosen = nearest(inRange, r.line);
-        if (chosen.line !== r.line) initialLines.set(`${r.player.slug}:${r.stat}`, chosen.line);
       }
+      if (!chosen) continue; // row has no qualifying rung of any selected kind → hide
+      out.push(r);
+      if (chosen.line !== r.line) initialLines.set(`${r.player.slug}:${r.stat}`, chosen.line);
     }
     return { filtered: out, initialLines };
-  }, [rows, mode, selectedKinds, multRange]);
+  }, [rows, hasKinds, hasMult, selectedKinds, multRange, rangeNarrowed]);
 
-  const active =
-    mode === 'type'
-      ? selectedKinds.size !== kindOptions.length
-      : mode === 'mult'
-        ? multRange[0] !== multBounds[0] || multRange[1] !== multBounds[1]
-        : false;
+  const active = (hasKinds && selectedKinds.size !== kindOptions.length) || (hasMult && rangeNarrowed);
 
   return {
-    mode,
     kindOptions,
     selectedKinds,
     toggleKind,
+    hasMult,
     multBounds,
     multRange,
     setMultRange: (r) => setRange(r),
     rows: filtered,
     initialLines,
+    enabledKinds: hasKinds ? selectedKinds : undefined,
     active,
   };
 }

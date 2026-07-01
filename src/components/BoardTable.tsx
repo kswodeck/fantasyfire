@@ -1,4 +1,5 @@
 import type { BoardRow } from '@/lib/types';
+import type { PayoutKind } from '@/lib/payoutVariant';
 import { BoardRowCard } from './BoardRowCard';
 
 /**
@@ -13,6 +14,7 @@ export function BoardTable({
   rows,
   source,
   initialLines,
+  enabledKinds,
   showSport = false,
 }: {
   rows: BoardRow[];
@@ -20,6 +22,8 @@ export function BoardTable({
   source?: string;
   /** Per `${slug}:${stat}` opening rung from the payout filter (remounts the row). */
   initialLines?: Map<string, number>;
+  /** Kinds the payout filter has selected — hides chips of de-selected kinds. */
+  enabledKinds?: Set<PayoutKind>;
   /** Add a league chip per row for the cross-sport ("All") board. */
   showSport?: boolean;
 }) {
@@ -34,6 +38,7 @@ export function BoardTable({
             row={r}
             source={source}
             initialLine={initialLine}
+            enabledKinds={enabledKinds}
             showSport={showSport}
           />
         );

@@ -5,16 +5,21 @@ import { pct } from '@/lib/format';
  * Alt-line explorer: the season over rate (with its 95% Wilson interval) at the
  * lines just above and below the one selected — so you can see where a soft-looking
  * number holds up or flips to a coin toss. Lines are user-entered, so this answers
- * "and if the book has it half a point higher?" without retyping.
+ * "and if the book has it half a point higher?" without retyping. When `onSelect` is
+ * provided (the player page), each line is clickable and funnels the full research
+ * read — verdict, hit rates, chart, splits — through that exact number.
  */
 export function AltLineExplorer({
   rows,
   statShort,
   windowLabel = 'season',
+  onSelect,
 }: {
   rows: AltLineRow[];
   statShort: string;
   windowLabel?: string;
+  /** Recompute the whole read at this line (the same path as the line input). */
+  onSelect?: (line: number) => void;
 }) {
   // Nothing to compare against if the player has no decided games anywhere.
   if (rows.every((r) => r.decided === 0)) return null;
@@ -30,6 +35,7 @@ export function AltLineExplorer({
             {statShort} over rate across nearby lines ({windowLabel}) — find where the
             edge holds or flips. The bar shows the 95% Wilson interval; the dot is the
             point estimate.
+            {onSelect && <> Click a line to run the full read at that number.</>}
           </p>
         </div>
 
@@ -73,7 +79,18 @@ export function AltLineExplorer({
                     className="py-2 pr-3 text-left font-medium tabular-nums"
                   >
                     <span className="inline-flex items-center gap-1.5">
-                      {r.line}
+                      {onSelect && !r.isCurrent ? (
+                        <button
+                          type="button"
+                          onClick={() => onSelect(r.line)}
+                          className="cursor-pointer rounded text-brand underline-offset-2 transition-colors hover:text-brand-strong hover:underline"
+                          aria-label={`Run the full read at ${r.line} ${statShort}`}
+                        >
+                          {r.line}
+                        </button>
+                      ) : (
+                        r.line
+                      )}
                       {r.isCurrent && (
                         <span className="rounded bg-brand px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-foreground">
                           Current

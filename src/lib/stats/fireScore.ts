@@ -155,6 +155,10 @@ export interface FireFactorInput {
   /** Total games available. Kept for callers/back-compat; the Pass floor now gates
    *  on the total DECIDED games across the (de-overlapped) windows, not this. */
   gamesPlayed: number;
+  /** One-directional line (PrizePicks demon/goblin, Underdog alternate): the book only
+   *  pays the over, so the side is pinned to 'over' — history that runs under reads as
+   *  a weak over, never an under lean. */
+  overOnly?: boolean;
 }
 
 export interface FireFactorComponent {
@@ -244,9 +248,11 @@ export function computeFireFactor(input: FireFactorInput): FireFactorResult {
   const { line, windows, projection, stdev, cv, matchup, evPerDollar, lineValueEdge, modelProbOver } =
     input;
 
-  // Side = the side recent history leans (blended Wilson CENTER of the over).
+  // Side = the side recent history leans (blended Wilson CENTER of the over) — unless
+  // the line is over-only (demon/goblin/alternate), which pins the side to 'over'.
   const overBlend = blendWilson(windows, 'over');
-  const side: FireSide = overBlend && overBlend.center >= 0.5 ? 'over' : 'under';
+  const historySide: FireSide = overBlend && overBlend.center >= 0.5 ? 'over' : 'under';
+  const side: FireSide = input.overOnly ? 'over' : historySide;
   const blended = blendWilson(windows, side);
 
   const trustFactor =
@@ -355,9 +361,11 @@ export function computeFireFactor(input: FireFactorInput): FireFactorResult {
 
   const note = insufficient
     ? 'No decided games at this line yet — no read.'
-    : `Recent history runs ${side} on this line${
-        thinSample ? ' on a small sample, so read with extra caution' : ''
-      }. Descriptive research from past games — not betting advice.`;
+    : input.overOnly && historySide === 'under'
+      ? 'This payout variant only pays the over, but recent history runs under this line — no over read here. Descriptive research from past games — not betting advice.'
+      : `Recent history runs ${side} on this line${
+          thinSample ? ' on a small sample, so read with extra caution' : ''
+        }. Descriptive research from past games — not betting advice.`;
 
   return { side, score, tier, trustFactor, components: comps, valueMode, note };
 }

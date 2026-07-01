@@ -6,12 +6,19 @@ import { SearchForm } from '@/components/SearchForm';
 import { BoardTable } from '@/components/BoardTable';
 import { SourcedBoardTable } from '@/components/SourcedBoardTable';
 import { HomeLeadersFallback } from '@/components/HomeLeadersFallback';
+import { SportHubTiles } from '@/components/SportHubTiles';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
-import { getBoard, getSourcedBoards, hasUpcomingGames } from '@/lib/server/players';
+import {
+  getBoard,
+  getInjuryReport,
+  getSourcedBoards,
+  getTonightSlate,
+  hasUpcomingGames,
+} from '@/lib/server/players';
 import { getAvailableSources } from '@/lib/server/providedLines';
 import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
-import type { BoardRow } from '@/lib/types';
+import type { BoardRow, InjuryReportRow, TonightGame } from '@/lib/types';
 
 export const revalidate = 1800; // 30 min — keep the leans close to the ~15-min lines ingest (prod is on Pro; board reads are optimized)
 export const dynamicParams = false;
@@ -46,26 +53,37 @@ export default async function SportHome({ params }: PageProps) {
   // nothing on the board the provided lines are for games that already happened. When
   // there are no upcoming games we show a season-leaders fallback instead of stale picks.
   const upcoming = await hasUpcomingGames(sport).catch(() => true);
+  // NFL plays weekly, so "today's slate" is framed as the week (same as the board).
+  const slateWord = sport === 'nfl' ? 'This week' : 'Today';
 
-  // Prefer real book lines (PrizePicks / Underdog / …) with a per-book dropdown; fall
-  // back to our computed median line only when no book lines are ingested.
+  // Home is the orientation HUB, not a second Heat Check: a short top-reads teaser
+  // (the full board lives at /[sport]/board) plus live section tiles. The tile data
+  // (slate + injuries) is cheap; the teaser reuses the board scan at a small limit.
   let sources: string[] = [];
   let boardsBySource: Record<string, BoardRow[]> = {};
   let leans: BoardRow[] = [];
   let initialSource = DEFAULT_PROVIDED_SOURCE;
+  let games: TonightGame[] = [];
+  let injuries: InjuryReportRow[] = [];
   if (upcoming) {
     try {
       sources = await getAvailableSources(sport);
       if (sources.length > 0) {
         initialSource = sources.includes(DEFAULT_PROVIDED_SOURCE) ? DEFAULT_PROVIDED_SOURCE : sources[0];
-        boardsBySource = await getSourcedBoards(sport, sources, { limit: 9 });
+        boardsBySource = await getSourcedBoards(sport, sources, { limit: 5 });
         leans = boardsBySource[initialSource] ?? [];
       } else {
-        leans = await getBoard(sport, { limit: 9 });
+        leans = await getBoard(sport, { limit: 5 });
       }
+      games = (await getTonightSlate(sport)).games;
     } catch {
       // DB unavailable — render the hero without the leans.
     }
+  }
+  try {
+    injuries = await getInjuryReport(sport);
+  } catch {
+    // Injuries are a nice-to-have on the tile — degrade to the static hint.
   }
   const hasSources = sources.length > 0;
   const hasHeatCheck = upcoming && (hasSources || leans.length > 0);
@@ -111,7 +129,7 @@ export default async function SportHome({ params }: PageProps) {
               defaultSource={initialSource}
               heading={
                 <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted">
-                  {cfg.name} Heat Check
+                  Heat Check — top reads
                   <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium normal-case text-muted">
                     experimental
                   </span>
@@ -121,7 +139,7 @@ export default async function SportHome({ params }: PageProps) {
           ) : (
             <>
               <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted">
-                {cfg.name} Heat Check
+                Heat Check — top reads
                 <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium normal-case text-muted">
                   experimental
                 </span>
@@ -133,7 +151,7 @@ export default async function SportHome({ params }: PageProps) {
             href={`/${sport}/board`}
             className="mt-4 inline-block text-sm font-medium text-brand transition-colors hover:text-brand-strong"
           >
-            See the full {cfg.name} board →
+            See the full {cfg.name} Heat Check — filters, matchups & every read →
           </Link>
         </section>
       ) : !upcoming ? (
@@ -141,6 +159,17 @@ export default async function SportHome({ params }: PageProps) {
           <HomeLeadersFallback sport={sport} />
         </section>
       ) : null}
+
+      {/* Section hub — what makes home a launchpad instead of a second board. */}
+      <section aria-labelledby="explore-heading" className="mx-auto max-w-3xl pb-12">
+        <h2
+          id="explore-heading"
+          className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted"
+        >
+          Explore {cfg.name}
+        </h2>
+        <SportHubTiles sport={sport} games={games} slateWord={slateWord} injuries={injuries} />
+      </section>
     </div>
   );
 }

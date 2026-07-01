@@ -53,6 +53,13 @@ describe('computeFireFactor', () => {
       { ...base, windows: [win(3, 4)], gamesPlayed: 4 },
       { ...base, evPerDollar: { over: 0.2 } },
       { ...base, projection: null, stdev: null, matchup: undefined },
+      // Over-only variant whose history runs under (the pinned-side note).
+      {
+        ...base,
+        windows: [win(2, 10), win(5, 20), win(10, 40), win(16, 62)],
+        projection: 16,
+        overOnly: true,
+      },
     ];
     for (const s of scenarios) {
       const note = computeFireFactor(s).note;
@@ -111,6 +118,29 @@ describe('computeFireFactor', () => {
       projection: 16,
     });
     expect(r.side).toBe('under');
+  });
+
+  it('overOnly pins the side to over even when history runs under, scoring the over weakly', () => {
+    const underHistory = {
+      ...base,
+      windows: [win(2, 10, '5'), win(5, 20, '10'), win(10, 40, '20'), win(16, 62, 'season')],
+      projection: 16,
+    };
+    const free = computeFireFactor(underHistory);
+    const pinned = computeFireFactor({ ...underHistory, overOnly: true });
+    expect(free.side).toBe('under');
+    expect(pinned.side).toBe('over');
+    // Scoring the weak side means a much lower read than the free under lean.
+    expect(pinned.score).toBeLessThan(free.score);
+    expect(pinned.note).toMatch(/only pays the over/i);
+  });
+
+  it('overOnly is a no-op when history already leans over', () => {
+    const free = computeFireFactor(base);
+    const pinned = computeFireFactor({ ...base, overOnly: true });
+    expect(pinned.side).toBe('over');
+    expect(pinned.score).toBe(free.score);
+    expect(pinned.tier).toBe(free.tier);
   });
 
   it('VALUE mode lifts the score and flags valueMode when a price gives positive EV', () => {

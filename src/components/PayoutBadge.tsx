@@ -102,5 +102,18 @@ export function PayoutBadge({
       </span>
     );
   }
+  // A default/standard line can still carry a non-standard payout multiplier
+  // (Underdog posts one per line) — surface it whenever it isn't the plain 1×.
+  if (kind === 'normal' && multiplier != null && multiplier !== 1) {
+    const boosted = multiplier >= 1;
+    return (
+      <span
+        className={`${PILL} tabular-nums ${boosted ? 'bg-heat-1/12 text-heat-1' : 'bg-ice-1/12 text-ice-1'} ${className}`}
+        title={`Standard line — ${formatMultiplier(multiplier)} payout`}
+      >
+        {formatMultiplier(multiplier)}
+      </span>
+    );
+  }
   return null; // plain line — no badge
 }

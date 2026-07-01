@@ -31,6 +31,15 @@ export function isNormalKind(oddsType: string | null | undefined): boolean {
   return payoutKind(oddsType) === 'normal';
 }
 
+/**
+ * True when a line only pays the over ("more"). PrizePicks demons/goblins and
+ * Underdog alternates are one-directional by the books' own rules — only the
+ * plain/standard line takes an under.
+ */
+export function isOverOnly(oddsType: string | null | undefined): boolean {
+  return payoutKind(oddsType) !== 'normal';
+}
+
 // Row display priority when a source offers several kinds for one player+stat:
 // prefer the plain line, then demon, then goblin, then alternate. Within a single
 // source only one "special" kind ever coexists with normal, so the tail order is
