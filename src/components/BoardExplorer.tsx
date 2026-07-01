@@ -143,7 +143,7 @@ export function BoardExplorer({
         )}
       </div>
 
-      {hasSources && payout.mode !== 'none' && (
+      {hasSources && (payout.kindOptions.length >= 2 || payout.hasMult) && (
         <div className="mb-4">
           <BoardPayoutControls filter={payout} />
         </div>
@@ -200,6 +200,7 @@ export function BoardExplorer({
           rows={filteredRows}
           source={hasSources ? sourced.source : undefined}
           initialLines={payout.initialLines}
+          enabledKinds={payout.enabledKinds}
           initialVisible={20}
         />
       )}

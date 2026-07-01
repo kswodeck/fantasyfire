@@ -74,7 +74,7 @@ import {
   getProvidedQuotesBySource,
 } from '@/lib/server/providedLines';
 import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
-import { pickRepresentative, normalLine } from '@/lib/payoutVariant';
+import { pickRepresentative, normalLine, isOverOnly } from '@/lib/payoutVariant';
 
 /**
  * The season the app reads for a sport. Computed from today's date, falling back
@@ -1338,6 +1338,8 @@ export async function getPlayerResearch(
     cv: consistency.cv,
     matchup: applyMatchup ? (grade ?? undefined) : undefined,
     gamesPlayed: games.length,
+    // Demon/goblin/alternate rungs only pay the over — pin the read to that side.
+    overOnly: selectedVariant ? isOverOnly(selectedVariant.oddsType) : false,
   };
   // FireFactor is the pure directional signal (hit · projection · consistency · matchup)
   // so it's IDENTICAL on the board and the player page. Price/line-value info (best book,
@@ -1865,6 +1867,10 @@ function computeBoardRows(
         seasonHr.stdev,
         line,
       );
+      // The shown rung (for its payout tag/multiplier + the over-only side pin) — the
+      // full ladder also ships on the row for the icon switcher (sourced boards only).
+      const variants = opts.variantMap?.get(`${p.id}:${stat}`);
+      const shownRung = variants?.find((v) => v.line === line) ?? null;
       // Matchup grade (next opponent's DvP) comes from the batched `matchupGrades` map
       // so the board's FireFactor matches the player page; absent → degrades gracefully.
       const ffInput = {
@@ -1876,6 +1882,8 @@ function computeBoardRows(
         cv: consistency.cv,
         matchup: opts.matchupGrades?.get(`${p.id}:${stat}`),
         gamesPlayed: games.length,
+        // Demon/goblin/alternate rungs only pay the over — pin the read to that side.
+        overOnly: shownRung ? isOverOnly(shownRung.oddsType) : false,
       };
       // FireFactor is the pure directional signal — IDENTICAL to the player page for the
       // same line/stat/matchup. Line-value (best price, cross-book discount) is a separate
@@ -1916,11 +1924,6 @@ function computeBoardRows(
           rowLineValue = { edge, best };
         }
       }
-
-      // Attach the shown rung's payout tag/multiplier + the full ladder for the row's
-      // icon switcher (sourced boards only; the computed board has no variantMap).
-      const variants = opts.variantMap?.get(`${p.id}:${stat}`);
-      const shownRung = variants?.find((v) => v.line === line) ?? null;
 
       out.push({
         player: listItem,

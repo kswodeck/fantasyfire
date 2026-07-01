@@ -31,9 +31,11 @@ export function VariantLadder({
     <div className="mb-5 rounded-xl border border-line bg-surface-2 p-4">
       <h3 className="text-sm font-semibold">{sourceLabel(sourceId)} payout options</h3>
       <p className="mb-3 mt-1 text-xs text-muted">
-        Pick a line to update the read. A{' '}
-        <span className="font-medium text-demon">demon</span> is a harder line that pays more; a{' '}
-        <span className="font-medium text-goblin">goblin</span> is an easier line that pays less.
+        Pick any line — standard, <span className="font-medium text-demon">demon</span>{' '}
+        (harder, pays more), <span className="font-medium text-goblin">goblin</span>{' '}
+        (easier, pays less), or an alternate with its payout multiplier — and the whole
+        read updates to it. Only the standard line takes an under; every other variant
+        pays the over only.
       </p>
       <ol className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface">
         {sorted.map((v) => {

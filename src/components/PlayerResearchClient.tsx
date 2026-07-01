@@ -31,6 +31,7 @@ import { VariantLadder } from './VariantLadder';
 import { PayoutBadge } from './PayoutBadge';
 import { useSelectedSource } from './SelectedSourceProvider';
 import { sourceLabel } from '@/lib/providedSources';
+import { isOverOnly } from '@/lib/payoutVariant';
 
 /** Sanitize raw odds: treat 0 / non-finite as "not entered". */
 function cleanOdds(x: number | null): number | null {
@@ -156,6 +157,10 @@ export function PlayerResearchClient({
 
   const statDef = STAT_DEFS[data.stat];
   const effectiveLine = line ?? data.line;
+  // Demon/goblin/alternate lines only pay the over (the server pins the verdict side
+  // the same way) — gate the under-odds input + fair-price math to match. A custom
+  // line that matches no book rung comes back with a null oddsType → both sides.
+  const overOnly = data.oddsType != null && isOverOnly(data.oddsType);
   // Where the shown line comes from: the user's own entry, the chosen book, or our
   // computed line (when that book has no line for this player+stat).
   const lineSourceLabel =
@@ -174,13 +179,15 @@ export function PlayerResearchClient({
   const edgeOver =
     data.windows.find((w) => w.window === edgeWindow)?.hitRate.hitRateOver ?? null;
 
-  const hasOdds = cleanOdds(overOdds) !== null || cleanOdds(underOdds) !== null;
+  // An over-only line ignores any under price left over from a previous selection.
+  const effectiveUnderOdds = overOnly ? null : underOdds;
+  const hasOdds = cleanOdds(overOdds) !== null || cleanOdds(effectiveUnderOdds) !== null;
   let readout = null;
   if (hasOdds) {
     try {
       readout = fairPriceReadout({
         overOdds: cleanOdds(overOdds),
-        underOdds: cleanOdds(underOdds),
+        underOdds: cleanOdds(effectiveUnderOdds),
         historicalHitRateOver: edgeOver,
       });
     } catch {
@@ -197,9 +204,9 @@ export function PlayerResearchClient({
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted">Line</span>
             <LineInput value={effectiveLine} onCommit={handleLine} />
-            {line === undefined && (
-              <PayoutBadge oddsType={data.oddsType} multiplier={data.multiplier} />
-            )}
+            {/* Payout tag whenever the current line matches a book rung — auto-picked
+                OR selected via the ladder (a hand-typed off-book number has none). */}
+            <PayoutBadge oddsType={data.oddsType} multiplier={data.multiplier} />
           </div>
           {availableSources.length > 0 && (
             <SourceSelector sources={availableSources} value={source} onChange={handleSource} />
@@ -254,8 +261,9 @@ export function PlayerResearchClient({
         ))}
       </section>
 
-      {/* Alternate lines — how the over rate moves around the selected line */}
-      <AltLineExplorer rows={altRows} statShort={statDef.short} />
+      {/* Alternate lines — how the over rate moves around the selected line; click one
+          to funnel the full read (verdict, charts, splits) through that number. */}
+      <AltLineExplorer rows={altRows} statShort={statDef.short} onSelect={handleLine} />
 
       {/* Chart */}
       <section aria-label="Game-by-game" className="mb-6">
@@ -317,9 +325,20 @@ export function PlayerResearchClient({
           <p className="mt-1 text-xs text-muted">
             Enter the book&apos;s American odds to see implied probability, the no-vig
             fair price, and the edge vs. this player&apos;s season hit rate.
+            {overOnly && (
+              <>
+                {' '}
+                This demon/goblin/alternate line pays the over only — no under to price.
+              </>
+            )}
           </p>
         </div>
-        <OddsInputs over={overOdds} under={underOdds} onChange={handleOdds} />
+        <OddsInputs
+          over={overOdds}
+          under={effectiveUnderOdds}
+          onChange={handleOdds}
+          allowUnder={!overOnly}
+        />
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="mr-1 text-xs text-muted">Edge vs</span>
           {EDGE_WINDOWS.map((w) => {

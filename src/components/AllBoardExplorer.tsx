@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import type { BoardRow } from '@/lib/types';
 import { BoardTable } from './BoardTable';
 import { SourceSelector } from './SourceSelector';
+import { BoardPayoutControls } from './BoardPayoutControls';
+import { useBoardPayoutFilter } from './useBoardPayoutFilter';
 import { useSourced } from './useSourced';
 import { normalizeName } from '@/lib/slate';
 
@@ -12,8 +14,10 @@ const STEP = 25;
 /**
  * The cross-sport ("All Sports") Heat Check board: every active league's reads merged
  * and ranked together by FireFactor, with a per-row league chip. Keeps the shared book
- * selector (a book just contributes the sports it lists). Name search + "show more"
- * only — team/position filters are sport-specific, so they live on the per-sport pages.
+ * selector (a book just contributes the sports it lists) and the payout-variant filter
+ * (PrizePicks demons/goblins, Underdog alternates + multiplier range). Name search +
+ * "show more" only — team/position filters are sport-specific, so they live on the
+ * per-sport pages.
  */
 export function AllBoardExplorer({
   boardsBySource,
@@ -33,15 +37,18 @@ export function AllBoardExplorer({
     (r) => r.fireScore.score > 0,
   );
 
+  // Payout filter (variant kinds / Underdog multiplier range) over the current book.
+  const payout = useBoardPayoutFilter(rows);
+
   const [query, setQuery] = useState('');
   const [visible, setVisible] = useState(STEP);
   const nq = normalizeName(query);
   const filtered = useMemo(
     () =>
       nq === ''
-        ? rows
-        : rows.filter((r) => normalizeName(r.player.fullName).includes(nq)),
-    [rows, nq],
+        ? payout.rows
+        : payout.rows.filter((r) => normalizeName(r.player.fullName).includes(nq)),
+    [payout.rows, nq],
   );
   const shown = filtered.slice(0, visible);
 
@@ -68,13 +75,25 @@ export function AllBoardExplorer({
         )}
       </div>
 
+      {hasSources && (payout.kindOptions.length >= 2 || payout.hasMult) && (
+        <div className="mb-4">
+          <BoardPayoutControls filter={payout} />
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
           No reads match right now.
         </p>
       ) : (
         <>
-          <BoardTable rows={shown} showSport />
+          <BoardTable
+            rows={shown}
+            source={hasSources ? sourced.source : undefined}
+            initialLines={payout.initialLines}
+            enabledKinds={payout.enabledKinds}
+            showSport
+          />
           {visible < filtered.length && (
             <button
               type="button"
