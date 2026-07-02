@@ -28,7 +28,7 @@ import {
   impliedTeamTotal,
   environmentMultiplier,
   volumeMultiplier,
-  lineProbabilities,
+  calibratedLineProbOver,
   computeFireFactor,
   gateAvailability,
   type AvailabilityStatus,
@@ -73,6 +73,7 @@ import {
   getProvidedVariants,
   getProvidedLinesBySource,
   getProvidedQuotesBySource,
+  getBookQuoteMap,
 } from '@/lib/server/providedLines';
 import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import {
@@ -80,9 +81,10 @@ import {
   normalLine,
   isNormalKind,
   isOverOnly,
-  ladderBreakeven,
+  resolvedBreakeven,
   bestVariantScore,
 } from '@/lib/payoutVariant';
+import type { RungQuote } from '@/lib/odds/marketBreakeven';
 
 /**
  * The season the app reads for a sport. Computed from today's date, falling back
@@ -1318,13 +1320,17 @@ export async function getPlayerResearch(
     line,
   );
 
-  // Model P(over) from the adjusted projection's distribution (idea #2) — the
-  // principled "projection vs line" probability FireFactor leans on.
-  const modelProb = lineProbabilities(
+  // Model P(over) — the projection's distribution ANCHORED to the player's own
+  // empirical rate at this exact line (the parametric model supplies the matchup
+  // shift + a thin-sample prior, never a level the sample contradicts).
+  const modelProbOver = calibratedLineProbOver(
     stat,
     projection.projection,
+    projection.adjustment,
     seasonResult.stdev,
     line,
+    seasonResult.hitRateOver,
+    seasonResult.decided,
   );
 
   // Cross-book market consensus + best price / +EV (idea #1) from the scraped book
@@ -1342,14 +1348,16 @@ export async function getPlayerResearch(
     })),
     projection: projection.projection,
     stdev: seasonResult.stdev,
-    modelProbOver: modelProb?.over ?? null,
+    modelProbOver,
     cv: consistency.cv,
     matchup: applyMatchup ? (grade ?? undefined) : undefined,
     gamesPlayed: games.length,
     // Demon/goblin/alternate rungs only pay the over — pin the read to that side —
-    // and are scored against their payout's breakeven, not a coin flip.
+    // and are scored against their payout's breakeven, not a coin flip. The bar is
+    // best-info-first: exact multiplier → market-implied (de-vigged book odds at
+    // this exact line) → configured approximation.
     overOnly: selectedVariant ? isOverOnly(selectedVariant.oddsType) : false,
-    benchmark: selectedVariant ? ladderBreakeven(selectedVariant, variants) : undefined,
+    benchmark: selectedVariant ? resolvedBreakeven(selectedVariant, variants, quotes) : undefined,
   };
   // FireFactor is the pure directional signal (hit · projection · consistency · matchup)
   // so it's IDENTICAL on the board and the player page. Price/line-value info (best book,
@@ -1405,13 +1413,18 @@ export async function getPlayerResearch(
   // compares rungs at a glance and rung switches paint instantly. Reuses the loaded
   // games + line-independent projection; the shown line's read IS the page verdict.
   const scoredVariants = variants.map((v): ProvidedVariant => {
+    const rungBreakeven = resolvedBreakeven(v, variants, quotes);
     if (v.line === line)
-      return { ...v, read: { side: gatedFireScore.side, score: gatedFireScore.score, tier: gatedFireScore.tier } };
+      return { ...v, breakeven: rungBreakeven, read: { side: gatedFireScore.side, score: gatedFireScore.score, tier: gatedFireScore.tier } };
     const rungWindows = STAT_WINDOWS.map((w) => {
       const hr = computeHitRate(games, stat, v.line, w);
       return { window: String(w), overs: hr.overs, decided: hr.decided };
     });
-    const rungProb = lineProbabilities(stat, projection.projection, seasonResult.stdev, v.line);
+    const rungSeason = computeHitRate(games, stat, v.line, 'season');
+    const rungProbOver = calibratedLineProbOver(
+      stat, projection.projection, projection.adjustment, seasonResult.stdev, v.line,
+      rungSeason.hitRateOver, rungSeason.decided,
+    );
     const rungCons = computeConsistency(seasonResult.values, seasonResult.mean, seasonResult.stdev, v.line);
     const fs = gateAvailability(
       computeFireFactor({
@@ -1419,16 +1432,16 @@ export async function getPlayerResearch(
         windows: rungWindows,
         projection: projection.projection,
         stdev: seasonResult.stdev,
-        modelProbOver: rungProb?.over ?? null,
+        modelProbOver: rungProbOver,
         cv: rungCons.cv,
         matchup: applyMatchup ? (grade ?? undefined) : undefined,
         gamesPlayed: games.length,
         overOnly: isOverOnly(v.oddsType),
-        benchmark: ladderBreakeven(v, variants),
+        benchmark: rungBreakeven,
       }),
       availability?.status,
     );
-    return { ...v, read: { side: fs.side, score: fs.score, tier: fs.tier } };
+    return { ...v, breakeven: rungBreakeven, read: { side: fs.side, score: fs.score, tier: fs.tier } };
   });
 
   return {
@@ -1451,7 +1464,7 @@ export async function getPlayerResearch(
       consistency,
       matchupGrade: grade,
       fireScore: gatedFireScore,
-      modelProbOver: modelProb?.over ?? null,
+      modelProbOver,
       marketConsensus: consensus,
     },
     splits,
@@ -1631,6 +1644,10 @@ export async function getSourcedBoards(
     normalMaps[s] = nm;
   }
   const consensus = consensusLineMap(normalMaps);
+  // Every sportsbook's two-sided quotes, once for the whole board — variant rungs
+  // whose exact line a book quotes get a MARKET-IMPLIED breakeven (de-vigged) instead
+  // of the configured approximation.
+  const bookQuotes = await getBookQuoteMap(sport, ids);
   const repMaps: Record<string, Map<string, number>> = {};
   for (const s of sources) {
     const rm = new Map<string, number>();
@@ -1656,6 +1673,7 @@ export async function getSourcedBoards(
       requireProvided: true,
       lineValue: { allMaps: normalMaps, consensus },
       variantMap: variantMaps[s],
+      bookQuotes,
       matchupGrades: ctx.grades,
       opponentMults: ctx.opponentMults,
       paceMultByPlayer: ctx.paceMultByPlayer,
@@ -1852,6 +1870,10 @@ function computeBoardRows(
     /** This source's variant ladders per `${playerId}:${stat}` — attaches the shown
      *  rung's payout tag/multiplier and the full ladder for the row's icon switcher. */
     variantMap?: Map<string, ProvidedVariant[]>;
+    /** Two-sided sportsbook quotes per `${playerId}:${stat}` (every book) — lets a
+     *  variant rung's breakeven be MARKET-IMPLIED from de-vigged odds at its exact
+     *  line instead of the configured approximation. */
+    bookQuotes?: Map<string, RungQuote[]>;
     /** Next-opponent DvP grade per `${playerId}:${stat}`, so the board's FireFactor
      *  includes the same matchup component as the player page. */
     matchupGrades?: Map<string, MatchupGrade>;
@@ -1907,11 +1929,14 @@ function computeBoardRows(
         environment: opts.envMultByPlayer?.get(p.id) ?? 1,
         volume: volumeMult,
       });
-      const modelProb = lineProbabilities(
+      const modelProbOver = calibratedLineProbOver(
         stat,
         projection.projection,
+        projection.adjustment,
         seasonHr.stdev,
         line,
+        seasonHr.hitRateOver,
+        seasonHr.decided,
       );
       const consistency = computeConsistency(
         seasonHr.values,
@@ -1923,6 +1948,7 @@ function computeBoardRows(
       // full ladder also ships on the row for the icon switcher (sourced boards only).
       const variants = opts.variantMap?.get(`${p.id}:${stat}`);
       const shownRung = variants?.find((v) => v.line === line) ?? null;
+      const rungQuotes = opts.bookQuotes?.get(`${p.id}:${stat}`);
       // Matchup grade (next opponent's DvP) comes from the batched `matchupGrades` map
       // so the board's FireFactor matches the player page; absent → degrades gracefully.
       const ffInput = {
@@ -1930,14 +1956,14 @@ function computeBoardRows(
         windows,
         projection: projection.projection,
         stdev: seasonHr.stdev,
-        modelProbOver: modelProb?.over ?? null,
+        modelProbOver,
         cv: consistency.cv,
         matchup: opts.matchupGrades?.get(`${p.id}:${stat}`),
         gamesPlayed: games.length,
         // Demon/goblin/alternate rungs only pay the over — pin the read to that side —
         // and are scored against their payout's breakeven, not a coin flip.
         overOnly: shownRung ? isOverOnly(shownRung.oddsType) : false,
-        benchmark: shownRung && variants ? ladderBreakeven(shownRung, variants) : undefined,
+        benchmark: shownRung && variants ? resolvedBreakeven(shownRung, variants, rungQuotes) : undefined,
       };
       // FireFactor is the pure directional signal — IDENTICAL to the player page for the
       // same line/stat/matchup. Line-value (best price, cross-book discount) is a separate
@@ -1983,13 +2009,18 @@ function computeBoardRows(
       // read already in hand, kind-filtered views rank by the rung they'll show, and
       // a hot demon keeps an otherwise-passing row on the board.
       const scoredVariants = variants?.map((v): ProvidedVariant => {
+        const rungBreakeven = resolvedBreakeven(v, variants, rungQuotes);
         if (v.line === line)
-          return { ...v, read: { side: fireScore.side, score: fireScore.score, tier: fireScore.tier } };
+          return { ...v, breakeven: rungBreakeven, read: { side: fireScore.side, score: fireScore.score, tier: fireScore.tier } };
         const rungWindows = STAT_WINDOWS.map((w) => {
           const hr = computeHitRate(games, stat, v.line, w);
           return { window: String(w), overs: hr.overs, decided: hr.decided };
         });
-        const rungProb = lineProbabilities(stat, projection.projection, seasonHr.stdev, v.line);
+        const rungSeason = computeHitRate(games, stat, v.line, 'season');
+        const rungProbOver = calibratedLineProbOver(
+          stat, projection.projection, projection.adjustment, seasonHr.stdev, v.line,
+          rungSeason.hitRateOver, rungSeason.decided,
+        );
         const rungCons = computeConsistency(seasonHr.values, seasonHr.mean, seasonHr.stdev, v.line);
         const fs = gateAvailability(
           computeFireFactor({
@@ -1997,16 +2028,16 @@ function computeBoardRows(
             windows: rungWindows,
             projection: projection.projection,
             stdev: seasonHr.stdev,
-            modelProbOver: rungProb?.over ?? null,
+            modelProbOver: rungProbOver,
             cv: rungCons.cv,
             matchup: opts.matchupGrades?.get(`${p.id}:${stat}`),
             gamesPlayed: games.length,
             overOnly: isOverOnly(v.oddsType),
-            benchmark: variants ? ladderBreakeven(v, variants) : undefined,
+            benchmark: rungBreakeven,
           }),
           avail?.status,
         );
-        return { ...v, read: { side: fs.side, score: fs.score, tier: fs.tier } };
+        return { ...v, breakeven: rungBreakeven, read: { side: fs.side, score: fs.score, tier: fs.tier } };
       });
 
       out.push({

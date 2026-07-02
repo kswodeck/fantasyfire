@@ -178,6 +178,50 @@ export async function getProvidedQuotesBySource(
 }
 
 /**
+ * Batched TWO-SIDED book quotes per `${playerId}:${stat}` — every book's latest
+ * (line, over/under American odds) — the raw input for MARKET-IMPLIED variant
+ * breakevens (a sportsbook quoting a demon/goblin rung's exact line reveals its fair
+ * probability once de-vigged). Latest quote per book; books that post no odds (DFS
+ * pick'em) never appear. Empty when the feature is off.
+ */
+export async function getBookQuoteMap(
+  sport: Sport,
+  playerIds: number[],
+): Promise<Map<string, { line: number; overOdds: number; underOdds: number }[]>> {
+  const map = new Map<string, { line: number; overOdds: number; underOdds: number }[]>();
+  if (!providedLinesEnabled() || playerIds.length === 0) return map;
+  try {
+    const rows = await db.providedLine.findMany({
+      where: {
+        sport,
+        playerId: { in: playerIds },
+        gameDate: { gte: recentCutoff() },
+        overOdds: { not: null },
+        underOdds: { not: null },
+      },
+      orderBy: [{ gameDate: 'desc' }, { fetchedAt: 'desc' }],
+      select: { playerId: true, stat: true, source: true, line: true, overOdds: true, underOdds: true },
+    });
+    const seen = new Set<string>(); // `${key}|${source}` — a book's newest quote wins
+    for (const r of rows) {
+      const key = `${r.playerId}:${r.stat}`;
+      const bookKey = `${key}|${r.source}`;
+      if (seen.has(bookKey)) continue;
+      seen.add(bookKey);
+      let arr = map.get(key);
+      if (!arr) {
+        arr = [];
+        map.set(key, arr);
+      }
+      arr.push({ line: r.line, overOdds: r.overOdds!, underOdds: r.underOdds! });
+    }
+  } catch (e) {
+    console.warn('[providedLines] getBookQuoteMap failed; treating as none:', e instanceof Error ? e.message : e);
+  }
+  return map;
+}
+
+/**
  * Batched variant ladders for a set of players from a SPECIFIC source, keyed
  * `${playerId}:${stat}` → every rung (PrizePicks demon/goblin, Underdog alternate).
  * One query for the whole board scan; empty map when the feature is off. Each key is

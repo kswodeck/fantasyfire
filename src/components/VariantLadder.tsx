@@ -2,7 +2,7 @@
 
 import type { ProvidedVariant } from '@/lib/types';
 import { PayoutBadge, formatMultiplier } from './PayoutBadge';
-import { payoutKind, ladderBreakeven } from '@/lib/payoutVariant';
+import { payoutKind, shownBreakeven } from '@/lib/payoutVariant';
 import { overRateAt } from '@/lib/stats';
 import { pct } from '@/lib/format';
 import { tierTextClass, heatLabel } from '@/lib/tierStyle';
@@ -50,7 +50,9 @@ export function VariantLadder({
         read updates to it. Only the standard line takes an under; every other variant
         pays the over only. Each rung&rsquo;s FireFactor is scored against its OWN payout
         breakeven — 0 means fairly priced for that payout, not a coin flip — so rungs
-        compare directly.
+        compare directly. The bar uses the best information available: an exact posted
+        multiplier, else the market&rsquo;s de-vigged sportsbook odds at that exact line,
+        else a published-payout approximation.
         {anyMult && hasValues && (
           <>
             {' '}
@@ -103,7 +105,7 @@ export function VariantLadder({
                     title={`${heatLabel(v.read.tier, v.read.side)} — ${
                       kind === 'normal'
                         ? 'scored vs a coin flip'
-                        : `scored vs this rung's ~${Math.round(ladderBreakeven(v, sorted) * 100)}% payout breakeven`
+                        : `scored vs this rung's ~${Math.round(shownBreakeven(v, sorted) * 100)}% payout breakeven`
                     }`}
                   >
                     · FF {v.read.score}

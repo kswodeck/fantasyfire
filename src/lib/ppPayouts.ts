@@ -35,12 +35,16 @@ export const PP_FLEX_PLAY: ReadonlyArray<{ picks: number; allHit: number; oneMis
  * the published payout-table adjustments — TUNE THEM alongside the tables above when
  * PrizePicks changes payouts; the UI presents them as approximate. Underdog needs no
  * entry here: its exact per-line multipliers give exact breakevens (0.5/multiplier).
+ *
+ * Because the true payout is UNKNOWN, these sit at the generous end of the plausible
+ * range: an uncertain assumption should not count against the play — a goblin scored
+ * with too high a bar reads "bad" when it may be fairly priced.
  */
 export const PP_BREAKEVEN_STEPS: Readonly<Record<'demon' | 'goblin', readonly number[]>> = {
   // Nearest goblin ≈ a mild discount; the deepest (easiest) goblins pay the least.
-  goblin: [0.7, 0.78, 0.85],
+  goblin: [0.65, 0.72, 0.8],
   // Nearest demon ≈ a mild boost; the deepest (hardest) demons pay the most.
-  demon: [0.38, 0.32, 0.27],
+  demon: [0.35, 0.3, 0.25],
 };
 
 /** How demons/goblins bend those tables — qualitative, since the app computes the

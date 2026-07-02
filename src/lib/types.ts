@@ -144,6 +144,11 @@ export interface ProvidedVariant {
    *  value-aware filtering. Present on player-research + sourced-board payloads;
    *  absent on trend rows (their metric is the form swing, not the score). */
   read?: { side: FireSide; score: number; tier: FireTier } | null;
+  /** The payout breakeven `read` was scored against, server-resolved best-info-first
+   *  (exact multiplier → market-implied from de-vigged book odds at this exact line →
+   *  configured approximation) — so the UI echoes the real bar. Ships wherever `read`
+   *  does. */
+  breakeven?: number | null;
 }
 
 export interface PlayerResearch {

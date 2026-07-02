@@ -4,6 +4,7 @@ import {
   normalLineProbabilities,
   countLineProbabilities,
   lineProbabilities,
+  calibratedLineProbOver,
   statFamily,
 } from './distribution';
 
@@ -71,6 +72,58 @@ describe('countLineProbabilities', () => {
     const p = countLineProbabilities(0, 0, 0.5);
     expect(p.over).toBe(0);
     expect(p.under).toBe(1);
+  });
+});
+
+describe('calibratedLineProbOver', () => {
+  // The motivating bug: a streaky TD scorer (mean ~1.0, sd ~1.4) over 0.5. The raw
+  // negative binomial fattens the zero bucket and claims ~47% over for a player who
+  // empirically clears the line 63% of the time.
+  const stat = 'tds' as Parameters<typeof calibratedLineProbOver>[0];
+
+  it('anchors to the empirical rate when the sample is deep', () => {
+    const model = lineProbabilities(stat, 1.0, 1.4, 0.5)!;
+    const modelOver = model.over / (model.over + model.under);
+    const p = calibratedLineProbOver(stat, 1.0, 1, 1.4, 0.5, 0.63, 40)!;
+    // With no matchup adjustment the anchor IS the empirical rate; at 40 decided
+    // games it carries w = 40/55 ≈ 0.73 of the blend.
+    expect(p).toBeGreaterThan(modelOver);
+    expect(Math.abs(p - 0.63)).toBeLessThan(Math.abs(p - modelOver));
+  });
+
+  it('layers the matchup shift on top of the empirical base rate', () => {
+    const flat = calibratedLineProbOver(stat, 1.0, 1, 1.4, 0.5, 0.63, 40)!;
+    // Same raw mean, but a +20% matchup bump (adjustedMean 1.2 = raw 1.0 × 1.2).
+    const boosted = calibratedLineProbOver(stat, 1.2, 1.2, 1.4, 0.5, 0.63, 40)!;
+    expect(boosted).toBeGreaterThan(flat);
+    // The lift is a shift, not a replacement — still anchored near the sample.
+    expect(boosted).toBeLessThan(0.85);
+  });
+
+  it('leans on the model while the sample is thin', () => {
+    const model = lineProbabilities(stat, 1.0, 1.4, 0.5)!;
+    const modelOver = model.over / (model.over + model.under);
+    const thin = calibratedLineProbOver(stat, 1.0, 1, 1.4, 0.5, 1, 2)!;
+    // 2 decided games at 100% must not read as near-certain.
+    expect(thin).toBeLessThan(0.65);
+    expect(thin).toBeGreaterThan(modelOver);
+  });
+
+  it('returns the pure model with no empirical sample', () => {
+    const model = lineProbabilities(stat, 1.0, 1.4, 0.5)!;
+    const modelOver = model.over / (model.over + model.under);
+    expect(calibratedLineProbOver(stat, 1.0, 1, 1.4, 0.5, null, 0)).toBeCloseTo(modelOver, 9);
+    expect(calibratedLineProbOver(stat, 1.0, 1, 1.4, 0.5, 0.63, 0)).toBeCloseTo(modelOver, 9);
+  });
+
+  it('works for continuous stats and stays within [0, 1]', () => {
+    const p = calibratedLineProbOver('recYds', 80, 1.15, 25, 60.5, 0.9, 30)!;
+    expect(p).toBeGreaterThan(0.5);
+    expect(p).toBeLessThanOrEqual(1);
+  });
+
+  it('returns null with no projection', () => {
+    expect(calibratedLineProbOver(stat, null, 1, 1.4, 0.5, 0.63, 40)).toBeNull();
   });
 });
 

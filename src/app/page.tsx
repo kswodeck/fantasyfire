@@ -67,7 +67,7 @@ export default async function Home() {
       <section className="flex flex-col items-center gap-6 py-14 text-center">
         <FlameMark className="h-14 w-14 text-brand" />
         <h1 className="max-w-2xl text-4xl font-bold tracking-tight sm:text-5xl">
-          A projection and a fair price for every prop
+          Find the heat in every player prop
         </h1>
         <p className="max-w-xl text-lg text-muted">
           {SITE.name} projects every NBA, MLB, and NFL player prop from public game logs —

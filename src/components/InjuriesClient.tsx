@@ -13,6 +13,7 @@ import {
 } from '@/lib/injury';
 import { InjuryBadge } from './InjuryBadge';
 import { MultiSelect, type MultiSelectOption } from './MultiSelect';
+import { normalizeName } from '@/lib/slate';
 
 const STATUS_LABEL: Record<InjuryReportRow['status'], string> = {
   out: 'Out',
@@ -30,10 +31,10 @@ const statusClass = (s: InjuryReportRow['status']) =>
   s === 'out' ? 'text-under' : s === 'day-to-day' ? 'text-muted' : 'text-heat-2';
 
 /**
- * Injury report list with a multi-select designation filter (Out / IL / GTD / Q …).
- * No selection = show every designation. Rows stay grouped by the coarse status
- * bucket for scannability; the filter narrows by the fine designation. Server-rendered
- * for SEO on first paint, interactive after hydration.
+ * Injury report list with a player-name search and a multi-select designation filter
+ * (Out / IL / GTD / Q …). No selection = show every designation. Rows stay grouped by
+ * the coarse status bucket for scannability; the filters narrow within it.
+ * Server-rendered for SEO on first paint, interactive after hydration.
  */
 export function InjuriesClient({
   sport,
@@ -43,6 +44,7 @@ export function InjuriesClient({
   rows: InjuryReportRow[];
 }) {
   const [selected, setSelected] = useState<string[]>([]);
+  const [query, setQuery] = useState('');
 
   // Tag every row with its fine designation once.
   const tagged = useMemo(
@@ -62,11 +64,14 @@ export function InjuriesClient({
   }, [tagged]);
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
-  const filtered = useMemo(
-    () =>
-      selectedSet.size === 0 ? tagged : tagged.filter((t) => selectedSet.has(t.key)),
-    [tagged, selectedSet],
-  );
+  const nq = normalizeName(query);
+  const filtered = useMemo(() => {
+    const byDesignation =
+      selectedSet.size === 0 ? tagged : tagged.filter((t) => selectedSet.has(t.key));
+    return nq === ''
+      ? byDesignation
+      : byDesignation.filter((t) => normalizeName(t.row.name).includes(nq));
+  }, [tagged, selectedSet, nq]);
 
   const byStatus = STATUS_ORDER.map((s) => ({
     status: s,
@@ -76,6 +81,14 @@ export function InjuriesClient({
   return (
     <div className="mt-6">
       <div className="mb-4 flex flex-wrap items-center gap-2">
+        <input
+          type="search"
+          aria-label="Search players by name"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search players…"
+          className="w-44 rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand"
+        />
         <MultiSelect
           label="Filter by injury designation"
           allLabel="All designations"
@@ -92,7 +105,9 @@ export function InjuriesClient({
 
       {filtered.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
-          No players match the selected designations.
+          No players match{nq !== '' ? ' this search' : ''}
+          {nq !== '' && selectedSet.size > 0 ? ' and' : ''}
+          {selectedSet.size > 0 ? ' the selected designations' : ''}.
         </p>
       ) : (
         <div className="space-y-6">

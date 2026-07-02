@@ -165,3 +165,43 @@ export function lineProbabilities(
     ? normalLineProbabilities(mean, s, line)
     : countLineProbabilities(mean, s * s, line);
 }
+
+/** The anchor's weight reaches ½ at this many decided games. */
+const CALIBRATION_HALF_SAMPLE = 15;
+
+/**
+ * Model P(over, pushes excluded) ANCHORED to the player's own empirical rate at this
+ * exact line. Parametric count models are miscalibrated at extreme lines: a few
+ * blow-up games inflate the fitted variance, and an overdispersed negative binomial
+ * responds by fattening the ZERO bucket too — it can claim "47% over 0.5 TB" for a
+ * player who clears that line 63% of the time. The sample directly measures the
+ * event, so the model contributes only what the sample can't:
+ *   - the MATCHUP SHIFT — P(at the adjusted mean) − P(at the raw mean) — layered on
+ *     top of the empirical base rate, and
+ *   - a prior that dominates only while the sample is thin.
+ */
+export function calibratedLineProbOver(
+  stat: StatKey,
+  adjustedMean: number | null,
+  /** The combined matchup/pace/environment/volume multiplier already inside
+   *  `adjustedMean` (1 = no adjustment) — used to recover the raw mean. */
+  adjustment: number,
+  sd: number | null,
+  line: number,
+  /** Empirical over rate at THIS line (pushes excluded) + its decided-game count. */
+  empiricalOverRate: number | null,
+  empiricalDecided: number,
+): number | null {
+  if (adjustedMean === null) return null;
+  const adj = lineProbabilities(stat, adjustedMean, sd, line);
+  if (!adj) return null;
+  const noPush = (p: LineProbabilities) => p.over / Math.max(1e-9, p.over + p.under);
+  const modelOver = noPush(adj);
+  if (empiricalOverRate === null || empiricalDecided <= 0) return modelOver;
+  const rawMean = adjustment > 0 ? adjustedMean / adjustment : adjustedMean;
+  const raw =
+    rawMean === adjustedMean ? adj : (lineProbabilities(stat, rawMean, sd, line) ?? adj);
+  const anchored = Math.max(0, Math.min(1, empiricalOverRate + (modelOver - noPush(raw))));
+  const w = empiricalDecided / (empiricalDecided + CALIBRATION_HALF_SAMPLE);
+  return w * anchored + (1 - w) * modelOver;
+}
