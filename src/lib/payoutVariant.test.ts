@@ -7,6 +7,8 @@ import {
   ladderBreakeven,
   resolvedBreakeven,
   shownBreakeven,
+  decimalFromAmerican,
+  sidedMultiplier,
   pickRepresentative,
 } from './payoutVariant';
 import { PP_BREAKEVEN_STEPS } from './ppPayouts';
@@ -126,5 +128,31 @@ describe('resolvedBreakeven', () => {
   it('shownBreakeven echoes a server-resolved bar and falls back to the approximation', () => {
     expect(shownBreakeven({ ...ladder[0], breakeven: 0.71 }, ladder)).toBe(0.71);
     expect(shownBreakeven(ladder[0], ladder)).toBe(ladderBreakeven(ladder[0], ladder));
+  });
+});
+
+describe('decimalFromAmerican', () => {
+  it('converts underdog (+) and favorite (−) American odds to decimal payouts', () => {
+    expect(decimalFromAmerican(150)).toBeCloseTo(2.5, 10);
+    expect(decimalFromAmerican(100)).toBeCloseTo(2, 10);
+    expect(decimalFromAmerican(-200)).toBeCloseTo(1.5, 10);
+    expect(decimalFromAmerican(-110)).toBeCloseTo(1.909, 3);
+  });
+});
+
+describe('sidedMultiplier', () => {
+  // A Sleeper standard line: over 1.62× / under 1.98× stored as American odds.
+  const twoWay = { multiplier: 1.62, overOdds: -161, underOdds: -102 };
+
+  it('shows the leaned side’s payout for a two-way priced line', () => {
+    expect(sidedMultiplier(twoWay, 'over')).toBeCloseTo(1.62, 2);
+    expect(sidedMultiplier(twoWay, 'under')).toBeCloseTo(1.98, 2);
+  });
+
+  it('returns the posted multiplier when a side is not separately priced', () => {
+    // Underdog/Pick6 alternate: multiplier but no two-sided odds.
+    expect(sidedMultiplier({ multiplier: 1.31, overOdds: null, underOdds: null }, 'over')).toBe(1.31);
+    // Plain line with no multiplier at all.
+    expect(sidedMultiplier({ multiplier: null, overOdds: -110, underOdds: -110 }, 'over')).toBeNull();
   });
 });

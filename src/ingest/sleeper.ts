@@ -1,29 +1,38 @@
-// Sleeper Picks line ingest — UNOFFICIAL public endpoint
-// (api.sleeper.app/lines/available), no auth.
+// Sleeper Picks line ingest — UNOFFICIAL public endpoints (api.sleeper.app/lines/*),
+// no auth.
 //
 // ⚠️ Not an official/contracted API: no SLA, ToS gray area, can change or IP-block.
 // All failures are non-fatal upstream; the app falls back to its computed line.
 // Source id: "sleeper".
 //
 // WHY A DIRECT SCRAPER (Sleeper also comes through RotoWire): RotoWire only gives the
-// line number + American odds. Sleeper's own feed carries the exact PER-SIDE PAYOUT
-// MULTIPLIER on every line — its whole pricing model. Sleeper posts ONE line per
-// player+stat (no PrizePicks-style alternate ladder); instead each side (over/under)
-// has its own decimal payout, e.g. over 1.62× / under 1.98×. We convert each side's
-// multiplier to American odds and store them as over/under odds on a STANDARD line, so
-// the de-vig market-consensus + market-implied-breakeven math treats Sleeper like any
-// two-way book; the over multiplier is also kept in `multiplier` for the payout readout.
+// line number + American odds. Sleeper's own feeds carry the exact PAYOUT MULTIPLIERS —
+// its whole pricing model — for BOTH the standard line (per-side over/under payouts,
+// e.g. over 1.62× / under 1.98×; stored as American odds so the de-vig consensus +
+// market-implied breakevens treat Sleeper as a two-way book, with the leaned side's
+// payout shown) AND a full Underdog-style ALTERNATE ladder (over-only rungs at
+// different lines, each with its own multiplier → 0.5/multiplier breakeven).
 //
-// Shape: an array of "lines", each with `sport`, `wager_type` (the stat), and an
-// `options[]` array of sides, each { outcome: "over"|"under", outcome_value (the line),
-// payout_multiplier }. Lines carry only `subject_id` (Sleeper's player id), so names are
-// resolved from the once-per-sport bulk player map (api.sleeper.app/players/<sport>).
+// Two feeds, both no-auth:
+//   • /lines/available      — the STANDARD line per player+stat (line_type "normal"):
+//     one line, over/under priced separately.
+//   • /lines/available_alt  — the ALTERNATE-line ladder (line_type "alt"): each line
+//     object's options[] are several over-only rungs at different outcome_values, each
+//     with its own payout_multiplier — Sleeper's Underdog-style alt ladder.
+//
+// Shape: an array of "lines", each with `sport`, `wager_type` (the stat), `line_type`,
+// and an `options[]` array, each option { outcome: "over"|"under", outcome_value (the
+// line), payout_multiplier }. Lines carry only `subject_id`, so names are resolved from
+// the once-per-sport bulk player map (api.sleeper.app/players/<sport>).
 import type { Sport } from '../lib/sports';
 import type { StatKey } from '../lib/stats';
 import type { ProvidedLineRow } from './providedTypes';
 import { scrapeFetch } from './scrapeFetch';
 
-const LINES_URL = 'https://api.sleeper.app/lines/available';
+const LINES_URLS = [
+  'https://api.sleeper.app/lines/available',
+  'https://api.sleeper.app/lines/available_alt',
+];
 const PLAYERS_URL = (sport: Sport) => `https://api.sleeper.app/players/${sport}`;
 const HEADERS = {
   'User-Agent':
@@ -93,6 +102,7 @@ interface SleeperLine {
   sport?: string;
   subject_id?: string;
   wager_type?: string;
+  line_type?: string; // 'normal' | 'alt' | 'line_promotion'
   options?: SleeperOption[];
 }
 interface SleeperPlayer {
@@ -146,15 +156,18 @@ async function playerNames(sport: Sport): Promise<Map<string, string>> {
 
 export async function fetchSleeperLines(): Promise<ProvidedLineRow[]> {
   const out: ProvidedLineRow[] = [];
-  let lines: SleeperLine[];
-  try {
-    const res = await scrapeFetch(LINES_URL, { headers: HEADERS });
-    if (!res.ok) throw new Error(`Sleeper HTTP ${res.status}`);
-    lines = (await res.json()) as SleeperLine[];
-  } catch (e) {
-    console.warn(`[sleeper] lines fetch failed: ${(e as Error).message}`);
-    return out;
+  // Merge the standard + alternate feeds (either may fail independently).
+  const lines: SleeperLine[] = [];
+  for (const url of LINES_URLS) {
+    try {
+      const res = await scrapeFetch(url, { headers: HEADERS });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      lines.push(...((await res.json()) as SleeperLine[]));
+    } catch (e) {
+      console.warn(`[sleeper] ${url} failed: ${(e as Error).message}`);
+    }
   }
+  if (lines.length === 0) return out;
 
   // Resolve names only for the sports that actually appear (skips the 8 MB fetch when a
   // league is off-season / absent from the feed).
@@ -167,34 +180,59 @@ export async function fetchSleeperLines(): Promise<ProvidedLineRow[]> {
   for (const sport of sportsPresent) names.set(sport, await playerNames(sport));
 
   const gameDate = todayUtc(); // current slate; the recent-window lookup keys on the day
+  const seen = new Set<string>(); // `${subject}:${wager}:${line}:${oddsType}` across feeds
+  const push = (row: ProvidedLineRow) => {
+    const key = `${row.externalPlayerId}:${row.stat}:${row.line}:${row.oddsType}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(row);
+  };
+
   for (const l of lines) {
     const sport = l.sport ? SLEEPER_SPORT[l.sport] : undefined;
     if (!sport) continue;
     const stat = l.wager_type ? SLEEPER_STAT_MAP[sport][l.wager_type] : undefined;
     if (!stat) continue;
-    const over = l.options?.find((o) => o.outcome === 'over');
-    const under = l.options?.find((o) => o.outcome === 'under');
-    const line = toNum((over ?? under ?? l.options?.[0])?.outcome_value);
-    if (line == null) continue;
     const name = l.subject_id ? names.get(sport)?.get(l.subject_id) : undefined;
     if (!name) continue;
-    const overMult = toNum(over?.payout_multiplier);
-    out.push({
+    const base = {
       sport,
       source: 'sleeper',
       externalPlayerId: l.subject_id ?? '',
       externalPlayerName: name,
       stat,
-      line,
-      // Per-side payouts are decimal prices → American, so the de-vig / market-implied
-      // breakeven treats Sleeper as a two-way book.
-      overOdds: decimalToAmerican(overMult),
-      underOdds: decimalToAmerican(toNum(under?.payout_multiplier)),
-      // Sleeper posts a single line per player+stat (no alternate ladder); the over
-      // payout rides along for the payout-weighted readout.
-      oddsType: 'standard',
-      multiplier: overMult,
       gameDate,
+    } as const;
+
+    if (l.line_type === 'alt') {
+      // Alternate ladder: each option is its own over-only rung at a different line,
+      // carrying its exact payout multiplier — modeled exactly like Underdog alternates
+      // (0.5 / multiplier breakeven).
+      for (const o of l.options ?? []) {
+        if (o.outcome !== 'over') continue;
+        const line = toNum(o.outcome_value);
+        const mult = toNum(o.payout_multiplier);
+        if (line == null || mult == null) continue;
+        push({ ...base, line, overOdds: null, underOdds: null, oddsType: 'alternate', multiplier: mult });
+      }
+      continue;
+    }
+    if (l.line_type && l.line_type !== 'normal') continue; // skip promos / unknown types
+
+    // Standard line: over and under priced separately. Store each side's decimal payout
+    // as American odds so the de-vig consensus / market-implied breakevens treat Sleeper
+    // as a two-way book; the over multiplier rides along (display picks the leaned side).
+    const over = l.options?.find((o) => o.outcome === 'over');
+    const under = l.options?.find((o) => o.outcome === 'under');
+    const line = toNum((over ?? under ?? l.options?.[0])?.outcome_value);
+    if (line == null) continue;
+    push({
+      ...base,
+      line,
+      overOdds: decimalToAmerican(toNum(over?.payout_multiplier)),
+      underOdds: decimalToAmerican(toNum(under?.payout_multiplier)),
+      oddsType: 'standard',
+      multiplier: toNum(over?.payout_multiplier),
     });
   }
   return out;

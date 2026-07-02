@@ -94,8 +94,15 @@ const P6_STAT_MAP: Record<Sport, Record<string, StatKey>> = {
   },
 };
 
-/** More = the "over" side. Standard lines carry both; goblin/demon rungs are More-only. */
+/** More = the "over" side. */
 const PROP_MORE = 1;
+
+/** The "More" payout multiplier of a rung, or null when it has no priced More side. */
+function moreMultiplier(m: P6Market): number | null {
+  const more = m.activeSelections?.find((s) => s.statLinePropositionId === PROP_MORE);
+  const mult = more?.standingsMultiplier;
+  return typeof mult === 'number' && mult > 0 ? mult : null;
+}
 
 interface P6League {
   leagueAbbreviation?: string;
@@ -120,6 +127,7 @@ interface P6Selection {
   standingsMultiplier?: number;
 }
 interface P6Market {
+  pickableMarketId?: number;
   pickSixMarketId?: number;
   isPaused?: boolean;
   targetValue?: number;
@@ -127,6 +135,8 @@ interface P6Market {
 }
 interface P6Card {
   entities?: { dkId?: number; compIds?: number[] }[];
+  /** The line DK highlights as the main/default one — our "standard" anchor. */
+  defaultPickableMarketId?: number;
   activePickableMarkets?: P6Market[];
 }
 interface P6CategoryResponse {
@@ -153,16 +163,27 @@ function dateOnlyUtc(iso?: string): Date {
   return new Date(Date.UTC(v.getUTCFullYear(), v.getUTCMonth(), v.getUTCDate()));
 }
 
-/** A rung's payout multiplier maps to a variant kind: 1× = the standard line, < 1× an
- *  easier line that pays less (goblin), > 1× a harder line that pays more (demon). */
-function kindForMultiplier(mult: number): string {
-  if (mult > 1.0001) return 'demon';
-  if (mult < 0.9999) return 'goblin';
-  return 'standard';
-}
-
 function unwrap(v: P6Card | { pickCard?: P6Card }): P6Card {
   return (v as { pickCard?: P6Card }).pickCard ?? (v as P6Card);
+}
+
+/**
+ * The pickableMarketId to treat as the card's STANDARD line — modeled exactly like
+ * Underdog's balanced line: the book's own default/main line, or (when that's paused/
+ * missing) the live rung whose multiplier is nearest 1×. Every other live rung becomes
+ * an ALTERNATE carrying its exact multiplier, so Pick6 renders like Underdog (one base
+ * line + a cycling multiplier chip) rather than PrizePicks goblin/demon icons.
+ */
+function standardMarketId(card: P6Card, liveMarkets: P6Market[]): number | undefined {
+  const dflt = card.defaultPickableMarketId;
+  if (dflt != null && liveMarkets.some((m) => m.pickableMarketId === dflt)) return dflt;
+  let best: P6Market | undefined;
+  for (const m of liveMarkets) {
+    const mult = moreMultiplier(m);
+    if (mult == null) continue;
+    if (!best || Math.abs(mult - 1) < Math.abs((moreMultiplier(best) ?? Infinity) - 1)) best = m;
+  }
+  return best?.pickableMarketId;
 }
 
 function parseCategory(sport: Sport, body: P6CategoryResponse, out: ProvidedLineRow[]): void {
@@ -181,16 +202,20 @@ function parseCategory(sport: Sport, body: P6CategoryResponse, out: ProvidedLine
     const compId = card.entities?.[0]?.compIds?.[0];
     const gameDate = dateOnlyUtc(compId != null ? comps[String(compId)]?.startTime : undefined);
 
-    for (const m of card.activePickableMarkets ?? []) {
-      if (m.isPaused) continue; // only currently-pickable rungs
+    // Only currently-pickable rungs with a priced More side; one of them is the
+    // standard (base) line, the rest are alternates.
+    const liveMarkets = (card.activePickableMarkets ?? []).filter(
+      (m) => !m.isPaused && moreMultiplier(m) != null,
+    );
+    const stdId = standardMarketId(card, liveMarkets);
+
+    for (const m of liveMarkets) {
       const marketName = m.pickSixMarketId != null ? markets[String(m.pickSixMarketId)]?.name : undefined;
       const stat = marketName ? statMap[marketName] : undefined;
       if (!stat) continue;
       const line = typeof m.targetValue === 'number' ? m.targetValue : NaN;
       if (!Number.isFinite(line)) continue;
-      const more = m.activeSelections?.find((s) => s.statLinePropositionId === PROP_MORE);
-      const mult = more?.standingsMultiplier;
-      if (typeof mult !== 'number' || !(mult > 0)) continue;
+      const mult = moreMultiplier(m)!;
       out.push({
         sport,
         source: 'pick6',
@@ -201,7 +226,9 @@ function parseCategory(sport: Sport, body: P6CategoryResponse, out: ProvidedLine
         // Pick6 prices via fixed multipliers, not two-sided odds.
         overOdds: null,
         underOdds: null,
-        oddsType: kindForMultiplier(mult),
+        // The default/main line is the standard anchor; every other rung is an
+        // alternate carrying its multiplier (→ 0.5/multiplier breakeven), same as UD.
+        oddsType: m.pickableMarketId === stdId ? 'standard' : 'alternate',
         multiplier: mult,
         gameDate,
       });

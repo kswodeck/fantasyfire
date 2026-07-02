@@ -122,6 +122,30 @@ export function shownBreakeven(v: ProvidedVariant, ladder: ProvidedVariant[]): n
   return v.breakeven ?? ladderBreakeven(v, ladder);
 }
 
+/** Decimal payout (total return per 1 unit staked) implied by American odds:
+ *  +150 → 2.5, −200 → 1.5. */
+export function decimalFromAmerican(odds: number): number {
+  return odds > 0 ? odds / 100 + 1 : 100 / -odds + 1;
+}
+
+/**
+ * The payout multiplier to DISPLAY for a rung given the side the read leans. Books that
+ * price the two sides differently on a single line (Sleeper: e.g. over 1.62× / under
+ * 1.98×, stored as over/under odds) should show the LEANED side's payout, not always
+ * the over. Detected by "posts a multiplier AND carries both odds"; every other rung
+ * (Underdog/Pick6 alternates, plain lines) just returns its posted multiplier.
+ */
+export function sidedMultiplier(
+  v: { multiplier: number | null; overOdds?: number | null; underOdds?: number | null },
+  side: 'over' | 'under',
+): number | null {
+  if (v.multiplier != null && v.overOdds != null && v.underOdds != null) {
+    const odds = side === 'over' ? v.overOdds : v.underOdds;
+    if (odds != null) return decimalFromAmerican(odds);
+  }
+  return v.multiplier;
+}
+
 /** The strongest score on a row across its shown line and every scored rung — what
  *  "worth showing at all" means once variants carry their own reads. */
 export function bestVariantScore(baseScore: number, variants?: ProvidedVariant[]): number {
