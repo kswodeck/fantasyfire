@@ -18,13 +18,13 @@ export function sportSections(sport: Sport): SportSection[] {
   return [
     { label: 'Heat Check', seg: 'board', desc: "Strongest reads + today's slate" },
     { label: 'Trends', seg: 'trends', desc: 'Form swings + current streaks' },
+    { label: 'Injuries', seg: 'injuries', desc: "Who's out, GTD + on the IL" },
+    { label: 'Players', seg: 'players', desc: 'Browse + filter every player' },
     { label: 'Leaders', seg: 'leaders', desc: 'Per-game stat leaders' },
     {
       label: 'Matchups',
       seg: 'matchups',
       desc: sport === 'mlb' ? 'Pitching allowed by team' : 'Defense vs position',
     },
-    { label: 'Injuries', seg: 'injuries', desc: "Who's out, GTD + on the IL" },
-    { label: 'Players', seg: 'players', desc: 'Browse + filter every player' },
   ];
 }
