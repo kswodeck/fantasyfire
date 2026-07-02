@@ -117,7 +117,9 @@ export function VariantChips({
             ? 'Click to cycle the alternate ladder, then back to the standard line.'
             : 'Click again for the standard line.'
         }`}
-        className={`${CHIP} ${tone}`}
+        // Fixed min-width so a changing multiplier label ("1.5×" → "1.31×") can't
+        // resize the chip mid-cycle — part of the layout-stability contract.
+        className={`${CHIP} min-w-[2.75rem] justify-center ${tone}`}
       >
         <span className="tabular-nums">
           {shown?.multiplier != null ? formatMultiplier(shown.multiplier) : 'alt'}
