@@ -19,15 +19,18 @@ export interface PayoutFilterableRow {
 //     the plain lines; turning a kind on adds rows shown at that kind (normal-first
 //     priority). PrizePicks gets Standard/Demons/Goblins, Underdog gets
 //     Standard/Alternates.
-//   • Multiplier range — when the book posts numeric multipliers (Underdog): a min–max
-//     window that constrains which ALTERNATE rungs qualify (the standard line is never
-//     range-gated — deselect Standard to see alternates only).
+//   • Multiplier min/max — when the book posts numeric multipliers (Underdog): an
+//     independent availability filter over EVERY rung's multiplier (standard lines
+//     carry them too), regardless of the Show selection. While set, only rows with an
+//     in-range multiplier remain, each opened at its best in-range rung. Both bounds
+//     default to empty (no filtering).
 // Both render nothing for a plain sportsbook board with no variants.
 
 const KIND_ORDER: PayoutKind[] = ['normal', 'demon', 'goblin', 'alternate'];
 
-// URL params the filter round-trips through (?kinds=normal,goblin&mult=1.2-1.5), so a
-// narrowed board survives refresh and pastes as the same view. Absent = defaults.
+// URL params the filter round-trips through (?kinds=normal,goblin&mult=1.2-1.5 — either
+// bound may be empty: 1.2- / -1.5), so a narrowed board survives refresh and pastes as
+// the same view. Absent = defaults.
 const KINDS_PARAM = 'kinds';
 const MULT_PARAM = 'mult';
 
@@ -39,10 +42,13 @@ function parseKindsParam(raw: string | null): Set<PayoutKind> | null {
   return kinds.length > 0 ? new Set(kinds) : null;
 }
 
-function parseMultParam(raw: string | null): [number, number] | null {
+/** "1.2-1.5" | "1.2-" | "-1.5" → [min, max] with null for an open side. */
+function parseMultParam(raw: string | null): [number | null, number | null] | null {
   if (raw === null) return null;
-  const [lo, hi] = raw.split('-').map(Number);
-  return Number.isFinite(lo) && Number.isFinite(hi) && lo <= hi ? [lo, hi] : null;
+  const [a, b] = raw.split('-');
+  const min = a !== '' && Number.isFinite(Number(a)) ? Number(a) : null;
+  const max = b !== undefined && b !== '' && Number.isFinite(Number(b)) ? Number(b) : null;
+  return min === null && max === null ? null : [min, max];
 }
 
 function rungKinds(row: PayoutFilterableRow): PayoutKind[] {
@@ -62,12 +68,15 @@ export interface BoardPayoutFilter<T extends PayoutFilterableRow = PayoutFiltera
   /** Currently-selected kinds. */
   selectedKinds: Set<PayoutKind>;
   toggleKind: (k: PayoutKind) => void;
-  /** True when any rung posts a numeric multiplier (Underdog) → show the range. */
+  /** True when any rung posts a numeric multiplier (Underdog) → show the min/max. */
   hasMult: boolean;
-  /** Full data bounds + the active [min,max] window over alternate multipliers. */
+  /** Data bounds across every rung's multiplier — a hint for the inputs. */
   multBounds: [number, number];
-  multRange: [number, number];
-  setMultRange: (r: [number, number]) => void;
+  /** The active bounds; null = unbounded on that side (the default). */
+  multMin: number | null;
+  multMax: number | null;
+  setMultMin: (v: number | null) => void;
+  setMultMax: (v: number | null) => void;
   /** Rows after the payout filter. */
   rows: T[];
   /** Per `${slug}:${stat}` → the rung line to open the row on (when it differs from the
@@ -77,9 +86,9 @@ export interface BoardPayoutFilter<T extends PayoutFilterableRow = PayoutFiltera
   active: boolean;
 }
 
-/** Board payout filtering (variant-kind multiselect + Underdog multiplier range). Pure
- *  over the already-fetched rows — no refetch here; the row card recomputes lazily if
- *  its opening rung differs from the server one. */
+/** Board payout filtering (variant-kind multiselect + Underdog multiplier min/max).
+ *  Pure over the already-fetched rows — no refetch here; the row card recomputes
+ *  lazily if its opening rung differs from the server one. */
 export function useBoardPayoutFilter<T extends PayoutFilterableRow>(rows: T[]): BoardPayoutFilter<T> {
   const kindOptions = useMemo(() => {
     const present = new Set<PayoutKind>();
@@ -88,13 +97,10 @@ export function useBoardPayoutFilter<T extends PayoutFilterableRow>(rows: T[]): 
   }, [rows]);
   const hasKinds = kindOptions.length >= 2;
 
+  // Multiplier availability considers EVERY rung — Underdog posts multipliers on
+  // standard lines too (e.g. 1.04×), not just alternates.
   const hasMult = useMemo(
-    () =>
-      rows.some((r) =>
-        (r.variants ?? []).some(
-          (v) => payoutKind(v.oddsType) === 'alternate' && v.multiplier != null,
-        ),
-      ),
+    () => rows.some((r) => (r.variants ?? []).some((v) => v.multiplier != null)),
     [rows],
   );
 
@@ -103,7 +109,7 @@ export function useBoardPayoutFilter<T extends PayoutFilterableRow>(rows: T[]): 
     let hi = -Infinity;
     for (const r of rows)
       for (const v of r.variants ?? [])
-        if (payoutKind(v.oddsType) === 'alternate' && v.multiplier != null) {
+        if (v.multiplier != null) {
           lo = Math.min(lo, v.multiplier);
           hi = Math.max(hi, v.multiplier);
         }
@@ -112,7 +118,8 @@ export function useBoardPayoutFilter<T extends PayoutFilterableRow>(rows: T[]): 
 
   // `null` = "not narrowed yet" so the defaults track the current book's data.
   const [selected, setSelected] = useState<Set<PayoutKind> | null>(null);
-  const [range, setRange] = useState<[number, number] | null>(null);
+  const [multMin, setMultMin] = useState<number | null>(null);
+  const [multMax, setMultMax] = useState<number | null>(null);
   const hydrated = useRef(false);
 
   // Hydrate a narrowed filter from the URL once on mount (after hydration, so SSR
@@ -124,7 +131,10 @@ export function useBoardPayoutFilter<T extends PayoutFilterableRow>(rows: T[]): 
     const m = parseMultParam(params.get(MULT_PARAM));
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (k) setSelected(k);
-    if (m) setRange(m);
+    if (m) {
+      setMultMin(m[0]);
+      setMultMax(m[1]);
+    }
     hydrated.current = true;
   }, []);
 
@@ -147,25 +157,19 @@ export function useBoardPayoutFilter<T extends PayoutFilterableRow>(rows: T[]): 
     return inter.size > 0 ? inter : defaultKinds;
   }, [selected, kindOptions, defaultKinds]);
 
+  const fmt = (n: number) => String(parseFloat(n.toFixed(2)));
   useEffect(() => {
     if (!hydrated.current) return;
     const params = new URLSearchParams(window.location.search);
     if (selected && !setsEqual(selectedKinds, defaultKinds))
       params.set(KINDS_PARAM, KIND_ORDER.filter((k) => selectedKinds.has(k)).join(','));
     else params.delete(KINDS_PARAM);
-    if (range && (range[0] !== multBounds[0] || range[1] !== multBounds[1]))
-      params.set(MULT_PARAM, `${parseFloat(range[0].toFixed(2))}-${parseFloat(range[1].toFixed(2))}`);
+    if (multMin !== null || multMax !== null)
+      params.set(MULT_PARAM, `${multMin !== null ? fmt(multMin) : ''}-${multMax !== null ? fmt(multMax) : ''}`);
     else params.delete(MULT_PARAM);
     const qs = params.toString();
     window.history.replaceState(null, '', qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
-  }, [selected, selectedKinds, range, defaultKinds, multBounds]);
-  const multRange = useMemo<[number, number]>(() => {
-    if (!range) return multBounds;
-    const lo = Math.min(Math.max(range[0], multBounds[0]), multBounds[1]);
-    const hi = Math.max(Math.min(range[1], multBounds[1]), lo);
-    return [lo, hi];
-  }, [range, multBounds]);
-  const rangeNarrowed = multRange[0] !== multBounds[0] || multRange[1] !== multBounds[1];
+  }, [selected, selectedKinds, multMin, multMax, defaultKinds]);
 
   const toggleKind = (k: PayoutKind) => {
     setSelected((prev) => {
@@ -182,54 +186,63 @@ export function useBoardPayoutFilter<T extends PayoutFilterableRow>(rows: T[]): 
     const initialLines = new Map<string, number>();
     if (!hasKinds && !hasMult) return { filtered: rows, initialLines };
 
-    // An alternate rung qualifies only inside the multiplier window (when narrowed);
-    // other kinds are never range-gated.
-    const [lo, hi] = multRange;
-    const eligible = (v: ProvidedVariant, kind: PayoutKind) =>
-      kind !== 'alternate' ||
-      !rangeNarrowed ||
-      (v.multiplier != null && v.multiplier >= lo - 1e-9 && v.multiplier <= hi + 1e-9);
-
-    // Narrowing the multiplier window is an explicit ask for alternates — surface the
-    // in-range alternate rung first, falling back to the other selected kinds for rows
-    // without one (deselect Standard to keep only in-range alternates).
-    const order: PayoutKind[] = rangeNarrowed
-      ? ['alternate', 'normal', 'demon', 'goblin']
-      : KIND_ORDER;
+    // A set multiplier bound is an AVAILABILITY filter across the WHOLE ladder —
+    // any rung (standard or alternate), regardless of the Show selection: keep rows
+    // with an in-range multiplier, opened at the best in-range rung. Clearing both
+    // bounds returns the view to the plain Show-chip behavior.
+    const rangeActive = multMin !== null || multMax !== null;
+    const inRange = (m: number | null | undefined) =>
+      m != null &&
+      (multMin === null || m >= multMin - 1e-9) &&
+      (multMax === null || m <= multMax + 1e-9);
 
     const out: T[] = [];
     const chosenScore = new Map<T, number>();
     for (const r of rows) {
       const variants = r.variants ?? [];
-      // Highest-priority selected kind the row actually has → its nearest rung.
       let chosen: ProvidedVariant | null = null;
-      for (const k of order) {
-        if (!selectedKinds.has(k)) continue;
-        const rungs = variants.filter((v) => payoutKind(v.oddsType) === k && eligible(v, k));
-        if (rungs.length) {
-          chosen = nearest(rungs, r.line);
-          break;
+      if (rangeActive) {
+        const candidates = variants.filter((v) => inRange(v.multiplier));
+        if (candidates.length === 0) continue; // no multiplier in range → hide
+        // Best read among the in-range rungs; without reads (trend rows), the rung
+        // nearest the row's own line.
+        chosen = candidates.reduce((best, v) => {
+          const b = best.read?.score ?? -1;
+          const s = v.read?.score ?? -1;
+          if (s !== b) return s > b ? v : best;
+          return Math.abs(v.line - r.line) < Math.abs(best.line - r.line) ? v : best;
+        });
+      } else {
+        // Highest-priority selected kind the row actually has → its nearest rung.
+        for (const k of KIND_ORDER) {
+          if (!selectedKinds.has(k)) continue;
+          const rungs = variants.filter((v) => payoutKind(v.oddsType) === k);
+          if (rungs.length) {
+            chosen = nearest(rungs, r.line);
+            break;
+          }
         }
+        if (!chosen) continue; // row has no rung of any selected kind → hide
+        // A special rung with a genuinely zero read isn't worth surfacing in a
+        // variant-focused cut (standard lines keep the explorers' own gate).
+        if (chosen.read && chosen.read.score <= 0 && payoutKind(chosen.oddsType) !== 'normal') continue;
       }
-      if (!chosen) continue; // row has no qualifying rung of any selected kind → hide
-      // A special rung with a genuinely zero read isn't worth surfacing in a
-      // variant-focused cut (standard lines keep the explorers' own gate).
-      if (chosen.read && chosen.read.score <= 0 && payoutKind(chosen.oddsType) !== 'normal') continue;
       out.push(r);
       if (chosen.read) chosenScore.set(r, chosen.read.score);
       if (chosen.line !== r.line) initialLines.set(`${r.player.slug}:${r.stat}`, chosen.line);
     }
     // Rank by the rung each row will actually SHOW — with the standard-only default
-    // this equals the server's order; a demon/goblin cut re-ranks by those rungs'
-    // reads. No-op when rungs carry no reads (trend rows): the sort keys all tie and
-    // the incoming order is kept (Array#sort is stable).
+    // this equals the server's order; a demon/goblin/multiplier cut re-ranks by those
+    // rungs' reads. No-op when rungs carry no reads (trend rows): the sort keys all
+    // tie and the incoming order is kept (Array#sort is stable).
     if (chosenScore.size > 0) {
       out.sort((a, b) => (chosenScore.get(b) ?? -1) - (chosenScore.get(a) ?? -1));
     }
     return { filtered: out, initialLines };
-  }, [rows, hasKinds, hasMult, selectedKinds, multRange, rangeNarrowed]);
+  }, [rows, hasKinds, hasMult, selectedKinds, multMin, multMax]);
 
-  const active = (hasKinds && !setsEqual(selectedKinds, defaultKinds)) || (hasMult && rangeNarrowed);
+  const active =
+    (hasKinds && !setsEqual(selectedKinds, defaultKinds)) || multMin !== null || multMax !== null;
 
   return {
     kindOptions,
@@ -237,8 +250,10 @@ export function useBoardPayoutFilter<T extends PayoutFilterableRow>(rows: T[]): 
     toggleKind,
     hasMult,
     multBounds,
-    multRange,
-    setMultRange: (r) => setRange(r),
+    multMin,
+    multMax,
+    setMultMin,
+    setMultMax,
     rows: filtered,
     initialLines,
     active,
