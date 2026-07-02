@@ -78,6 +78,7 @@ import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import {
   pickRepresentative,
   normalLine,
+  isNormalKind,
   isOverOnly,
   variantBreakeven,
   bestVariantScore,
@@ -1509,6 +1510,10 @@ export interface BoardOptions {
   /** Reuse an already-loaded pool (the heavy query) instead of loading a fresh one —
    *  lets one page compute board + trends from a single load. */
   pool?: BoardPool;
+  /** Teaser surfaces (home/sport-home): build rows from STANDARD rungs only, skipping
+   *  stats where the book posts nothing but variants — a demon/goblin/alternate line
+   *  never headlines a default view. Ladders still attach for the chips. */
+  standardOnly?: boolean;
 }
 
 /** Map a PlayerInjury row (the badge-relevant columns) to the slim card shape. */
@@ -1632,7 +1637,12 @@ export async function getSourcedBoards(
   for (const s of sources) {
     const rm = new Map<string, number>();
     for (const [key, variants] of variantMaps[s]) {
-      const rep = pickRepresentative(variants, consensus.get(key) ?? null);
+      // standardOnly (the teaser surfaces): rows come from STANDARD rungs only —
+      // stats where the book posts nothing but demons/goblins are skipped entirely,
+      // so a variant line can never headline a default view. The full ladder still
+      // ships on each row, so the chips can funnel through variants on demand.
+      const eligible = opts.standardOnly ? variants.filter((v) => isNormalKind(v.oddsType)) : variants;
+      const rep = pickRepresentative(eligible, consensus.get(key) ?? null);
       if (rep) rm.set(key, rep.line);
     }
     repMaps[s] = rm;

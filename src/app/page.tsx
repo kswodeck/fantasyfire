@@ -28,7 +28,7 @@ async function loadSport(sport: Sport): Promise<{
   if (sources.length > 0) {
     const [s, boardsBySource] = await Promise.all([
       slate,
-      getSourcedBoards(sport, sources, { limit: 24 }).catch(
+      getSourcedBoards(sport, sources, { limit: 24, standardOnly: true }).catch(
         () => ({}) as Record<string, BoardRow[]>,
       ),
     ]);

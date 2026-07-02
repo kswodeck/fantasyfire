@@ -17,6 +17,7 @@ import {
 } from '@/lib/server/players';
 import { getAvailableSources } from '@/lib/server/providedLines';
 import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
+import { isOverOnly } from '@/lib/payoutVariant';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
 import type { BoardRow, InjuryReportRow, TonightGame, TrendRow } from '@/lib/types';
 
@@ -76,12 +77,15 @@ export default async function SportHome({ params }: PageProps) {
         const { boards, trends } = await getSourcedBoardsAndTrends(
           sport,
           sources,
-          { limit: 5 },
+          { limit: 5, standardOnly: true },
           { limit: 3 },
         );
         boardsBySource = boards;
         leans = boardsBySource[initialSource] ?? [];
-        topTrend = trends[initialSource]?.[0] ?? null;
+        // The tile headlines a STANDARD-line trend when one exists (matching the
+        // site-wide standard-first default); variant-only swings are the fallback.
+        const trendList = trends[initialSource] ?? [];
+        topTrend = trendList.find((r) => !isOverOnly(r.oddsType ?? null)) ?? trendList[0] ?? null;
       } else {
         leans = await getBoard(sport, { limit: 5 });
       }
