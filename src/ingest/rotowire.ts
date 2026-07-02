@@ -2,15 +2,15 @@
 // player-prop lines with American odds already normalized:
 //   GET https://www.rotowire.com/picks/api/lines.php   (no auth; Cloudflare-fronted)
 //
-// This is how we reach books that block direct scraping (Sleeper needs an account
-// token; DraftKings Pick6 sits behind Akamai) — RotoWire already aggregates them, so
-// a single proxy-free request yields Sleeper, DraftKings Pick6, RT Sports, plus the
-// major sportsbooks (DraftKings/FanDuel/BetMGM/Caesars/Hard Rock/BetRivers).
+// This is how we reach books we don't scrape directly — a single proxy-free request
+// yields RT Sports plus the major sportsbooks (DraftKings/FanDuel/BetMGM/Caesars/Hard
+// Rock/BetRivers).
 //
-// We DELIBERATELY skip PrizePicks + Underdog here — their own clients (prizepicks.ts /
-// underdog.ts) scrape them directly (authoritative + not RotoWire-dependent). Each
-// remaining book fans out to its own ProvidedLine `source`. Fail-safe upstream: if
-// RotoWire is ever unreachable, these sources simply don't appear.
+// We DELIBERATELY skip PrizePicks, Underdog, Sleeper, and DraftKings Pick6 here — their
+// own clients (prizepicks.ts / underdog.ts / sleeper.ts / pick6.ts) scrape them directly
+// and, crucially, carry the payout multipliers + alternate-line ladders RotoWire doesn't
+// expose. Each remaining book fans out to its own ProvidedLine `source`. Fail-safe
+// upstream: if RotoWire is ever unreachable, these sources simply don't appear.
 //
 // Shape: { entities[], markets[], events[], props[] }.
 //   entities[] : { entityID, eventID, sport, name, team, pos }            (the player)
@@ -33,13 +33,12 @@ const HEADERS = {
 /** RotoWire sport string → our Sport (others — WNBA/NHL/PGA/MMA/CS2 — are ignored). */
 const RW_SPORT: Record<string, Sport> = { NBA: 'nba', MLB: 'mlb', NFL: 'nfl' };
 
-/** RotoWire `book` → our ProvidedLine `source` id. PrizePicks/Underdog omitted on
- *  purpose (direct scrapers own those). Sportsbook books (…-sb) reuse the existing
- *  sportsbook source ids registered in providedSources.ts. */
+/** RotoWire `book` → our ProvidedLine `source` id. PrizePicks/Underdog/Sleeper/Pick6
+ *  omitted on purpose — their own direct scrapers own those (and carry payout
+ *  multipliers / alternate ladders RotoWire doesn't expose). Sportsbook books (…-sb)
+ *  reuse the existing sportsbook source ids registered in providedSources.ts. */
 const BOOK_SOURCE: Record<string, string> = {
   // DFS pick'em
-  sleeper: 'sleeper',
-  pick6: 'pick6', // DraftKings Pick6
   rtsports: 'rtsports',
   // Sportsbooks
   'draftkings-sb': 'draftkings',
