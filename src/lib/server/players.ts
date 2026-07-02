@@ -80,7 +80,7 @@ import {
   normalLine,
   isNormalKind,
   isOverOnly,
-  variantBreakeven,
+  ladderBreakeven,
   bestVariantScore,
 } from '@/lib/payoutVariant';
 
@@ -1349,9 +1349,7 @@ export async function getPlayerResearch(
     // Demon/goblin/alternate rungs only pay the over — pin the read to that side —
     // and are scored against their payout's breakeven, not a coin flip.
     overOnly: selectedVariant ? isOverOnly(selectedVariant.oddsType) : false,
-    benchmark: selectedVariant
-      ? variantBreakeven(selectedVariant.oddsType, selectedVariant.multiplier)
-      : undefined,
+    benchmark: selectedVariant ? ladderBreakeven(selectedVariant, variants) : undefined,
   };
   // FireFactor is the pure directional signal (hit · projection · consistency · matchup)
   // so it's IDENTICAL on the board and the player page. Price/line-value info (best book,
@@ -1426,7 +1424,7 @@ export async function getPlayerResearch(
         matchup: applyMatchup ? (grade ?? undefined) : undefined,
         gamesPlayed: games.length,
         overOnly: isOverOnly(v.oddsType),
-        benchmark: variantBreakeven(v.oddsType, v.multiplier),
+        benchmark: ladderBreakeven(v, variants),
       }),
       availability?.status,
     );
@@ -1939,9 +1937,7 @@ function computeBoardRows(
         // Demon/goblin/alternate rungs only pay the over — pin the read to that side —
         // and are scored against their payout's breakeven, not a coin flip.
         overOnly: shownRung ? isOverOnly(shownRung.oddsType) : false,
-        benchmark: shownRung
-          ? variantBreakeven(shownRung.oddsType, shownRung.multiplier)
-          : undefined,
+        benchmark: shownRung && variants ? ladderBreakeven(shownRung, variants) : undefined,
       };
       // FireFactor is the pure directional signal — IDENTICAL to the player page for the
       // same line/stat/matchup. Line-value (best price, cross-book discount) is a separate
@@ -2006,7 +2002,7 @@ function computeBoardRows(
             matchup: opts.matchupGrades?.get(`${p.id}:${stat}`),
             gamesPlayed: games.length,
             overOnly: isOverOnly(v.oddsType),
-            benchmark: variantBreakeven(v.oddsType, v.multiplier),
+            benchmark: variants ? ladderBreakeven(v, variants) : undefined,
           }),
           avail?.status,
         );

@@ -302,13 +302,19 @@ export function computeFireFactor(input: FireFactorInput): FireFactorResult {
     // uncertainty AND bias the edge whenever the benchmark isn't 0.5 (it erases a
     // goblin's edge over its high breakeven) — and let `trustFactor` (derived from
     // the Wilson lower bound) apply the small-sample discount exactly once.
+    // The span scales with the binomial noise at the benchmark (√p(1−p)): the same
+    // point-edge is a stronger statistical signal near the extremes, so a goblin's
+    // +8pts over its ~75% bar counts like a standard line's +10pts over 50%. A 0.5
+    // benchmark reproduces the flat HIT_SPAN exactly.
+    const hitSpan =
+      FIREFACTOR_HIT_SPAN * (Math.sqrt(benchSide * (1 - benchSide)) / 0.5);
     comps.push({
       key: 'hit',
       label: 'Hit rate (confidence-adjusted)',
       // Probability-style sub-score: a rate AT the benchmark is NEUTRAL (0.5), rising
-      // to 1.0 at (benchmark + HIT_SPAN). Feeding a "strength" value (0 at neutral)
+      // to 1.0 at (benchmark + span). Feeding a "strength" value (0 at neutral)
       // into logit would wrongly treat a fair rate as strong evidence against the side.
-      score: clamp01(0.5 + (blended.rate - benchSide) / (2 * FIREFACTOR_HIT_SPAN)),
+      score: clamp01(0.5 + (blended.rate - benchSide) / (2 * hitSpan)),
       weight: FIREFACTOR_WEIGHTS.hit,
     });
   }

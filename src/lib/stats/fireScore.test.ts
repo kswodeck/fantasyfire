@@ -215,6 +215,29 @@ describe('computeFireFactor', () => {
       expect(loose.score).toBeGreaterThan(tight.score);
     });
 
+    it('scales the hit span with binomial noise at the benchmark (extreme edges count more)', () => {
+      // Same raw sample; the variant benchmark's smaller √p(1−p) tightens the span,
+      // so a +10pt edge over a 0.75 bar out-scores the same points over 0.5.
+      const windows = [win(17, 20, '10'), win(34, 40, '20')]; // 85% rate
+      const vsGoblinBar = computeFireFactor({
+        ...base,
+        windows,
+        matchup: undefined,
+        overOnly: true,
+        benchmark: 0.75,
+      });
+      const hit = (r: ReturnType<typeof computeFireFactor>) =>
+        r.components.find((c) => c.key === 'hit')!.score;
+      const expectedSpan = FIREFACTOR_HIT_SPAN * (Math.sqrt(0.75 * 0.25) / 0.5);
+      expect(hit(vsGoblinBar)).toBeCloseTo(
+        Math.min(1, 0.5 + (0.85 - 0.75) / (2 * expectedSpan)),
+        5,
+      );
+      // And the standard benchmark still uses the flat span exactly.
+      const std = computeFireFactor({ ...base, windows: [win(58, 100, 'season')] });
+      expect(hit(std)).toBeCloseTo(0.5 + (0.58 - 0.5) / (2 * FIREFACTOR_HIT_SPAN), 5);
+    });
+
     it('a goblin above its high breakeven scores like the same edge on a standard line', () => {
       // Same +10pt edge over the benchmark, same sample sizes: a goblin hitting 85%
       // vs a 75% breakeven must NOT read materially worse than a standard line

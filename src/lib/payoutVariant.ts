@@ -9,7 +9,7 @@
 //   goblin    — PrizePicks easier line / reduced payout (green)
 //   alternate — Underdog alternate line, carries a numeric `multiplier` (e.g. 1.31×)
 import type { ProvidedVariant } from './types';
-import { PP_BREAKEVEN } from './ppPayouts';
+import { PP_BREAKEVEN_STEPS } from './ppPayouts';
 
 export type PayoutKind = 'normal' | 'demon' | 'goblin' | 'alternate';
 
@@ -45,19 +45,46 @@ export function isOverOnly(oddsType: string | null | undefined): boolean {
  * The breakeven probability a rung's payout implies — the anchor FireFactor scores
  * it against (0 = fairly priced). An exact posted multiplier wins (Underdog:
  * 0.5/multiplier, the same "relative to a standard leg's 0.5" convention); PrizePicks
- * demons/goblins fall back to the configured approximations. A standard line — or an
- * alternate with no posted multiplier — anchors at the plain 0.5.
+ * demons/goblins fall back to the configured EXTREMITY-STEPPED approximations —
+ * `rank` is the rung's position among its kind (0 = nearest the standard line), since
+ * a deeper goblin pays less (higher bar) and a deeper demon pays more (lower bar).
+ * A standard line — or an alternate with no posted multiplier — anchors at 0.5.
  */
 export function variantBreakeven(
   oddsType: string | null | undefined,
   multiplier?: number | null,
+  rank: number = 0,
 ): number {
   const kind = payoutKind(oddsType);
   if (kind === 'normal') return 0.5;
   if (multiplier != null && multiplier > 0) return Math.max(0.05, Math.min(0.95, 0.5 / multiplier));
-  if (kind === 'demon') return PP_BREAKEVEN.demon;
-  if (kind === 'goblin') return PP_BREAKEVEN.goblin;
+  if (kind === 'demon' || kind === 'goblin') {
+    const steps = PP_BREAKEVEN_STEPS[kind];
+    return steps[Math.max(0, Math.min(rank, steps.length - 1))];
+  }
   return 0.5;
+}
+
+/**
+ * A rung's extremity rank among its kind within a ladder: 0 = nearest the standard
+ * line (the mildest goblin/demon), counting outward. Anchored on the ladder's plain
+ * line; a ladder with no standard rung anchors on the rung set's own median-ish pick.
+ */
+export function variantRank(v: ProvidedVariant, ladder: ProvidedVariant[]): number {
+  const kind = payoutKind(v.oddsType);
+  if (kind === 'normal') return 0;
+  const anchor = normalLine(ladder) ?? v.line;
+  const peers = ladder
+    .filter((x) => payoutKind(x.oddsType) === kind)
+    .sort((a, b) => Math.abs(a.line - anchor) - Math.abs(b.line - anchor));
+  const at = peers.findIndex((x) => x.line === v.line);
+  return at >= 0 ? at : 0;
+}
+
+/** `variantBreakeven` with the extremity rank derived from the rung's own ladder —
+ *  use this wherever the full ladder is in hand. */
+export function ladderBreakeven(v: ProvidedVariant, ladder: ProvidedVariant[]): number {
+  return variantBreakeven(v.oddsType, v.multiplier, variantRank(v, ladder));
 }
 
 /** The strongest score on a row across its shown line and every scored rung — what
