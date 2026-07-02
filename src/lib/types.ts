@@ -11,6 +11,8 @@ import type {
   Consistency,
   MatchupGrade,
   FireFactorResult,
+  FireSide,
+  FireTier,
   PlayerSplits,
 } from '@/lib/stats';
 import type { MarketConsensus } from '@/lib/odds';
@@ -137,6 +139,11 @@ export interface ProvidedVariant {
   multiplier: number | null;
   overOdds: number | null;
   underOdds: number | null;
+  /** Server-computed FireFactor at THIS rung, calibrated vs the rung's payout
+   *  breakeven — powers instant chip switches, per-rung ladder scores, and
+   *  value-aware filtering. Present on player-research + sourced-board payloads;
+   *  absent on trend rows (their metric is the form swing, not the score). */
+  read?: { side: FireSide; score: number; tier: FireTier } | null;
 }
 
 export interface PlayerResearch {

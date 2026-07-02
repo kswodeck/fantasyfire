@@ -19,6 +19,23 @@ export const PP_FLEX_PLAY: ReadonlyArray<{ picks: number; allHit: number; oneMis
   { picks: 6, allHit: 25, oneMiss: 2, twoMiss: 0.4 },
 ];
 
+/**
+ * Approximate per-leg BREAKEVEN probabilities for PrizePicks variants — the anchor
+ * FireFactor scores a variant against (0 = fairly priced for its payout).
+ *
+ * Convention: the standard line is anchored at 0.5 (FireFactor's long-standing
+ * neutral point), and a variant's anchor scales by the payout it buys relative to a
+ * standard leg: breakeven ≈ 0.5 × (standard payout / variant payout). Using a 2-pick
+ * Power Play (3×) against commonly-cited demon (~4.25×) and goblin (~2×) adjustments
+ * gives ≈0.35 and ≈0.75. TUNE THESE alongside the payout tables above when
+ * PrizePicks changes them — the UI presents them as approximate. Underdog needs no
+ * entry here: its exact per-line multipliers give exact breakevens (0.5/multiplier).
+ */
+export const PP_BREAKEVEN: Readonly<Record<'demon' | 'goblin', number>> = {
+  demon: 0.35,
+  goblin: 0.75,
+};
+
 /** How demons/goblins bend those tables — qualitative, since the app computes the
  *  exact adjusted payout per entry. */
 export const PP_DEMON_RULE =

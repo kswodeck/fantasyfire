@@ -7,6 +7,7 @@ import { SourceSelector } from './SourceSelector';
 import { BoardPayoutControls } from './BoardPayoutControls';
 import { useBoardPayoutFilter } from './useBoardPayoutFilter';
 import { useSourced } from './useSourced';
+import { bestVariantScore } from '@/lib/payoutVariant';
 import { normalizeName } from '@/lib/slate';
 
 const STEP = 25;
@@ -32,9 +33,10 @@ export function AllBoardExplorer({
 }) {
   const hasSources = sources.length > 0;
   const sourced = useSourced(boardsBySource, sources, defaultSource);
-  // Drop true coin-flip reads (FireFactor 0) — a 50/50 isn't a play worth surfacing.
+  // Drop rows with no read anywhere — neither the shown line nor any scored rung
+  // clears 0 (0 = coin flip on a standard line, fairly-priced on a variant).
   const rows = (hasSources ? sourced.rows : medianRows).filter(
-    (r) => r.fireScore.score > 0,
+    (r) => bestVariantScore(r.fireScore.score, r.variants) > 0,
   );
 
   // Payout filter (variant kinds / Underdog multiplier range) over the current book.

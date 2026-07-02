@@ -269,8 +269,9 @@ export function PlayerResearchClient({
         <AvailabilityBanner availability={data.availability} playerName={data.player.fullName} />
       )}
 
-      {/* Verdict — the FireFactor "good prop" read + sub-signals */}
-      <VerdictPanel verdict={data.verdict} statShort={statDef.short} line={data.line} />
+      {/* Verdict — the FireFactor "good prop" read + sub-signals. A variant line reads
+          in value terms (scored vs its payout breakeven, over-only). */}
+      <VerdictPanel verdict={data.verdict} statShort={statDef.short} line={data.line} oddsType={data.oddsType} />
 
       {/* Hit-rate cards */}
       <section aria-label="Hit rates" className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">

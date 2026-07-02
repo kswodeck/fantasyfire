@@ -159,6 +159,15 @@ export interface FireFactorInput {
    *  pays the over, so the side is pinned to 'over' — history that runs under reads as
    *  a weak over, never an under lean. */
   overOnly?: boolean;
+  /**
+   * The probability the score is anchored at (default 0.5 — a coin flip). Payout
+   * variants pass their payout-implied BREAKEVEN instead (Underdog: 0.5/multiplier;
+   * PrizePicks demons/goblins: the configured approximation), so 0 means "fairly
+   * priced for its payout", not "50/50". A demon with a 35% chance against a 28%
+   * breakeven scores like a solid lean; the probability-vs-benchmark shift happens
+   * in log-odds space, so benchmark 0.5 reproduces the standard behavior exactly.
+   */
+  benchmark?: number;
 }
 
 export interface FireFactorComponent {
@@ -255,40 +264,59 @@ export function computeFireFactor(input: FireFactorInput): FireFactorResult {
   const side: FireSide = input.overOnly ? 'over' : historySide;
   const blended = blendWilson(windows, side);
 
+  // The anchor every probability-shaped component is measured against. 0.5 for a
+  // standard line; a payout variant's breakeven otherwise — so the fused score reads
+  // "edge over what the payout needs", not "edge over a coin flip". Expressed for
+  // the CHOSEN side (an under vs a 0.5 benchmark is also 0.5, so standard lines are
+  // bit-for-bit unchanged).
+  const bench = Math.max(0.05, Math.min(0.95, input.benchmark ?? 0.5));
+  const benchSide = side === 'over' ? bench : 1 - bench;
+
+  // Trust is the Wilson LOWER bound's distance below the benchmark, re-centered so a
+  // benchmark of 0.5 reproduces the original formula. Without the shift, every
+  // low-probability (demon) side would floor trust regardless of sample size.
   const trustFactor =
-    blended === null ? 0.4 : Math.max(0.4, Math.min(1, (blended.lower + 0.1) / 0.6));
+    blended === null
+      ? 0.4
+      : Math.max(0.4, Math.min(1, (blended.lower + (0.5 - benchSide) + 0.1) / 0.6));
 
   const comps: FireFactorComponent[] = [];
   if (blended !== null) {
-    // Strength = how far the leaned side's rate sits above the fair 50% point
-    // (0.50 -> 0, ~0.70 -> max). We use the recency-weighted CENTER for the
+    // Strength = how far the leaned side's rate sits above the benchmark (the fair
+    // 50% point for a standard line, the payout breakeven for a variant): bench -> 0,
+    // ~(bench + HIT_SPAN·2) -> max. We use the recency-weighted CENTER for the
     // magnitude and let `trustFactor` (derived from the Wilson lower bound) apply
     // the small-sample discount — so confidence is counted once, not twice.
     comps.push({
       key: 'hit',
       label: 'Hit rate (confidence-adjusted)',
-      // Probability-style sub-score: a 50% rate is NEUTRAL (0.5), rising to 1.0 at
-      // (50% + HIT_SPAN). Feeding a "strength" value (0 at 50%) into logit would wrongly
-      // treat a coin-flip rate as strong evidence against the side.
-      score: clamp01(0.5 + (blended.center - 0.5) / (2 * FIREFACTOR_HIT_SPAN)),
+      // Probability-style sub-score: a rate AT the benchmark is NEUTRAL (0.5), rising
+      // to 1.0 at (benchmark + HIT_SPAN). Feeding a "strength" value (0 at neutral)
+      // into logit would wrongly treat a fair rate as strong evidence against the side.
+      score: clamp01(0.5 + (blended.center - benchSide) / (2 * FIREFACTOR_HIT_SPAN)),
       weight: FIREFACTOR_WEIGHTS.hit,
     });
   }
   if (modelProbOver != null) {
-    // Principled path: the projection's distribution gives P(over) directly.
+    // Principled path: the projection's distribution gives P(over) directly. The
+    // benchmark shift happens in log-odds space; at a 0.5 benchmark this reduces to
+    // the raw probability (sigmoid∘logit = identity within the clamp).
+    const pSide = side === 'over' ? modelProbOver : 1 - modelProbOver;
     comps.push({
       key: 'proj',
       label: 'Projection vs line',
-      score: clamp01(side === 'over' ? modelProbOver : 1 - modelProbOver),
+      score: clamp01(sigmoid(logit(pSide) - logit(benchSide))),
       weight: FIREFACTOR_WEIGHTS.proj,
     });
   } else if (projection !== null && stdev !== null) {
-    // Fallback when no distribution prob was supplied: a z-score sigmoid.
+    // Fallback when no distribution prob was supplied: a z-score sigmoid as a
+    // pseudo-P(over), then the same benchmark shift.
     const z = (projection - line) / Math.max(stdev, 0.5);
+    const pSide = side === 'over' ? sigmoid(1.1 * z) : sigmoid(-1.1 * z);
     comps.push({
       key: 'proj',
       label: 'Projection vs line',
-      score: side === 'over' ? sigmoid(1.1 * z) : sigmoid(-1.1 * z),
+      score: clamp01(sigmoid(logit(pSide) - logit(benchSide))),
       weight: FIREFACTOR_WEIGHTS.proj,
     });
   }
@@ -359,13 +387,18 @@ export function computeFireFactor(input: FireFactorInput): FireFactorResult {
   const thinSample = blended !== null && blended.decided < FIREFACTOR_MIN_GAMES;
   const tier = tierFor(score, !insufficient && score >= FIREFACTOR_TIER_CUTOFFS.none);
 
+  const calibrated = (input.benchmark ?? 0.5) !== 0.5;
   const note = insufficient
     ? 'No decided games at this line yet — no read.'
-    : input.overOnly && historySide === 'under'
-      ? 'This payout variant only pays the over, but recent history runs under this line — no over read here. Descriptive research from past games — not betting advice.'
-      : `Recent history runs ${side} on this line${
-          thinSample ? ' on a small sample, so read with extra caution' : ''
-        }. Descriptive research from past games — not betting advice.`;
+    : calibrated
+      ? `Scored against this payout variant's ~${Math.round(bench * 100)}% breakeven — 0 means fairly priced for its payout, not a coin flip.${
+          thinSample ? ' Small sample, so read with extra caution.' : ''
+        } Descriptive research from past games — not betting advice.`
+      : input.overOnly && historySide === 'under'
+        ? 'This payout variant only pays the over, but recent history runs under this line — no over read here. Descriptive research from past games — not betting advice.'
+        : `Recent history runs ${side} on this line${
+            thinSample ? ' on a small sample, so read with extra caution' : ''
+          }. Descriptive research from past games — not betting advice.`;
 
   return { side, score, tier, trustFactor, components: comps, valueMode, note };
 }

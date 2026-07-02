@@ -9,6 +9,7 @@
 //   goblin    — PrizePicks easier line / reduced payout (green)
 //   alternate — Underdog alternate line, carries a numeric `multiplier` (e.g. 1.31×)
 import type { ProvidedVariant } from './types';
+import { PP_BREAKEVEN } from './ppPayouts';
 
 export type PayoutKind = 'normal' | 'demon' | 'goblin' | 'alternate';
 
@@ -38,6 +39,33 @@ export function isNormalKind(oddsType: string | null | undefined): boolean {
  */
 export function isOverOnly(oddsType: string | null | undefined): boolean {
   return payoutKind(oddsType) !== 'normal';
+}
+
+/**
+ * The breakeven probability a rung's payout implies — the anchor FireFactor scores
+ * it against (0 = fairly priced). An exact posted multiplier wins (Underdog:
+ * 0.5/multiplier, the same "relative to a standard leg's 0.5" convention); PrizePicks
+ * demons/goblins fall back to the configured approximations. A standard line — or an
+ * alternate with no posted multiplier — anchors at the plain 0.5.
+ */
+export function variantBreakeven(
+  oddsType: string | null | undefined,
+  multiplier?: number | null,
+): number {
+  const kind = payoutKind(oddsType);
+  if (kind === 'normal') return 0.5;
+  if (multiplier != null && multiplier > 0) return Math.max(0.05, Math.min(0.95, 0.5 / multiplier));
+  if (kind === 'demon') return PP_BREAKEVEN.demon;
+  if (kind === 'goblin') return PP_BREAKEVEN.goblin;
+  return 0.5;
+}
+
+/** The strongest score on a row across its shown line and every scored rung — what
+ *  "worth showing at all" means once variants carry their own reads. */
+export function bestVariantScore(baseScore: number, variants?: ProvidedVariant[]): number {
+  let best = baseScore;
+  for (const v of variants ?? []) if (v.read && v.read.score > best) best = v.read.score;
+  return best;
 }
 
 // Row display priority when a source offers several kinds for one player+stat:

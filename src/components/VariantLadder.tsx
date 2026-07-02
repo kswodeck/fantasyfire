@@ -2,9 +2,10 @@
 
 import type { ProvidedVariant } from '@/lib/types';
 import { PayoutBadge, formatMultiplier } from './PayoutBadge';
-import { payoutKind } from '@/lib/payoutVariant';
+import { payoutKind, variantBreakeven } from '@/lib/payoutVariant';
 import { overRateAt } from '@/lib/stats';
 import { pct } from '@/lib/format';
+import { tierTextClass, valueLabel, heatLabel } from '@/lib/tierStyle';
 import { sourceLabel } from '@/lib/providedSources';
 import { PP_POWER_PLAY, PP_FLEX_PLAY, PP_DEMON_RULE, PP_GOBLIN_RULE } from '@/lib/ppPayouts';
 
@@ -47,7 +48,9 @@ export function VariantLadder({
         (harder, pays more), <span className="font-medium text-goblin">goblin</span>{' '}
         (easier, pays less), or an alternate with its payout multiplier — and the whole
         read updates to it. Only the standard line takes an under; every other variant
-        pays the over only.
+        pays the over only. Each rung&rsquo;s FireFactor is scored against its OWN payout
+        breakeven — 0 means fairly priced for that payout, not a coin flip — so rungs
+        compare directly.
         {anyMult && hasValues && (
           <>
             {' '}
@@ -92,6 +95,18 @@ export function VariantLadder({
                     title={`Season over rate ${pct(rate)} × ${formatMultiplier(mult as number)} payout`}
                   >
                     · payout-wt <span className="font-medium text-foreground">{weighted.toFixed(2)}</span>
+                  </span>
+                )}
+                {v.read && (
+                  <span
+                    className={`text-[11px] font-semibold tabular-nums ${tierTextClass(v.read.tier, v.read.side)}`}
+                    title={`${
+                      kind === 'normal'
+                        ? `${heatLabel(v.read.tier, v.read.side)} — scored vs a coin flip`
+                        : `${valueLabel(v.read.tier)} — scored vs this rung's ~${Math.round(variantBreakeven(v.oddsType, v.multiplier) * 100)}% payout breakeven`
+                    }`}
+                  >
+                    · FF {v.read.score}
                   </span>
                 )}
                 <span className="ml-auto flex items-center gap-2">

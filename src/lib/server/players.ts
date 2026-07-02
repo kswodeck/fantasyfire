@@ -74,7 +74,13 @@ import {
   getProvidedQuotesBySource,
 } from '@/lib/server/providedLines';
 import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
-import { pickRepresentative, normalLine, isOverOnly } from '@/lib/payoutVariant';
+import {
+  pickRepresentative,
+  normalLine,
+  isOverOnly,
+  variantBreakeven,
+  bestVariantScore,
+} from '@/lib/payoutVariant';
 
 /**
  * The season the app reads for a sport. Computed from today's date, falling back
@@ -1338,8 +1344,12 @@ export async function getPlayerResearch(
     cv: consistency.cv,
     matchup: applyMatchup ? (grade ?? undefined) : undefined,
     gamesPlayed: games.length,
-    // Demon/goblin/alternate rungs only pay the over — pin the read to that side.
+    // Demon/goblin/alternate rungs only pay the over — pin the read to that side —
+    // and are scored against their payout's breakeven, not a coin flip.
     overOnly: selectedVariant ? isOverOnly(selectedVariant.oddsType) : false,
+    benchmark: selectedVariant
+      ? variantBreakeven(selectedVariant.oddsType, selectedVariant.multiplier)
+      : undefined,
   };
   // FireFactor is the pure directional signal (hit · projection · consistency · matchup)
   // so it's IDENTICAL on the board and the player page. Price/line-value info (best book,
@@ -1391,6 +1401,36 @@ export async function getPlayerResearch(
   // identically on the board, so the verdict stays consistent for the same player/line.
   const gatedFireScore = gateAvailability(fireScore, availability?.status);
 
+  // Score every rung of the ladder (each vs ITS OWN payout breakeven) so the ladder
+  // compares rungs at a glance and rung switches paint instantly. Reuses the loaded
+  // games + line-independent projection; the shown line's read IS the page verdict.
+  const scoredVariants = variants.map((v): ProvidedVariant => {
+    if (v.line === line)
+      return { ...v, read: { side: gatedFireScore.side, score: gatedFireScore.score, tier: gatedFireScore.tier } };
+    const rungWindows = STAT_WINDOWS.map((w) => {
+      const hr = computeHitRate(games, stat, v.line, w);
+      return { window: String(w), overs: hr.overs, decided: hr.decided };
+    });
+    const rungProb = lineProbabilities(stat, projection.projection, seasonResult.stdev, v.line);
+    const rungCons = computeConsistency(seasonResult.values, seasonResult.mean, seasonResult.stdev, v.line);
+    const fs = gateAvailability(
+      computeFireFactor({
+        line: v.line,
+        windows: rungWindows,
+        projection: projection.projection,
+        stdev: seasonResult.stdev,
+        modelProbOver: rungProb?.over ?? null,
+        cv: rungCons.cv,
+        matchup: applyMatchup ? (grade ?? undefined) : undefined,
+        gamesPlayed: games.length,
+        overOnly: isOverOnly(v.oddsType),
+        benchmark: variantBreakeven(v.oddsType, v.multiplier),
+      }),
+      availability?.status,
+    );
+    return { ...v, read: { side: fs.side, score: fs.score, tier: fs.tier } };
+  });
+
   return {
     player,
     bio: toBio(record),
@@ -1399,7 +1439,7 @@ export async function getPlayerResearch(
     lineSource,
     oddsType: selectedVariant?.oddsType ?? null,
     multiplier: selectedVariant?.multiplier ?? null,
-    variants,
+    variants: scoredVariants,
     lineValue,
     seasonAverage: seasonResult.mean,
     gamesPlayed: games.length,
@@ -1885,8 +1925,12 @@ function computeBoardRows(
         cv: consistency.cv,
         matchup: opts.matchupGrades?.get(`${p.id}:${stat}`),
         gamesPlayed: games.length,
-        // Demon/goblin/alternate rungs only pay the over — pin the read to that side.
+        // Demon/goblin/alternate rungs only pay the over — pin the read to that side —
+        // and are scored against their payout's breakeven, not a coin flip.
         overOnly: shownRung ? isOverOnly(shownRung.oddsType) : false,
+        benchmark: shownRung
+          ? variantBreakeven(shownRung.oddsType, shownRung.multiplier)
+          : undefined,
       };
       // FireFactor is the pure directional signal — IDENTICAL to the player page for the
       // same line/stat/matchup. Line-value (best price, cross-book discount) is a separate
@@ -1928,6 +1972,36 @@ function computeBoardRows(
         }
       }
 
+      // Score the OTHER rungs too, each vs its own breakeven — chips switch with a
+      // read already in hand, kind-filtered views rank by the rung they'll show, and
+      // a hot demon keeps an otherwise-passing row on the board.
+      const scoredVariants = variants?.map((v): ProvidedVariant => {
+        if (v.line === line)
+          return { ...v, read: { side: fireScore.side, score: fireScore.score, tier: fireScore.tier } };
+        const rungWindows = STAT_WINDOWS.map((w) => {
+          const hr = computeHitRate(games, stat, v.line, w);
+          return { window: String(w), overs: hr.overs, decided: hr.decided };
+        });
+        const rungProb = lineProbabilities(stat, projection.projection, seasonHr.stdev, v.line);
+        const rungCons = computeConsistency(seasonHr.values, seasonHr.mean, seasonHr.stdev, v.line);
+        const fs = gateAvailability(
+          computeFireFactor({
+            line: v.line,
+            windows: rungWindows,
+            projection: projection.projection,
+            stdev: seasonHr.stdev,
+            modelProbOver: rungProb?.over ?? null,
+            cv: rungCons.cv,
+            matchup: opts.matchupGrades?.get(`${p.id}:${stat}`),
+            gamesPlayed: games.length,
+            overOnly: isOverOnly(v.oddsType),
+            benchmark: variantBreakeven(v.oddsType, v.multiplier),
+          }),
+          avail?.status,
+        );
+        return { ...v, read: { side: fs.side, score: fs.score, tier: fs.tier } };
+      });
+
       out.push({
         player: listItem,
         stat,
@@ -1938,12 +2012,19 @@ function computeBoardRows(
         lineValue: rowLineValue,
         oddsType: shownRung?.oddsType ?? null,
         multiplier: shownRung?.multiplier ?? null,
-        variants,
+        variants: scoredVariants,
       });
     }
   }
 
-  out.sort((a, b) => b.fireScore.score - a.fireScore.score);
+  // Rank (and retain, under the caps) by the row's BEST read — its shown line or any
+  // scored rung — so a pass-at-standard row with a strong demon isn't cut. The row
+  // still displays its shown line's read; the value badge explains the placement.
+  out.sort(
+    (a, b) =>
+      bestVariantScore(b.fireScore.score, b.variants) -
+      bestVariantScore(a.fireScore.score, a.variants),
+  );
   return capBoardRows(out, limit, perPlayerCap, perStatCap);
 }
 

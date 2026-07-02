@@ -172,6 +172,8 @@ export function useBoardPayoutFilter<T extends PayoutFilterableRow>(rows: T[]): 
     });
   };
 
+  const kindNarrowed = hasKinds && selectedKinds.size !== kindOptions.length;
+
   const { filtered, initialLines } = useMemo(() => {
     const initialLines = new Map<string, number>();
     if (!hasKinds && !hasMult) return { filtered: rows, initialLines };
@@ -192,6 +194,7 @@ export function useBoardPayoutFilter<T extends PayoutFilterableRow>(rows: T[]): 
       : KIND_ORDER;
 
     const out: T[] = [];
+    const chosenScore = new Map<T, number>();
     for (const r of rows) {
       const variants = r.variants ?? [];
       // Highest-priority selected kind the row actually has → its nearest rung.
@@ -205,11 +208,21 @@ export function useBoardPayoutFilter<T extends PayoutFilterableRow>(rows: T[]): 
         }
       }
       if (!chosen) continue; // row has no qualifying rung of any selected kind → hide
+      // Narrowed view + a scored rung that doesn't clear 0 (fairly priced or worse
+      // for its payout) → not worth surfacing in a value-focused cut.
+      if (kindNarrowed && chosen.read && chosen.read.score <= 0) continue;
       out.push(r);
+      if (chosen.read) chosenScore.set(r, chosen.read.score);
       if (chosen.line !== r.line) initialLines.set(`${r.player.slug}:${r.stat}`, chosen.line);
     }
+    // A narrowed cut re-ranks by the rung it will actually show (server order ranks
+    // by each row's best read, not this kind's). No-op when rungs carry no reads
+    // (trend rows) — the sort key defaults keep the incoming order stable.
+    if (kindNarrowed && chosenScore.size > 0) {
+      out.sort((a, b) => (chosenScore.get(b) ?? -1) - (chosenScore.get(a) ?? -1));
+    }
     return { filtered: out, initialLines };
-  }, [rows, hasKinds, hasMult, selectedKinds, multRange, rangeNarrowed]);
+  }, [rows, hasKinds, hasMult, selectedKinds, multRange, rangeNarrowed, kindNarrowed]);
 
   const active = (hasKinds && selectedKinds.size !== kindOptions.length) || (hasMult && rangeNarrowed);
 
