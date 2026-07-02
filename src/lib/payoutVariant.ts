@@ -10,6 +10,7 @@
 //   alternate — Underdog alternate line, carries a numeric `multiplier` (e.g. 1.31×)
 import type { ProvidedVariant } from './types';
 import { PP_BREAKEVEN_STEPS } from './ppPayouts';
+import { marketImpliedBreakeven, type RungQuote } from './odds/marketBreakeven';
 
 export type PayoutKind = 'normal' | 'demon' | 'goblin' | 'alternate';
 
@@ -85,6 +86,40 @@ export function variantRank(v: ProvidedVariant, ladder: ProvidedVariant[]): numb
  *  use this wherever the full ladder is in hand. */
 export function ladderBreakeven(v: ProvidedVariant, ladder: ProvidedVariant[]): number {
   return variantBreakeven(v.oddsType, v.multiplier, variantRank(v, ladder));
+}
+
+/**
+ * The breakeven a rung is actually SCORED against, best information first:
+ *   1. an exact posted multiplier (Underdog) — an exact breakeven;
+ *   2. the MARKET-IMPLIED bar — de-vigged sportsbook odds at the rung's exact line
+ *      (see marketImpliedBreakeven), kind-bounded because a payout can't beat the
+ *      standard leg's: an easier line always pays less (goblin bar ≥ 0.5), a harder
+ *      line always pays more (demon bar ≤ 0.5);
+ *   3. the configured extremity-stepped approximation (ladderBreakeven).
+ */
+export function resolvedBreakeven(
+  v: ProvidedVariant,
+  ladder: ProvidedVariant[],
+  quotes?: RungQuote[],
+): number {
+  const kind = payoutKind(v.oddsType);
+  if (kind === 'normal') return 0.5;
+  if (v.multiplier != null && v.multiplier > 0) return variantBreakeven(v.oddsType, v.multiplier);
+  const market = quotes?.length
+    ? marketImpliedBreakeven(quotes, v.line, normalLine(ladder))
+    : null;
+  if (market != null) {
+    if (kind === 'goblin') return Math.max(0.5, market);
+    if (kind === 'demon') return Math.min(0.5, market);
+    return market;
+  }
+  return ladderBreakeven(v, ladder);
+}
+
+/** The breakeven to ECHO in the UI for a rung: the server-resolved bar its read was
+ *  scored against when present, else the client-computable approximation. */
+export function shownBreakeven(v: ProvidedVariant, ladder: ProvidedVariant[]): number {
+  return v.breakeven ?? ladderBreakeven(v, ladder);
 }
 
 /** The strongest score on a row across its shown line and every scored rung — what

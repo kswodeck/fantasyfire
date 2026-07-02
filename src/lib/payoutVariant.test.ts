@@ -5,6 +5,8 @@ import {
   variantBreakeven,
   variantRank,
   ladderBreakeven,
+  resolvedBreakeven,
+  shownBreakeven,
   pickRepresentative,
 } from './payoutVariant';
 import { PP_BREAKEVEN_STEPS } from './ppPayouts';
@@ -81,5 +83,48 @@ describe('variantRank / ladderBreakeven', () => {
     expect(isOverOnly('demon')).toBe(true);
     expect(isOverOnly('alternate')).toBe(true);
     expect(payoutKind('balanced')).toBe('normal');
+  });
+});
+
+describe('resolvedBreakeven', () => {
+  // Standard 1.5 with a goblin at 0.5 and a demon at 2.5 (the TB-ladder shape).
+  const ladder = [rung(0.5, 'goblin'), rung(1.5, 'standard'), rung(2.5, 'demon')];
+  // A book quoting over 0.5 at -250/+190 → ~71% de-vigged.
+  const quotes = [{ line: 0.5, overOdds: -250, underOdds: 190 }];
+
+  it('standard lines stay at 0.5 regardless of quotes', () => {
+    expect(resolvedBreakeven(ladder[1], ladder, quotes)).toBe(0.5);
+  });
+
+  it('an exact posted multiplier beats the market read', () => {
+    const alt = rung(0.5, 'alternate', 1.25);
+    expect(resolvedBreakeven(alt, ladder, quotes)).toBeCloseTo(0.4, 10);
+  });
+
+  it('uses the MARKET-IMPLIED bar when a book quotes the rung line', () => {
+    const bar = resolvedBreakeven(ladder[0], ladder, quotes);
+    expect(bar).not.toBe(ladderBreakeven(ladder[0], ladder)); // not the config step
+    expect(bar).toBeGreaterThan(0.65);
+    expect(bar).toBeLessThan(0.75); // ≈ the de-vigged -250/+190
+  });
+
+  it('falls back to the configured steps without a matching quote', () => {
+    expect(resolvedBreakeven(ladder[2], ladder, quotes)).toBe(ladderBreakeven(ladder[2], ladder));
+    expect(resolvedBreakeven(ladder[0], ladder, [])).toBe(ladderBreakeven(ladder[0], ladder));
+    expect(resolvedBreakeven(ladder[0], ladder)).toBe(ladderBreakeven(ladder[0], ladder));
+  });
+
+  it('kind-bounds a market bar at the standard leg (goblin ≥ 0.5, demon ≤ 0.5)', () => {
+    // Nonsense market says the goblin line is a 40% shot — a goblin still can't pay
+    // BETTER than a standard leg, so its bar floors at 0.5.
+    const dogQuotes = [{ line: 0.5, overOdds: 150, underOdds: -190 }];
+    expect(resolvedBreakeven(ladder[0], ladder, dogQuotes)).toBe(0.5);
+    const demonQuotes = [{ line: 2.5, overOdds: -190, underOdds: 150 }];
+    expect(resolvedBreakeven(ladder[2], ladder, demonQuotes)).toBe(0.5);
+  });
+
+  it('shownBreakeven echoes a server-resolved bar and falls back to the approximation', () => {
+    expect(shownBreakeven({ ...ladder[0], breakeven: 0.71 }, ladder)).toBe(0.71);
+    expect(shownBreakeven(ladder[0], ladder)).toBe(ladderBreakeven(ladder[0], ladder));
   });
 });

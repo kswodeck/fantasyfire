@@ -121,11 +121,13 @@ export function useBoardPayoutFilter<T extends PayoutFilterableRow>(rows: T[]): 
   const [multMin, setMultMin] = useState<number | null>(null);
   const [multMax, setMultMax] = useState<number | null>(null);
   const hydrated = useRef(false);
+  const mountPath = useRef<string | null>(null);
 
   // Hydrate a narrowed filter from the URL once on mount (after hydration, so SSR
   // and the first client render agree), then mirror every change back into the URL
   // with replaceState — leaving all other params (and history) untouched.
   useEffect(() => {
+    mountPath.current = window.location.pathname;
     const params = new URLSearchParams(window.location.search);
     const k = parseKindsParam(params.get(KINDS_PARAM));
     const m = parseMultParam(params.get(MULT_PARAM));
@@ -160,16 +162,23 @@ export function useBoardPayoutFilter<T extends PayoutFilterableRow>(rows: T[]): 
   const fmt = (n: number) => String(parseFloat(n.toFixed(2)));
   useEffect(() => {
     if (!hydrated.current) return;
+    // Never stamp OUR params onto a different page: if the pathname has moved on
+    // (a client-side navigation is in flight), this instance's filter no longer
+    // owns the URL.
+    if (window.location.pathname !== mountPath.current) return;
     const params = new URLSearchParams(window.location.search);
     if (selected && !setsEqual(selectedKinds, defaultKinds))
       params.set(KINDS_PARAM, KIND_ORDER.filter((k) => selectedKinds.has(k)).join(','));
     else params.delete(KINDS_PARAM);
-    if (multMin !== null || multMax !== null)
+    // The multiplier range belongs in the URL only while the current book actually
+    // posts multipliers (Underdog) — on a book without them (PrizePicks) the bounds
+    // are inert AND scrubbed, so a carried-over ?mult= can't strand the board empty.
+    if (hasMult && (multMin !== null || multMax !== null))
       params.set(MULT_PARAM, `${multMin !== null ? fmt(multMin) : ''}-${multMax !== null ? fmt(multMax) : ''}`);
     else params.delete(MULT_PARAM);
     const qs = params.toString();
     window.history.replaceState(null, '', qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
-  }, [selected, selectedKinds, multMin, multMax, defaultKinds]);
+  }, [selected, selectedKinds, multMin, multMax, defaultKinds, hasMult]);
 
   const toggleKind = (k: PayoutKind) => {
     setSelected((prev) => {
@@ -189,8 +198,11 @@ export function useBoardPayoutFilter<T extends PayoutFilterableRow>(rows: T[]): 
     // A set multiplier bound is an AVAILABILITY filter across the WHOLE ladder —
     // any rung (standard or alternate), regardless of the Show selection: keep rows
     // with an in-range multiplier, opened at the best in-range rung. Clearing both
-    // bounds returns the view to the plain Show-chip behavior.
-    const rangeActive = multMin !== null || multMax !== null;
+    // bounds returns the view to the plain Show-chip behavior. It only ever applies
+    // when the current book POSTS multipliers (Underdog): on a book without them
+    // (PrizePicks), a leftover range must be inert — otherwise every row would fail
+    // the range and the board would empty out.
+    const rangeActive = hasMult && (multMin !== null || multMax !== null);
     const inRange = (m: number | null | undefined) =>
       m != null &&
       (multMin === null || m >= multMin - 1e-9) &&
@@ -242,7 +254,8 @@ export function useBoardPayoutFilter<T extends PayoutFilterableRow>(rows: T[]): 
   }, [rows, hasKinds, hasMult, selectedKinds, multMin, multMax]);
 
   const active =
-    (hasKinds && !setsEqual(selectedKinds, defaultKinds)) || multMin !== null || multMax !== null;
+    (hasKinds && !setsEqual(selectedKinds, defaultKinds)) ||
+    (hasMult && (multMin !== null || multMax !== null));
 
   return {
     kindOptions,
