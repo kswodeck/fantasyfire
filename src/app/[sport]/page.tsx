@@ -142,21 +142,15 @@ export default async function SportHome({ params }: PageProps) {
               sources={sources}
               defaultSource={initialSource}
               heading={
-                <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
                   Heat Check — top reads
-                  <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium normal-case text-muted">
-                    experimental
-                  </span>
                 </h2>
               }
             />
           ) : (
             <>
-              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted">
+              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
                 Heat Check — top reads
-                <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium normal-case text-muted">
-                  experimental
-                </span>
               </h2>
               <BoardTable rows={leans} />
             </>

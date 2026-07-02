@@ -33,12 +33,7 @@ export function VerdictPanel({
   return (
     <section aria-label="Verdict" className={`mb-6 rounded-xl border p-4 ${tierBox}`}>
       <div className="flex items-center justify-between gap-2">
-        <h3 className="flex items-center gap-2 text-sm font-semibold">
-          Verdict
-          <span className="rounded bg-surface px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted">
-            experimental
-          </span>
-        </h3>
+        <h3 className="text-sm font-semibold">Verdict</h3>
         <span className="text-xs text-muted">
           vs {line} {statShort}
         </span>
