@@ -87,7 +87,7 @@ export default async function GamePage({ params }: PageProps) {
   // Not on the current slate (already played, or a bad id) → soft fallback, not a 404.
   if (!game) {
     return (
-      <div className="mx-auto w-full max-w-3xl px-4 py-8">
+      <div className="mx-auto w-full max-w-3xl px-2 py-8 sm:px-4">
         {crumbs('Game')}
         <h1 className="text-2xl font-bold tracking-tight">Game not on the current slate</h1>
         <p className="mt-2 text-sm text-muted">
@@ -136,7 +136,7 @@ export default async function GamePage({ params }: PageProps) {
       : null;
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-8">
+    <div className="mx-auto w-full max-w-3xl px-2 py-8 sm:px-4">
       {crumbs(matchupLabel(game))}
 
       <header className="rounded-2xl border border-line bg-surface p-5">

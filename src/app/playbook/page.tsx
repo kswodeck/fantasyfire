@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 
 export default function PlaybookPage() {
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-8">
+    <div className="mx-auto w-full max-w-3xl px-2 py-8 sm:px-4">
       <Breadcrumbs className="mb-4" items={[{ label: 'Home', href: '/' }, { label: 'My Playbook' }]} />
       <h1 className="text-3xl font-bold tracking-tight">My Playbook</h1>
       <p className="mt-2 max-w-2xl text-sm text-muted">

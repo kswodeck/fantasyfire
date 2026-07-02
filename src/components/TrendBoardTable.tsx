@@ -12,6 +12,7 @@ import { SportTag } from './SportTag';
 import { LeanArrow } from './LeanArrow';
 import { PayoutBadge } from './PayoutBadge';
 import { VariantChips } from './VariantChips';
+import { leanTextClass } from '@/lib/tierStyle';
 
 /** The row's own top-level snapshot as a TrendRung (the standard-preferred rung). */
 function headlineRung(r: TrendRow): TrendRung {
@@ -121,15 +122,12 @@ function TrendRowCard({
     d.streak ?? r.streak ?? r.rungTrends?.find((rt) => rt.streak)?.streak ?? null;
 
   return (
-    <li className="relative flex items-center gap-2 px-3 py-2.5 transition-colors hover:bg-surface-2 sm:gap-3">
+    <li className="relative flex items-center gap-2 px-2 py-2.5 transition-colors hover:bg-surface-2 sm:gap-3 sm:px-3">
       <Link
         href={`/${sport}/${r.player.slug}?stat=${r.stat}&line=${d.line}${source ? `&source=${source}` : ''}`}
         aria-label={`${r.player.fullName} ${d.side} ${d.line} ${r.statShort}`}
         className="absolute inset-0"
       />
-      <span className="w-5 shrink-0 text-right text-xs tabular-nums text-muted">
-        {r.rank}
-      </span>
       <PlayerAvatar
         sport={sport}
         externalId={r.player.externalId}
@@ -162,7 +160,8 @@ function TrendRowCard({
             </span>
           )}
           <span className="min-w-0 truncate">
-            {r.player.teamAbbreviation} · {d.side === 'over' ? 'Over' : 'Under'}{' '}
+            {r.player.teamAbbreviation} ·{' '}
+            <span className={leanTextClass(d.side)}>{d.side === 'over' ? 'Over' : 'Under'}</span>{' '}
             <span className="tabular-nums">{d.line}</span> {r.statShort}
           </span>
         </div>
@@ -172,12 +171,11 @@ function TrendRowCard({
           className={`flex items-center justify-end gap-1 text-sm font-semibold ${sideCls}`}
         >
           <LeanArrow tier="Lean" side={d.side} size={14} />
-          {Math.round(d.recentRate * d.recentGames)} of {d.recentGames}{' '}
-          <span className="text-xs font-normal text-muted">L10</span>
+          {Math.round(d.recentRate * d.recentGames)} of {d.recentGames}
         </div>
         <div className="text-[11px] tabular-nums text-muted">
-          {pct(d.recentRate)} · +{Math.round(d.delta * 100)}
-          <span className="hidden sm:inline"> vs {pct(d.seasonRate)} season</span>
+          {pct(d.recentRate)} <span className="text-muted/80">L10</span>
+          <span className="hidden sm:inline"> · vs {pct(d.seasonRate)} season</span>
         </div>
         {streakSample && (
           <div
@@ -186,7 +184,7 @@ function TrendRowCard({
             }`}
           >
             <LeanArrow tier="Lean" side={(d.streak ?? streakSample).side} size={11} />
-            {(d.streak ?? streakSample).length} straight {(d.streak ?? streakSample).side}
+            {(d.streak ?? streakSample).length} straight
           </div>
         )}
       </div>

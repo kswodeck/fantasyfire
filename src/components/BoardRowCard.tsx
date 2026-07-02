@@ -12,7 +12,7 @@ import { LeanArrow } from './LeanArrow';
 import { PayoutBadge, formatMultiplier } from './PayoutBadge';
 import { VariantChips } from './VariantChips';
 import { getTeam } from '@/lib/teams';
-import { tierTextClass, heatLabel } from '@/lib/tierStyle';
+import { tierTextClass, heatLabel, leanTextClass } from '@/lib/tierStyle';
 import { sourceLabel } from '@/lib/providedSources';
 import { payoutKind } from '@/lib/payoutVariant';
 import { FIREFACTOR_TIER_CUTOFFS } from '@/lib/stats';
@@ -89,7 +89,7 @@ export function BoardRowCard({
   const href = `/${sport}/${row.player.slug}?stat=${row.stat}&line=${line}${source ? `&source=${source}` : ''}`;
 
   return (
-    <li className="relative flex items-center gap-2.5 px-3 py-2.5 transition-colors hover:bg-surface-2">
+    <li className="relative flex items-center gap-2.5 px-2 py-2.5 transition-colors hover:bg-surface-2 sm:px-3">
       <Link href={href} aria-label={`${row.player.fullName} ${fireScore.side} ${line} ${row.statShort}`} className="absolute inset-0" />
       <PlayerAvatar sport={sport} externalId={row.player.externalId} name={row.player.fullName} size={36} ring={team.primary} />
       <div className="min-w-0 flex-1">
@@ -121,7 +121,7 @@ export function BoardRowCard({
           )}
           <span className="min-w-0 truncate">
             {row.player.teamAbbreviation} ·{' '}
-            {fireScore.side === 'over' ? 'Over' : 'Under'}{' '}
+            <span className={leanTextClass(fireScore.side)}>{fireScore.side === 'over' ? 'Over' : 'Under'}</span>{' '}
             <span className="tabular-nums">{line}</span> {row.statShort}
           </span>
         </div>

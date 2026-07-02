@@ -29,6 +29,12 @@ export function heatIcon(tier: string, side: Side): 'flame' | 'snowflake' | 'das
   return side === 'over' ? 'flame' : 'snowflake';
 }
 
+/** Emphasis class for a bare over/under lean word so directions POP everywhere they're
+ *  shown (board/trends/playbook meta lines, etc.): bold + warm (over) / cool (under). */
+export function leanTextClass(side: Side): string {
+  return `font-semibold ${side === 'over' ? 'text-over' : 'text-under'}`;
+}
+
 /** Text/icon color class for a tier + side (warm = over, cool = under). */
 export function tierTextClass(tier: string, side: Side): string {
   if (isNeutral(tier)) return 'text-muted';

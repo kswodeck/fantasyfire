@@ -15,7 +15,7 @@ export default async function SportLayout({
   return (
     <>
       {isSport(sport) && (
-        <div className="mx-auto w-full max-w-5xl px-4 pt-4">
+        <div className="mx-auto w-full max-w-5xl px-2 pt-4 sm:px-4">
           <SportNav sport={sport} />
         </div>
       )}

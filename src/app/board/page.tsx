@@ -37,7 +37,7 @@ export default async function AllBoardPage() {
     Object.values(boardsBySource).some((r) => r.length > 0) || medianRows.length > 0;
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-8">
+    <div className="mx-auto w-full max-w-3xl px-2 py-8 sm:px-4">
       <Breadcrumbs
         className="mb-4"
         items={[{ label: 'Home', href: '/' }, { label: 'Heat Check' }]}

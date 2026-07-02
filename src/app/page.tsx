@@ -63,7 +63,7 @@ export default async function Home() {
   });
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4">
+    <div className="mx-auto w-full max-w-5xl px-2 sm:px-4">
       <section className="flex flex-col items-center gap-6 py-14 text-center">
         <FlameMark className="h-14 w-14 text-brand" />
         <h1 className="max-w-2xl text-4xl font-bold tracking-tight sm:text-5xl">
