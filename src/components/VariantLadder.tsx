@@ -115,7 +115,6 @@ export function VariantLadder({
                   ) : (
                     <PayoutBadge oddsType={v.oddsType} multiplier={v.multiplier} showLabel />
                   )}
-                  {active && <span className="text-[11px] font-medium text-brand">selected</span>}
                 </span>
               </button>
             </li>
