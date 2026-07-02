@@ -28,7 +28,7 @@ import {
   impliedTeamTotal,
   environmentMultiplier,
   volumeMultiplier,
-  lineProbabilities,
+  calibratedLineProbOver,
   computeFireFactor,
   gateAvailability,
   type AvailabilityStatus,
@@ -1318,13 +1318,17 @@ export async function getPlayerResearch(
     line,
   );
 
-  // Model P(over) from the adjusted projection's distribution (idea #2) — the
-  // principled "projection vs line" probability FireFactor leans on.
-  const modelProb = lineProbabilities(
+  // Model P(over) — the projection's distribution ANCHORED to the player's own
+  // empirical rate at this exact line (the parametric model supplies the matchup
+  // shift + a thin-sample prior, never a level the sample contradicts).
+  const modelProbOver = calibratedLineProbOver(
     stat,
     projection.projection,
+    projection.adjustment,
     seasonResult.stdev,
     line,
+    seasonResult.hitRateOver,
+    seasonResult.decided,
   );
 
   // Cross-book market consensus + best price / +EV (idea #1) from the scraped book
@@ -1342,7 +1346,7 @@ export async function getPlayerResearch(
     })),
     projection: projection.projection,
     stdev: seasonResult.stdev,
-    modelProbOver: modelProb?.over ?? null,
+    modelProbOver,
     cv: consistency.cv,
     matchup: applyMatchup ? (grade ?? undefined) : undefined,
     gamesPlayed: games.length,
@@ -1411,7 +1415,11 @@ export async function getPlayerResearch(
       const hr = computeHitRate(games, stat, v.line, w);
       return { window: String(w), overs: hr.overs, decided: hr.decided };
     });
-    const rungProb = lineProbabilities(stat, projection.projection, seasonResult.stdev, v.line);
+    const rungSeason = computeHitRate(games, stat, v.line, 'season');
+    const rungProbOver = calibratedLineProbOver(
+      stat, projection.projection, projection.adjustment, seasonResult.stdev, v.line,
+      rungSeason.hitRateOver, rungSeason.decided,
+    );
     const rungCons = computeConsistency(seasonResult.values, seasonResult.mean, seasonResult.stdev, v.line);
     const fs = gateAvailability(
       computeFireFactor({
@@ -1419,7 +1427,7 @@ export async function getPlayerResearch(
         windows: rungWindows,
         projection: projection.projection,
         stdev: seasonResult.stdev,
-        modelProbOver: rungProb?.over ?? null,
+        modelProbOver: rungProbOver,
         cv: rungCons.cv,
         matchup: applyMatchup ? (grade ?? undefined) : undefined,
         gamesPlayed: games.length,
@@ -1451,7 +1459,7 @@ export async function getPlayerResearch(
       consistency,
       matchupGrade: grade,
       fireScore: gatedFireScore,
-      modelProbOver: modelProb?.over ?? null,
+      modelProbOver,
       marketConsensus: consensus,
     },
     splits,
@@ -1907,11 +1915,14 @@ function computeBoardRows(
         environment: opts.envMultByPlayer?.get(p.id) ?? 1,
         volume: volumeMult,
       });
-      const modelProb = lineProbabilities(
+      const modelProbOver = calibratedLineProbOver(
         stat,
         projection.projection,
+        projection.adjustment,
         seasonHr.stdev,
         line,
+        seasonHr.hitRateOver,
+        seasonHr.decided,
       );
       const consistency = computeConsistency(
         seasonHr.values,
@@ -1930,7 +1941,7 @@ function computeBoardRows(
         windows,
         projection: projection.projection,
         stdev: seasonHr.stdev,
-        modelProbOver: modelProb?.over ?? null,
+        modelProbOver,
         cv: consistency.cv,
         matchup: opts.matchupGrades?.get(`${p.id}:${stat}`),
         gamesPlayed: games.length,
@@ -1989,7 +2000,11 @@ function computeBoardRows(
           const hr = computeHitRate(games, stat, v.line, w);
           return { window: String(w), overs: hr.overs, decided: hr.decided };
         });
-        const rungProb = lineProbabilities(stat, projection.projection, seasonHr.stdev, v.line);
+        const rungSeason = computeHitRate(games, stat, v.line, 'season');
+        const rungProbOver = calibratedLineProbOver(
+          stat, projection.projection, projection.adjustment, seasonHr.stdev, v.line,
+          rungSeason.hitRateOver, rungSeason.decided,
+        );
         const rungCons = computeConsistency(seasonHr.values, seasonHr.mean, seasonHr.stdev, v.line);
         const fs = gateAvailability(
           computeFireFactor({
@@ -1997,7 +2012,7 @@ function computeBoardRows(
             windows: rungWindows,
             projection: projection.projection,
             stdev: seasonHr.stdev,
-            modelProbOver: rungProb?.over ?? null,
+            modelProbOver: rungProbOver,
             cv: rungCons.cv,
             matchup: opts.matchupGrades?.get(`${p.id}:${stat}`),
             gamesPlayed: games.length,
