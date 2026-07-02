@@ -23,10 +23,12 @@ import { FIREFACTOR_TIER_CUTOFFS } from '@/lib/stats';
  * sit above it (z-10) so clicking one switches the shown rung WITHOUT navigating.
  *
  * LAYOUT STABILITY CONTRACT: clicking a chip must not move the chips under the
- * pointer (a shifted chip makes the next click fall through to the row link). The
- * meta row therefore never wraps, the side word always renders (even on a Pass), the
- * chips keep a fixed structure, and the payout badge sits AFTER the chips so its
- * appearing/disappearing never displaces them.
+ * pointer at all (a shifted chip makes the next click miss or fall through to the
+ * row link). The chips therefore render FIRST in a non-wrapping meta row — before
+ * the side word, line number, and payout badge, all of which change width across
+ * rungs — and the right-hand block keeps its context lines mounted (invisible off
+ * the default rung) so the row height, and with it the chips' vertical centering,
+ * never changes either.
  *
  * The standard line is the no-chip-highlighted state: clicking an active chip cycles
  * that kind's ladder and then funnels back to the plain line when the book has one.
@@ -96,13 +98,10 @@ export function BoardRowCard({
           <span className="truncate text-sm font-semibold">{row.player.fullName}</span>
           <InjuryBadge injury={row.player.availability} />
         </div>
-        {/* One non-wrapping meta row: text | chips | badge — see the stability contract. */}
+        {/* One non-wrapping meta row with the chips FIRST: their position depends on
+            nothing that can change on a click — not the side word ("Over"/"Under"),
+            not the line number's width, not the right-hand read block. */}
         <div className="flex items-center gap-1.5 text-xs text-muted">
-          <span className="min-w-0 truncate">
-            {row.player.teamAbbreviation} ·{' '}
-            {fireScore.side === 'over' ? 'Over' : 'Under'}{' '}
-            <span className="tabular-nums">{line}</span> {row.statShort}
-          </span>
           {hasSwitcher && (
             <VariantChips
               variants={variants}
@@ -113,12 +112,18 @@ export function BoardRowCard({
           )}
           {/* Current rung's payout tag (e.g. an Underdog non-1× multiplier on the
               standard line), or the shown rung's badge when there's no switcher.
-              AFTER the chips, so toggling it never moves them. */}
+              Between the chips and the text: toggling it shifts the text, never
+              the buttons. */}
           {(!hasSwitcher || activeKind === 'normal') && (
             <span className="shrink-0">
               <PayoutBadge oddsType={currentRung?.oddsType} multiplier={currentRung?.multiplier} showLabel={false} />
             </span>
           )}
+          <span className="min-w-0 truncate">
+            {row.player.teamAbbreviation} ·{' '}
+            {fireScore.side === 'over' ? 'Over' : 'Under'}{' '}
+            <span className="tabular-nums">{line}</span> {row.statShort}
+          </span>
         </div>
       </div>
       <div className={`shrink-0 text-right transition-opacity ${loading ? 'opacity-40' : ''}`}>
@@ -127,15 +132,19 @@ export function BoardRowCard({
           {heatLabel(fireScore.tier, fireScore.side)}
         </div>
         <div className="text-[11px] tabular-nums text-muted">FireFactor {fireScore.score}</div>
-        {isDefault && row.lineValue?.best && row.lineValue.best.edge >= 0.05 && (
-          <div className="text-[10px] tabular-nums text-muted">
+        {/* The default-line context lines stay MOUNTED (merely invisible) off the
+            default rung — losing them would change the row height and re-center the
+            chips vertically mid-click. Presence keys off the row's server read so it
+            can't flicker as rungs switch. */}
+        {row.lineValue?.best && row.lineValue.best.edge >= 0.05 && (
+          <div className={`text-[10px] tabular-nums text-muted ${isDefault ? '' : 'invisible'}`}>
             best: {sourceLabel(row.lineValue.best.source)} +{Math.round(row.lineValue.best.edge * 100)}
           </div>
         )}
-        {/* A special rung scoring a real read above the shown line — the chips funnel
-            straight to it. */}
-        {isDefault && bestSpecial?.read && bestSpecial.read.score >= FIREFACTOR_TIER_CUTOFFS.slight && bestSpecial.read.score > fireScore.score && (
-          <div className="text-[10px] tabular-nums text-heat-1">
+        {/* A special rung scoring a real read above the default line — the chips
+            funnel straight to it. */}
+        {bestSpecial?.read && bestSpecial.read.score >= FIREFACTOR_TIER_CUTOFFS.slight && bestSpecial.read.score > row.fireScore.score && (
+          <div className={`text-[10px] tabular-nums text-heat-1 ${isDefault ? '' : 'invisible'}`}>
             {specialWord(bestSpecial)}: FF {bestSpecial.read.score}
           </div>
         )}

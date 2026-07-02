@@ -2,7 +2,7 @@
 
 import type { ProvidedVariant } from '@/lib/types';
 import { PayoutBadge, formatMultiplier } from './PayoutBadge';
-import { payoutKind, variantBreakeven } from '@/lib/payoutVariant';
+import { payoutKind, ladderBreakeven } from '@/lib/payoutVariant';
 import { overRateAt } from '@/lib/stats';
 import { pct } from '@/lib/format';
 import { tierTextClass, heatLabel } from '@/lib/tierStyle';
@@ -103,7 +103,7 @@ export function VariantLadder({
                     title={`${heatLabel(v.read.tier, v.read.side)} — ${
                       kind === 'normal'
                         ? 'scored vs a coin flip'
-                        : `scored vs this rung's ~${Math.round(variantBreakeven(v.oddsType, v.multiplier) * 100)}% payout breakeven`
+                        : `scored vs this rung's ~${Math.round(ladderBreakeven(v, sorted) * 100)}% payout breakeven`
                     }`}
                   >
                     · FF {v.read.score}
@@ -115,7 +115,6 @@ export function VariantLadder({
                   ) : (
                     <PayoutBadge oddsType={v.oddsType} multiplier={v.multiplier} showLabel />
                   )}
-                  {active && <span className="text-[11px] font-medium text-brand">selected</span>}
                 </span>
               </button>
             </li>

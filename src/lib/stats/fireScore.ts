@@ -227,14 +227,19 @@ function disjointBuckets(windows: WindowHits[]): Bucket[] {
   return out;
 }
 
-/** Recency-weighted blend of a side's Wilson bounds across disjoint buckets.
+/** Recency-weighted blend of a side's Wilson bounds AND raw rate across disjoint
+ *  buckets. `rate` is the shrinkage-free success rate — the edge MAGNITUDE (the
+ *  Wilson center shrinks toward 0.5, which is fine against a 0.5 benchmark but
+ *  systematically erases a goblin's edge over its ~0.75 breakeven while flattering a
+ *  demon's — sample uncertainty belongs to the trust factor alone, counted once).
  *  `decided` is the total over all buckets — the honest (non-double-counted) sample. */
 function blendWilson(
   windows: WindowHits[],
   side: FireSide,
-): { lower: number; center: number; decided: number } | null {
+): { lower: number; center: number; rate: number; decided: number } | null {
   let lowerNum = 0;
   let centerNum = 0;
+  let rateNum = 0;
   let den = 0;
   let decided = 0;
   for (const b of disjointBuckets(windows)) {
@@ -243,10 +248,13 @@ function blendWilson(
     const wt = b.decided * (FIREFACTOR_WINDOW_RECENCY[b.window] ?? 1);
     lowerNum += wt * iv.lower;
     centerNum += wt * iv.center;
+    rateNum += wt * (successes / b.decided);
     den += wt;
     decided += b.decided;
   }
-  return den === 0 ? null : { lower: lowerNum / den, center: centerNum / den, decided };
+  return den === 0
+    ? null
+    : { lower: lowerNum / den, center: centerNum / den, rate: rateNum / den, decided };
 }
 
 function tierFor(score: number, ok: boolean): FireTier {
@@ -289,16 +297,24 @@ export function computeFireFactor(input: FireFactorInput): FireFactorResult {
   if (blended !== null) {
     // Strength = how far the leaned side's rate sits above the benchmark (the fair
     // 50% point for a standard line, the payout breakeven for a variant): bench -> 0,
-    // ~(bench + HIT_SPAN·2) -> max. We use the recency-weighted CENTER for the
-    // magnitude and let `trustFactor` (derived from the Wilson lower bound) apply
-    // the small-sample discount — so confidence is counted once, not twice.
+    // ~(bench + HIT_SPAN·2) -> max. We use the recency-weighted RAW rate for the
+    // magnitude — the Wilson center's shrinkage toward 0.5 would double-count sample
+    // uncertainty AND bias the edge whenever the benchmark isn't 0.5 (it erases a
+    // goblin's edge over its high breakeven) — and let `trustFactor` (derived from
+    // the Wilson lower bound) apply the small-sample discount exactly once.
+    // The span scales with the binomial noise at the benchmark (√p(1−p)): the same
+    // point-edge is a stronger statistical signal near the extremes, so a goblin's
+    // +8pts over its ~75% bar counts like a standard line's +10pts over 50%. A 0.5
+    // benchmark reproduces the flat HIT_SPAN exactly.
+    const hitSpan =
+      FIREFACTOR_HIT_SPAN * (Math.sqrt(benchSide * (1 - benchSide)) / 0.5);
     comps.push({
       key: 'hit',
       label: 'Hit rate (confidence-adjusted)',
       // Probability-style sub-score: a rate AT the benchmark is NEUTRAL (0.5), rising
-      // to 1.0 at (benchmark + HIT_SPAN). Feeding a "strength" value (0 at neutral)
+      // to 1.0 at (benchmark + span). Feeding a "strength" value (0 at neutral)
       // into logit would wrongly treat a fair rate as strong evidence against the side.
-      score: clamp01(0.5 + (blended.center - benchSide) / (2 * FIREFACTOR_HIT_SPAN)),
+      score: clamp01(0.5 + (blended.rate - benchSide) / (2 * hitSpan)),
       weight: FIREFACTOR_WEIGHTS.hit,
     });
   }
@@ -391,7 +407,7 @@ export function computeFireFactor(input: FireFactorInput): FireFactorResult {
   // (Skipped entirely with no decided games — an unreadable line stays a true 0.)
   const pModelSide = modelProbOver == null ? null : side === 'over' ? modelProbOver : 1 - modelProbOver;
   if (blended !== null) {
-    const pHat = pModelSide !== null ? 0.6 * blended.center + 0.4 * pModelSide : blended.center;
+    const pHat = pModelSide !== null ? 0.6 * blended.rate + 0.4 * pModelSide : blended.rate;
     score = Math.max(
       score,
       Math.min(FIREFACTOR_CHANCE_FLOOR.cap, Math.round(pHat * FIREFACTOR_CHANCE_FLOOR.gain)),

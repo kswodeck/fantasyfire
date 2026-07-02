@@ -11,7 +11,6 @@ import {
   type FireFactorInput,
   type WindowHits,
 } from './fireScore';
-import { wilsonInterval } from './confidence';
 
 function win(overs: number, decided: number, window = '10'): WindowHits {
   return { window, overs, decided };
@@ -216,6 +215,57 @@ describe('computeFireFactor', () => {
       expect(loose.score).toBeGreaterThan(tight.score);
     });
 
+    it('scales the hit span with binomial noise at the benchmark (extreme edges count more)', () => {
+      // Same raw sample; the variant benchmark's smaller √p(1−p) tightens the span,
+      // so a +10pt edge over a 0.75 bar out-scores the same points over 0.5.
+      const windows = [win(17, 20, '10'), win(34, 40, '20')]; // 85% rate
+      const vsGoblinBar = computeFireFactor({
+        ...base,
+        windows,
+        matchup: undefined,
+        overOnly: true,
+        benchmark: 0.75,
+      });
+      const hit = (r: ReturnType<typeof computeFireFactor>) =>
+        r.components.find((c) => c.key === 'hit')!.score;
+      const expectedSpan = FIREFACTOR_HIT_SPAN * (Math.sqrt(0.75 * 0.25) / 0.5);
+      expect(hit(vsGoblinBar)).toBeCloseTo(
+        Math.min(1, 0.5 + (0.85 - 0.75) / (2 * expectedSpan)),
+        5,
+      );
+      // And the standard benchmark still uses the flat span exactly.
+      const std = computeFireFactor({ ...base, windows: [win(58, 100, 'season')] });
+      expect(hit(std)).toBeCloseTo(0.5 + (0.58 - 0.5) / (2 * FIREFACTOR_HIT_SPAN), 5);
+    });
+
+    it('a goblin above its high breakeven scores like the same edge on a standard line', () => {
+      // Same +10pt edge over the benchmark, same sample sizes: a goblin hitting 85%
+      // vs a 75% breakeven must NOT read materially worse than a standard line
+      // hitting 60% vs 50% — the old Wilson-center shrinkage erased high-rate edges.
+      const goblin = computeFireFactor({
+        line: 15,
+        windows: [win(9, 10, '5'), win(17, 20, '10'), win(34, 40, '20')],
+        projection: 18,
+        stdev: 5,
+        cv: 0.25,
+        matchup: undefined,
+        gamesPlayed: 40,
+        overOnly: true,
+        benchmark: 0.75,
+      });
+      const standard = computeFireFactor({
+        line: 20,
+        windows: [win(6, 10, '5'), win(12, 20, '10'), win(24, 40, '20')],
+        projection: 21.5,
+        stdev: 5,
+        cv: 0.25,
+        matchup: undefined,
+        gamesPlayed: 40,
+      });
+      expect(goblin.score).toBeGreaterThanOrEqual(FIREFACTOR_TIER_CUTOFFS.slight); // a real read
+      expect(goblin.score).toBeGreaterThan(standard.score * 0.6); // comparable, not crushed
+    });
+
     it('benchmark 0.5 reproduces the standard behavior exactly', () => {
       const std = computeFireFactor(base);
       const bench = computeFireFactor({ ...base, benchmark: 0.5 });
@@ -257,14 +307,16 @@ describe('computeFireFactor', () => {
     expect(proj.score).toBeGreaterThan(0.5); // projection above the line ⇒ leans over
   });
 
-  it('hit sub-score is 0.5-centered on the Wilson CENTER (50% rate ⇒ neutral)', () => {
+  it('hit sub-score is 0.5-centered on the RAW rate (50% rate ⇒ neutral)', () => {
     const overs = 58; // ~58% rate — chosen so the sub-score does NOT clamp to 1.0
     const decided = 100;
     const r = computeFireFactor({ ...base, windows: [win(overs, decided, 'season')], gamesPlayed: decided });
-    const center = wilsonInterval(overs, decided).center;
+    // The magnitude uses the shrinkage-free rate (the Wilson LOWER bound already
+    // handles sample uncertainty via the trust factor — counted once, not twice).
+    const rate = overs / decided;
     const hit = r.components.find((c) => c.key === 'hit')!.score;
     expect(hit).toBeCloseTo(
-      Math.max(0, Math.min(1, 0.5 + (center - 0.5) / (2 * FIREFACTOR_HIT_SPAN))),
+      Math.max(0, Math.min(1, 0.5 + (rate - 0.5) / (2 * FIREFACTOR_HIT_SPAN))),
       5,
     );
     expect(hit).toBeGreaterThan(0.5); // a real over-lean reads above neutral

@@ -2,7 +2,7 @@
 
 import type { ProvidedVariant } from '@/lib/types';
 import { PayoutGlyph, formatMultiplier } from './PayoutBadge';
-import { payoutKind, variantBreakeven, type PayoutKind } from '@/lib/payoutVariant';
+import { payoutKind, ladderBreakeven, type PayoutKind } from '@/lib/payoutVariant';
 
 const CHIP =
   'inline-flex cursor-pointer items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold leading-none transition-colors';
@@ -64,7 +64,7 @@ export function VariantChips({
     if (rungsOfKind(variants, kind).length === 0) return null;
     const active = kind === activeKind;
     const target = active ? currentRung : nearest(rungsOfKind(variants, kind), line);
-    const bk = Math.round(variantBreakeven(kind, null) * 100);
+    const bk = target ? Math.round(ladderBreakeven(target, variants) * 100) : 50;
     const tone =
       kind === 'demon'
         ? active
@@ -103,7 +103,7 @@ export function VariantChips({
       : 'border-line text-muted hover:text-foreground';
     const altBk =
       shown?.multiplier != null
-        ? ` Scored vs its ~${Math.round(variantBreakeven('alternate', shown.multiplier) * 100)}% payout breakeven${
+        ? ` Scored vs its ~${Math.round(ladderBreakeven(shown, variants) * 100)}% payout breakeven${
             shown.read ? ` (FireFactor ${shown.read.score} at ${shown.line})` : ''
           }.`
         : '';
@@ -117,7 +117,9 @@ export function VariantChips({
             ? 'Click to cycle the alternate ladder, then back to the standard line.'
             : 'Click again for the standard line.'
         }`}
-        className={`${CHIP} ${tone}`}
+        // Fixed min-width so a changing multiplier label ("1.5×" → "1.31×") can't
+        // resize the chip mid-cycle — part of the layout-stability contract.
+        className={`${CHIP} min-w-[2.75rem] justify-center ${tone}`}
       >
         <span className="tabular-nums">
           {shown?.multiplier != null ? formatMultiplier(shown.multiplier) : 'alt'}

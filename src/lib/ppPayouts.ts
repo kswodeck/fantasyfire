@@ -21,19 +21,26 @@ export const PP_FLEX_PLAY: ReadonlyArray<{ picks: number; allHit: number; oneMis
 
 /**
  * Approximate per-leg BREAKEVEN probabilities for PrizePicks variants — the anchor
- * FireFactor scores a variant against (0 = fairly priced for its payout).
+ * FireFactor scores a variant against (0 = fairly priced for its payout) — STEPPED BY
+ * EXTREMITY, because PrizePicks prices each rung individually: the further a goblin
+ * sits below the standard line (the easier it is), the less it pays, so the higher
+ * the bar it must clear; demons mirror the other way (harder line → bigger payout →
+ * lower bar). Index 0 = the rung nearest the standard line; ladders deeper than the
+ * table reuse the last entry.
  *
  * Convention: the standard line is anchored at 0.5 (FireFactor's long-standing
  * neutral point), and a variant's anchor scales by the payout it buys relative to a
- * standard leg: breakeven ≈ 0.5 × (standard payout / variant payout). Using a 2-pick
- * Power Play (3×) against commonly-cited demon (~4.25×) and goblin (~2×) adjustments
- * gives ≈0.35 and ≈0.75. TUNE THESE alongside the payout tables above when
- * PrizePicks changes them — the UI presents them as approximate. Underdog needs no
+ * standard leg: breakeven ≈ 0.5 × (standard payout / variant payout). PrizePicks
+ * ships NO per-line payout numbers through its API, so these are hand-derived from
+ * the published payout-table adjustments — TUNE THEM alongside the tables above when
+ * PrizePicks changes payouts; the UI presents them as approximate. Underdog needs no
  * entry here: its exact per-line multipliers give exact breakevens (0.5/multiplier).
  */
-export const PP_BREAKEVEN: Readonly<Record<'demon' | 'goblin', number>> = {
-  demon: 0.35,
-  goblin: 0.75,
+export const PP_BREAKEVEN_STEPS: Readonly<Record<'demon' | 'goblin', readonly number[]>> = {
+  // Nearest goblin ≈ a mild discount; the deepest (easiest) goblins pay the least.
+  goblin: [0.7, 0.78, 0.85],
+  // Nearest demon ≈ a mild boost; the deepest (hardest) demons pay the most.
+  demon: [0.38, 0.32, 0.27],
 };
 
 /** How demons/goblins bend those tables — qualitative, since the app computes the
