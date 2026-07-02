@@ -73,6 +73,11 @@ export const FIREFACTOR_HIT_SPAN = 0.17;
 /** Cross-book line value: boost = clamp(0, edge * gain, cap) added to the 0-100 score,
  *  so a genuine discount can lift the read up a tier but can't manufacture one alone. */
 export const FIREFACTOR_LINE_VALUE = { gain: 40, cap: 10 } as const;
+/** Chance floor: the score never drops below round(P(hit) × gain), capped in the
+ *  single digits (below the No-lean cutoff, so tiers are untouched). 0 is reserved
+ *  for a near-zero chance — a bad-value-but-plausible line reads as a small number,
+ *  not as "impossible". */
+export const FIREFACTOR_CHANCE_FLOOR = { gain: 12, cap: 9 } as const;
 /** Recency weight per non-overlapping bucket (keyed by the cumulative window it
  *  came from) when blending the Wilson bounds. Recent games count for more. */
 export const FIREFACTOR_WINDOW_RECENCY: Record<string, number> = {
@@ -377,6 +382,21 @@ export function computeFireFactor(input: FireFactorInput): FireFactorResult {
   }
 
   score = Math.round(clamp01(score / 100) * 100);
+
+  // Chance floor: 0 should mean "close to a 0% chance", not merely "no edge". A rough
+  // P(hit) — the recency-weighted history rate blended with the model probability —
+  // keeps any plausible line in the single digits; only the truly-unlikely round to 0.
+  // Applied before the availability gate (an Out player still zeroes) and capped under
+  // the No-lean cutoff so it never manufactures a tier.
+  // (Skipped entirely with no decided games — an unreadable line stays a true 0.)
+  const pModelSide = modelProbOver == null ? null : side === 'over' ? modelProbOver : 1 - modelProbOver;
+  if (blended !== null) {
+    const pHat = pModelSide !== null ? 0.6 * blended.center + 0.4 * pModelSide : blended.center;
+    score = Math.max(
+      score,
+      Math.min(FIREFACTOR_CHANCE_FLOOR.cap, Math.round(pHat * FIREFACTOR_CHANCE_FLOOR.gain)),
+    );
+  }
 
   // A line is only UNREADABLE when it has no decided games at all (all pushes / never
   // played at that number). A THIN sample — a few decided games — is still graded: the

@@ -6,6 +6,7 @@ import {
   AVAILABILITY_DISCOUNT,
   FIREFACTOR_HIT_SPAN,
   FIREFACTOR_TIER_CUTOFFS,
+  FIREFACTOR_CHANCE_FLOOR,
   FIREFACTOR_CURVE,
   type FireFactorInput,
   type WindowHits,
@@ -164,25 +165,49 @@ describe('computeFireFactor', () => {
       overOnly: true,
     };
 
-    it('a below-50% over history is 0 vs a coin flip but positive vs its breakeven', () => {
+    it('a below-50% over history floors in single digits vs a coin flip but reads real value vs its breakeven', () => {
       const coinFlip = computeFireFactor(demonish);
       const value = computeFireFactor({ ...demonish, benchmark: 0.25 });
-      expect(coinFlip.score).toBe(0);
+      // No edge over 50/50 — but a ~37% chance is far from impossible, so the
+      // chance floor keeps it in the single digits instead of a flat 0.
+      expect(coinFlip.score).toBeGreaterThan(0);
+      expect(coinFlip.score).toBeLessThanOrEqual(FIREFACTOR_CHANCE_FLOOR.cap);
       expect(value.side).toBe('over');
-      expect(value.score).toBeGreaterThan(0);
+      expect(value.score).toBeGreaterThan(coinFlip.score);
       expect(value.tier).not.toBe('Pass');
       expect(value.note).toMatch(/breakeven/i);
       expect(value.note).toMatch(/not betting advice/i);
     });
 
-    it('a truly bad demon (≈10% chance vs a 35% breakeven) still reads 0', () => {
+    it('a truly bad demon (≈10% chance vs a 35% breakeven) reads single digits, not a tier', () => {
       const r = computeFireFactor({
         ...demonish,
         windows: [win(1, 10, '5'), win(2, 20, '10'), win(4, 40, '20')],
         projection: 22,
         benchmark: 0.35,
       });
-      expect(r.score).toBe(0);
+      expect(r.score).toBeGreaterThan(0); // still a real (if tiny) chance
+      expect(r.score).toBeLessThanOrEqual(FIREFACTOR_CHANCE_FLOOR.cap);
+      expect(r.tier).toBe('Pass'); // never manufactures a tier
+    });
+
+    it('the chance floor scales with P(hit) and 0 stays reserved for ~0% chances', () => {
+      const never = computeFireFactor({
+        ...demonish,
+        windows: [win(0, 10, '5'), win(0, 20, '10'), win(0, 40, '20')],
+        projection: 10,
+        benchmark: 0.35,
+      });
+      // 0-for-40 with a far-off projection ≈ 0% chance (Wilson smoothing keeps a
+      // sliver of doubt, so at most a 1).
+      expect(never.score).toBeLessThanOrEqual(1);
+      const likelyButBadValue = computeFireFactor({
+        ...demonish,
+        windows: [win(8, 10, '5'), win(15, 20, '10'), win(30, 40, '20')],
+        benchmark: 0.95, // absurd breakeven → no value edge at all
+      });
+      expect(likelyButBadValue.score).toBeGreaterThan(0);
+      expect(likelyButBadValue.score).toBeLessThanOrEqual(FIREFACTOR_CHANCE_FLOOR.cap);
     });
 
     it('an easier benchmark scores the same history higher', () => {

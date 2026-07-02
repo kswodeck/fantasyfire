@@ -5,7 +5,7 @@ import { PayoutBadge, formatMultiplier } from './PayoutBadge';
 import { payoutKind, variantBreakeven } from '@/lib/payoutVariant';
 import { overRateAt } from '@/lib/stats';
 import { pct } from '@/lib/format';
-import { tierTextClass, valueLabel, heatLabel } from '@/lib/tierStyle';
+import { tierTextClass, heatLabel } from '@/lib/tierStyle';
 import { sourceLabel } from '@/lib/providedSources';
 import { PP_POWER_PLAY, PP_FLEX_PLAY, PP_DEMON_RULE, PP_GOBLIN_RULE } from '@/lib/ppPayouts';
 
@@ -100,10 +100,10 @@ export function VariantLadder({
                 {v.read && (
                   <span
                     className={`text-[11px] font-semibold tabular-nums ${tierTextClass(v.read.tier, v.read.side)}`}
-                    title={`${
+                    title={`${heatLabel(v.read.tier, v.read.side)} — ${
                       kind === 'normal'
-                        ? `${heatLabel(v.read.tier, v.read.side)} — scored vs a coin flip`
-                        : `${valueLabel(v.read.tier)} — scored vs this rung's ~${Math.round(variantBreakeven(v.oddsType, v.multiplier) * 100)}% payout breakeven`
+                        ? 'scored vs a coin flip'
+                        : `scored vs this rung's ~${Math.round(variantBreakeven(v.oddsType, v.multiplier) * 100)}% payout breakeven`
                     }`}
                   >
                     · FF {v.read.score}

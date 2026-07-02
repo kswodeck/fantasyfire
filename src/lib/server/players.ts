@@ -60,6 +60,7 @@ import type {
   LineValueComparison,
   ProvidedVariant,
   TrendRow,
+  TrendRung,
   DvpTableRow,
   LeaderRow,
   SlateResult,
@@ -2017,13 +2018,15 @@ function computeBoardRows(
     }
   }
 
-  // Rank (and retain, under the caps) by the row's BEST read — its shown line or any
-  // scored rung — so a pass-at-standard row with a strong demon isn't cut. The row
-  // still displays its shown line's read; the value badge explains the placement.
+  // Rank by the SHOWN line's read — what the row actually displays — so the board
+  // reads as strictly FireFactor-sorted. Ties break toward the row whose best rung
+  // is stronger, which also keeps a hot-demon row inside the caps a beat longer;
+  // kind-filtered views re-rank client-side by the rung they switch to.
   out.sort(
     (a, b) =>
+      b.fireScore.score - a.fireScore.score ||
       bestVariantScore(b.fireScore.score, b.variants) -
-      bestVariantScore(a.fireScore.score, a.variants),
+        bestVariantScore(a.fireScore.score, a.variants),
   );
   return capBoardRows(out, limit, perPlayerCap, perStatCap);
 }
@@ -2292,47 +2295,92 @@ function computeTrendRows(
       requireProvided,
     )) {
       if (!provided && line <= 0.5) continue;
-      const recent = computeHitRate(games, stat, line, 10);
-      const season = computeHitRate(games, stat, line, 'season');
-      if (recent.decided < 4 || season.decided < FIREFACTOR_MIN_GAMES) continue;
-      const recentOver = recent.hitRateOver ?? 0.5;
-      const side: 'over' | 'under' = recentOver >= 0.5 ? 'over' : 'under';
-      if (line <= 0.5 && side === 'under') continue; // trivial under on a 0.5 line
-      // A demon/goblin/alternate rung only pays the over — an under swing on it isn't
-      // a playable trend at this book, so don't surface it.
-      const variants = opts.variantMap?.get(`${p.id}:${stat}`);
-      const shownRung = variants?.find((v) => v.line === line) ?? null;
-      if (side === 'under' && shownRung && isOverOnly(shownRung.oddsType)) continue;
-      const recentRate = side === 'over' ? recentOver : 1 - recentOver;
-      const seasonOver = season.hitRateOver ?? 0.5;
-      const seasonRate = side === 'over' ? seasonOver : 1 - seasonOver;
-      const delta = recentRate - seasonRate;
-      if (delta < TREND_MIN_SWING) continue;
-      const successes = side === 'over' ? recent.overs : recent.unders;
-      // The player's current consecutive run for this stat+line — the merged "Streaks"
-      // metric, shown alongside the L10 swing (its side may differ from the lean).
-      const run = computeStreak(
-        games.map((g) => statValue(stat, g)),
-        line,
-      );
+      // Evaluate the swing at ONE line; null when it doesn't qualify as a trend
+      // (thin sample, sub-threshold swing, trivial 0.5-under, or an under swing on
+      // an over-only rung — not playable at the book).
+      const evalRung = (
+        rungLine: number,
+        oddsType: string | null,
+        multiplier: number | null,
+      ): TrendRung | null => {
+        const recent = computeHitRate(games, stat, rungLine, 10);
+        const season = computeHitRate(games, stat, rungLine, 'season');
+        if (recent.decided < 4 || season.decided < FIREFACTOR_MIN_GAMES) return null;
+        const recentOver = recent.hitRateOver ?? 0.5;
+        const side: 'over' | 'under' = recentOver >= 0.5 ? 'over' : 'under';
+        if (rungLine <= 0.5 && side === 'under') return null; // trivial under on a 0.5 line
+        if (side === 'under' && isOverOnly(oddsType)) return null;
+        const recentRate = side === 'over' ? recentOver : 1 - recentOver;
+        const seasonOver = season.hitRateOver ?? 0.5;
+        const seasonRate = side === 'over' ? seasonOver : 1 - seasonOver;
+        const delta = recentRate - seasonRate;
+        if (delta < TREND_MIN_SWING) return null;
+        const successes = side === 'over' ? recent.overs : recent.unders;
+        // The player's current consecutive run for this stat+line — the merged
+        // "Streaks" metric, shown alongside the L10 swing.
+        const run = computeStreak(
+          games.map((g) => statValue(stat, g)),
+          rungLine,
+        );
+        return {
+          line: rungLine,
+          oddsType,
+          multiplier,
+          side,
+          recentRate,
+          recentLower: wilsonInterval(successes, recent.decided).lower,
+          recentGames: recent.decided,
+          seasonRate,
+          delta,
+          streak:
+            run.side !== null && run.length >= STREAK_MIN_LENGTH
+              ? { side: run.side, length: run.length }
+              : null,
+        };
+      };
+
+      // Score EVERY rung of the ladder (the filter can show "goblins only" — those
+      // rows must display the goblin line's own trend); the median/computed path has
+      // no ladder and evaluates just the one line.
+      const ladder = opts.variantMap?.get(`${p.id}:${stat}`);
+      const rungTrends: TrendRung[] = [];
+      const qualifying: ProvidedVariant[] = [];
+      if (ladder && ladder.length > 0) {
+        for (const v of ladder) {
+          const rt = evalRung(v.line, v.oddsType, v.multiplier);
+          if (rt) {
+            rungTrends.push(rt);
+            qualifying.push(v);
+          }
+        }
+      } else {
+        const rt = evalRung(line, null, null);
+        if (rt) rungTrends.push(rt);
+      }
+      if (rungTrends.length === 0) continue;
+
+      // The row's headline snapshot: the standard rung when it qualifies (matching
+      // the standard-only default view), else the strongest qualifying swing.
+      const top =
+        rungTrends.find((rt) => !isOverOnly(rt.oddsType)) ??
+        [...rungTrends].sort((a, b) => b.recentLower - a.recentLower)[0];
+
       out.push({
         player: listItem,
         stat,
         statShort: STAT_DEFS[stat].short,
-        line,
-        side,
-        recentRate,
-        recentLower: wilsonInterval(successes, recent.decided).lower,
-        recentGames: recent.decided,
-        seasonRate,
-        delta,
-        streak:
-          run.side !== null && run.length >= STREAK_MIN_LENGTH
-            ? { side: run.side, length: run.length }
-            : null,
-        oddsType: shownRung?.oddsType ?? null,
-        multiplier: shownRung?.multiplier ?? null,
-        variants,
+        line: top.line,
+        side: top.side,
+        recentRate: top.recentRate,
+        recentLower: top.recentLower,
+        recentGames: top.recentGames,
+        seasonRate: top.seasonRate,
+        delta: top.delta,
+        streak: top.streak,
+        oddsType: top.oddsType,
+        multiplier: top.multiplier,
+        variants: qualifying.length > 0 ? qualifying : undefined,
+        rungTrends: ladder ? rungTrends : undefined,
       });
     }
   }

@@ -2,7 +2,6 @@
 
 import type { Sport } from '@/lib/sports';
 import type { BoardRow } from '@/lib/types';
-import type { PayoutKind } from '@/lib/payoutVariant';
 import { BoardTable } from './BoardTable';
 import { ListFilters } from './ListFilters';
 import { useListFilter } from './useListFilter';
@@ -16,7 +15,6 @@ export function FilterableBoard({
   rows,
   source,
   initialLines,
-  enabledKinds,
   initialVisible = 25,
   step = 25,
 }: {
@@ -26,8 +24,6 @@ export function FilterableBoard({
   source?: string;
   /** Per `${slug}:${stat}` opening rung from the payout filter. */
   initialLines?: Map<string, number>;
-  /** Kinds the payout filter has selected — hides chips of de-selected kinds. */
-  enabledKinds?: Set<PayoutKind>;
   initialVisible?: number;
   step?: number;
 }) {
@@ -53,7 +49,7 @@ export function FilterableBoard({
         </p>
       ) : (
         <>
-          <BoardTable rows={f.shown} source={source} initialLines={initialLines} enabledKinds={enabledKinds} />
+          <BoardTable rows={f.shown} source={source} initialLines={initialLines} />
           {f.visible < f.filtered.length && (
             <button
               type="button"

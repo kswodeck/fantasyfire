@@ -40,23 +40,25 @@ test('demon/goblin chip cycles its ladder and funnels back to the standard line'
   expect(returned, 'cycling an active chip should funnel back to the standard line').toBe(true);
 });
 
-test('payout filter hides de-selected kinds from the rows and persists in the URL', async ({ page }) => {
+test('kind filter defaults to Standard only, adds kinds on click, and persists in the URL', async ({ page }) => {
   await gotoBoard(page);
   const goblinFilter = page.getByRole('button', { name: 'Goblins' });
   test.skip(!(await goblinFilter.isVisible().catch(() => false)), 'no kind filter on today\'s board');
 
+  // Default = Standard only: the standard chip is on, the variant kinds are off,
+  // but the rows' variant chips stay clickable regardless.
+  await expect(page.getByRole('button', { name: 'Standard' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(goblinFilter).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator(GOBLIN_CHIP).first()).toBeVisible();
 
-  // De-select Goblins → goblin chips disappear from every row + the URL records it.
+  // Turning Goblins on records the non-default selection in the URL…
   await goblinFilter.click();
-  await expect(goblinFilter).toHaveAttribute('aria-pressed', 'false');
-  await expect(page.locator(GOBLIN_CHIP)).toHaveCount(0);
+  await expect(goblinFilter).toHaveAttribute('aria-pressed', 'true');
   await expect(page).toHaveURL(/kinds=/);
 
-  // The narrowed view survives a reload (the URL is the state).
+  // …and the selection survives a reload (the URL is the state).
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Goblins' })).toHaveAttribute('aria-pressed', 'false');
-  await expect(page.locator(GOBLIN_CHIP)).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Goblins' })).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('a variant line is over-only on the player page (no under odds input)', async ({ page }) => {

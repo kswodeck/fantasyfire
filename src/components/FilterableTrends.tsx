@@ -11,6 +11,7 @@ export function FilterableTrends({
   sport,
   rows,
   source,
+  initialLines,
   initialVisible = 50,
   step = 50,
 }: {
@@ -18,6 +19,8 @@ export function FilterableTrends({
   rows: TrendRow[];
   /** Book the shown trends belong to — carried into each row's player-page link. */
   source?: string;
+  /** Per `${slug}:${stat}` rung the payout filter picked (displays that rung's trend). */
+  initialLines?: Map<string, number>;
   initialVisible?: number;
   step?: number;
 }) {
@@ -43,7 +46,7 @@ export function FilterableTrends({
         </p>
       ) : (
         <>
-          <TrendBoardTable rows={f.shown} source={source} />
+          <TrendBoardTable rows={f.shown} source={source} initialLines={initialLines} />
           {f.visible < f.filtered.length && (
             <button
               type="button"

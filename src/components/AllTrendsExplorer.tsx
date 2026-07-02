@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import type { TrendRow } from '@/lib/types';
-import { TrendBoardTable } from './TrendBoardTable';
+import { TrendBoardTable, displayedTrend } from './TrendBoardTable';
 import { SourceSelector } from './SourceSelector';
 import { BoardPayoutControls } from './BoardPayoutControls';
 import { useBoardPayoutFilter } from './useBoardPayoutFilter';
@@ -32,6 +32,13 @@ export function AllTrendsExplorer({
   const rows = hasSources ? sourced.rows : medianRows;
   // Payout filter (variant kinds) over the current book's trend rows.
   const payout = useBoardPayoutFilter(rows);
+  // Rank by the rung each row will actually DISPLAY and renumber (see SourcedTrends).
+  const ranked = useMemo(() => {
+    const d = (r: TrendRow) => displayedTrend(r, payout.initialLines);
+    return [...payout.rows]
+      .sort((a, b) => d(b).recentLower - d(a).recentLower || d(b).delta - d(a).delta)
+      .map((r, i) => ({ ...r, rank: i + 1 }));
+  }, [payout.rows, payout.initialLines]);
 
   const [query, setQuery] = useState('');
   const [visible, setVisible] = useState(STEP);
@@ -39,9 +46,9 @@ export function AllTrendsExplorer({
   const filtered = useMemo(
     () =>
       nq === ''
-        ? payout.rows
-        : payout.rows.filter((r) => normalizeName(r.player.fullName).includes(nq)),
-    [payout.rows, nq],
+        ? ranked
+        : ranked.filter((r) => normalizeName(r.player.fullName).includes(nq)),
+    [ranked, nq],
   );
   const shown = filtered.slice(0, visible);
 
@@ -80,7 +87,12 @@ export function AllTrendsExplorer({
         </p>
       ) : (
         <>
-          <TrendBoardTable rows={shown} source={hasSources ? sourced.source : undefined} showSport />
+          <TrendBoardTable
+            rows={shown}
+            source={hasSources ? sourced.source : undefined}
+            initialLines={payout.initialLines}
+            showSport
+          />
           {visible < filtered.length && (
             <button
               type="button"

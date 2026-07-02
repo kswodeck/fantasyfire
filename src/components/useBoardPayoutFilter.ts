@@ -15,9 +15,9 @@ export interface PayoutFilterableRow {
 
 // The board's payout filter, driven by what the current book offers:
 //   • Kind chips — a multiselect of Standard / Demons / Goblins / Alternates (only the
-//     kinds present on this board). Default is all on (prefer-normal fallback), so every
-//     player shows once; narrowing keeps only rows with a rung of a selected kind,
-//     re-shown at that kind. PrizePicks gets Standard/Demons/Goblins, Underdog gets
+//     kinds present on this board). Default is STANDARD ONLY, so every page opens on
+//     the plain lines; turning a kind on adds rows shown at that kind (normal-first
+//     priority). PrizePicks gets Standard/Demons/Goblins, Underdog gets
 //     Standard/Alternates.
 //   • Multiplier range — when the book posts numeric multipliers (Underdog): a min–max
 //     window that constrains which ALTERNATE rungs qualify (the standard line is never
@@ -73,10 +73,6 @@ export interface BoardPayoutFilter<T extends PayoutFilterableRow = PayoutFiltera
   /** Per `${slug}:${stat}` → the rung line to open the row on (when it differs from the
    *  server representative), so a filtered row shows its selected-kind/in-range rung. */
   initialLines: Map<string, number>;
-  /** Kinds each row's inline chips should offer — mirrors the chip multiselect so a
-   *  de-selected kind's buttons disappear from the rows too. undefined = no kind
-   *  filter on this board (plain book) → rows show every kind they have. */
-  enabledKinds: Set<PayoutKind> | undefined;
   /** True when the filter is doing something (for a "clear" affordance). */
   active: boolean;
 }
@@ -132,27 +128,37 @@ export function useBoardPayoutFilter<T extends PayoutFilterableRow>(rows: T[]): 
     hydrated.current = true;
   }, []);
 
+  // The DEFAULT selection is Standard only — every page opens on the plain lines,
+  // and demons/goblins/alternates are an explicit opt-in (a book with no standard
+  // lines at all falls back to everything it has).
+  const defaultKinds = useMemo(
+    () => new Set<PayoutKind>(kindOptions.includes('normal') ? ['normal'] : kindOptions),
+    [kindOptions],
+  );
+  const setsEqual = (a: Set<PayoutKind>, b: Set<PayoutKind>) =>
+    a.size === b.size && [...a].every((k) => b.has(k));
+
+  // Intersect the saved picks with what the CURRENT book offers — switching books
+  // (PrizePicks → Underdog) must never strand the board on a kind that no longer
+  // exists. An empty intersection falls back to the standard-only default.
+  const selectedKinds = useMemo(() => {
+    if (!selected) return defaultKinds;
+    const inter = new Set(kindOptions.filter((k) => selected.has(k)));
+    return inter.size > 0 ? inter : defaultKinds;
+  }, [selected, kindOptions, defaultKinds]);
+
   useEffect(() => {
     if (!hydrated.current) return;
     const params = new URLSearchParams(window.location.search);
-    if (selected && selected.size !== kindOptions.length)
-      params.set(KINDS_PARAM, KIND_ORDER.filter((k) => selected.has(k)).join(','));
+    if (selected && !setsEqual(selectedKinds, defaultKinds))
+      params.set(KINDS_PARAM, KIND_ORDER.filter((k) => selectedKinds.has(k)).join(','));
     else params.delete(KINDS_PARAM);
     if (range && (range[0] !== multBounds[0] || range[1] !== multBounds[1]))
       params.set(MULT_PARAM, `${parseFloat(range[0].toFixed(2))}-${parseFloat(range[1].toFixed(2))}`);
     else params.delete(MULT_PARAM);
     const qs = params.toString();
     window.history.replaceState(null, '', qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
-  }, [selected, range, kindOptions, multBounds]);
-
-  // Intersect the saved picks with what the CURRENT book offers — switching books
-  // (PrizePicks → Underdog) must never strand the board on a kind that no longer
-  // exists. An empty intersection falls back to "all on".
-  const selectedKinds = useMemo(() => {
-    if (!selected) return new Set(kindOptions);
-    const inter = new Set(kindOptions.filter((k) => selected.has(k)));
-    return inter.size > 0 ? inter : new Set(kindOptions);
-  }, [selected, kindOptions]);
+  }, [selected, selectedKinds, range, defaultKinds, multBounds]);
   const multRange = useMemo<[number, number]>(() => {
     if (!range) return multBounds;
     const lo = Math.min(Math.max(range[0], multBounds[0]), multBounds[1]);
@@ -163,16 +169,14 @@ export function useBoardPayoutFilter<T extends PayoutFilterableRow>(rows: T[]): 
 
   const toggleKind = (k: PayoutKind) => {
     setSelected((prev) => {
-      const base = prev ?? new Set(kindOptions);
+      const base = prev ?? defaultKinds;
       const next = new Set(base);
       if (next.has(k)) next.delete(k);
       else next.add(k);
-      // Never let the board go fully empty via the filter — re-selecting all is the floor.
-      return next.size === 0 ? new Set(kindOptions) : next;
+      // Never let the board go fully empty via the filter — the default is the floor.
+      return next.size === 0 ? defaultKinds : next;
     });
   };
-
-  const kindNarrowed = hasKinds && selectedKinds.size !== kindOptions.length;
 
   const { filtered, initialLines } = useMemo(() => {
     const initialLines = new Map<string, number>();
@@ -208,23 +212,24 @@ export function useBoardPayoutFilter<T extends PayoutFilterableRow>(rows: T[]): 
         }
       }
       if (!chosen) continue; // row has no qualifying rung of any selected kind → hide
-      // Narrowed view + a scored rung that doesn't clear 0 (fairly priced or worse
-      // for its payout) → not worth surfacing in a value-focused cut.
-      if (kindNarrowed && chosen.read && chosen.read.score <= 0) continue;
+      // A special rung with a genuinely zero read isn't worth surfacing in a
+      // variant-focused cut (standard lines keep the explorers' own gate).
+      if (chosen.read && chosen.read.score <= 0 && payoutKind(chosen.oddsType) !== 'normal') continue;
       out.push(r);
       if (chosen.read) chosenScore.set(r, chosen.read.score);
       if (chosen.line !== r.line) initialLines.set(`${r.player.slug}:${r.stat}`, chosen.line);
     }
-    // A narrowed cut re-ranks by the rung it will actually show (server order ranks
-    // by each row's best read, not this kind's). No-op when rungs carry no reads
-    // (trend rows) — the sort key defaults keep the incoming order stable.
-    if (kindNarrowed && chosenScore.size > 0) {
+    // Rank by the rung each row will actually SHOW — with the standard-only default
+    // this equals the server's order; a demon/goblin cut re-ranks by those rungs'
+    // reads. No-op when rungs carry no reads (trend rows): the sort keys all tie and
+    // the incoming order is kept (Array#sort is stable).
+    if (chosenScore.size > 0) {
       out.sort((a, b) => (chosenScore.get(b) ?? -1) - (chosenScore.get(a) ?? -1));
     }
     return { filtered: out, initialLines };
-  }, [rows, hasKinds, hasMult, selectedKinds, multRange, rangeNarrowed, kindNarrowed]);
+  }, [rows, hasKinds, hasMult, selectedKinds, multRange, rangeNarrowed]);
 
-  const active = (hasKinds && selectedKinds.size !== kindOptions.length) || (hasMult && rangeNarrowed);
+  const active = (hasKinds && !setsEqual(selectedKinds, defaultKinds)) || (hasMult && rangeNarrowed);
 
   return {
     kindOptions,
@@ -236,7 +241,6 @@ export function useBoardPayoutFilter<T extends PayoutFilterableRow>(rows: T[]): 
     setMultRange: (r) => setRange(r),
     rows: filtered,
     initialLines,
-    enabledKinds: hasKinds ? selectedKinds : undefined,
     active,
   };
 }
