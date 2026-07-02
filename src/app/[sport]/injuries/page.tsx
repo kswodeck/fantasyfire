@@ -43,7 +43,7 @@ export default async function InjuriesPage({ params }: PageProps) {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-8">
+    <div className="mx-auto w-full max-w-3xl px-2 py-8 sm:px-4">
       <Breadcrumbs
         className="mb-4"
         items={[

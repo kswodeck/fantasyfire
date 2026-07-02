@@ -10,7 +10,7 @@ import { useHitRate } from '@/hooks/useHitRate';
 import { STAT_DEFS } from '@/lib/stats';
 import { SPORTS, SPORT_LIST, type Sport } from '@/lib/sports';
 import { pct } from '@/lib/format';
-import { tierTextClass, heatLabel } from '@/lib/tierStyle';
+import { tierTextClass, heatLabel, leanTextClass } from '@/lib/tierStyle';
 import { LeanArrow } from './LeanArrow';
 import { SideArrow } from './SideArrow';
 import { BookLogo } from './BookLogo';
@@ -364,8 +364,8 @@ function PropRow({ prop }: { prop: SavedProp }) {
         <div className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
           <span>
             {def.label}{' '}
-            <span className={`tabular-nums ${side === 'over' ? 'text-over' : 'text-under'}`}>
-              {side === 'over' ? 'Over' : 'Under'} {line}
+            <span className="tabular-nums">
+              <span className={leanTextClass(side)}>{side === 'over' ? 'Over' : 'Under'}</span> {line}
             </span>
           </span>
           <PayoutBadge oddsType={prop.oddsType} multiplier={prop.multiplier} showLabel={false} />

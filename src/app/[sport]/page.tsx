@@ -103,7 +103,7 @@ export default async function SportHome({ params }: PageProps) {
   const hasHeatCheck = upcoming && (hasSources || leans.length > 0);
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4">
+    <div className="mx-auto w-full max-w-5xl px-2 sm:px-4">
       <div className="px-0 pt-6">
         <Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: cfg.name }]} />
       </div>

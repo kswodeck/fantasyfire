@@ -94,7 +94,7 @@ export default async function LeadersPage({ params }: PageProps) {
   ]);
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-8">
+    <div className="mx-auto w-full max-w-3xl px-2 py-8 sm:px-4">
       <JsonLd data={jsonLd} />
       <Breadcrumbs
         className="mb-4"

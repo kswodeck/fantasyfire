@@ -82,6 +82,7 @@ import {
   isNormalKind,
   isOverOnly,
   resolvedBreakeven,
+  sidedMultiplier,
   bestVariantScore,
 } from '@/lib/payoutVariant';
 import type { RungQuote } from '@/lib/odds/marketBreakeven';
@@ -1415,7 +1416,7 @@ export async function getPlayerResearch(
   const scoredVariants = variants.map((v): ProvidedVariant => {
     const rungBreakeven = resolvedBreakeven(v, variants, quotes);
     if (v.line === line)
-      return { ...v, breakeven: rungBreakeven, read: { side: gatedFireScore.side, score: gatedFireScore.score, tier: gatedFireScore.tier } };
+      return { ...v, breakeven: rungBreakeven, multiplier: sidedMultiplier(v, gatedFireScore.side), read: { side: gatedFireScore.side, score: gatedFireScore.score, tier: gatedFireScore.tier } };
     const rungWindows = STAT_WINDOWS.map((w) => {
       const hr = computeHitRate(games, stat, v.line, w);
       return { window: String(w), overs: hr.overs, decided: hr.decided };
@@ -1441,7 +1442,7 @@ export async function getPlayerResearch(
       }),
       availability?.status,
     );
-    return { ...v, breakeven: rungBreakeven, read: { side: fs.side, score: fs.score, tier: fs.tier } };
+    return { ...v, breakeven: rungBreakeven, multiplier: sidedMultiplier(v, fs.side), read: { side: fs.side, score: fs.score, tier: fs.tier } };
   });
 
   return {
@@ -1451,7 +1452,7 @@ export async function getPlayerResearch(
     line,
     lineSource,
     oddsType: selectedVariant?.oddsType ?? null,
-    multiplier: selectedVariant?.multiplier ?? null,
+    multiplier: selectedVariant ? sidedMultiplier(selectedVariant, gatedFireScore.side) : null,
     variants: scoredVariants,
     lineValue,
     seasonAverage: seasonResult.mean,
@@ -2011,7 +2012,7 @@ function computeBoardRows(
       const scoredVariants = variants?.map((v): ProvidedVariant => {
         const rungBreakeven = resolvedBreakeven(v, variants, rungQuotes);
         if (v.line === line)
-          return { ...v, breakeven: rungBreakeven, read: { side: fireScore.side, score: fireScore.score, tier: fireScore.tier } };
+          return { ...v, breakeven: rungBreakeven, multiplier: sidedMultiplier(v, fireScore.side), read: { side: fireScore.side, score: fireScore.score, tier: fireScore.tier } };
         const rungWindows = STAT_WINDOWS.map((w) => {
           const hr = computeHitRate(games, stat, v.line, w);
           return { window: String(w), overs: hr.overs, decided: hr.decided };
@@ -2037,7 +2038,7 @@ function computeBoardRows(
           }),
           avail?.status,
         );
-        return { ...v, breakeven: rungBreakeven, read: { side: fs.side, score: fs.score, tier: fs.tier } };
+        return { ...v, breakeven: rungBreakeven, multiplier: sidedMultiplier(v, fs.side), read: { side: fs.side, score: fs.score, tier: fs.tier } };
       });
 
       out.push({
@@ -2049,7 +2050,7 @@ function computeBoardRows(
         fireScore,
         lineValue: rowLineValue,
         oddsType: shownRung?.oddsType ?? null,
-        multiplier: shownRung?.multiplier ?? null,
+        multiplier: shownRung ? sidedMultiplier(shownRung, fireScore.side) : null,
         variants: scoredVariants,
       });
     }
@@ -2339,6 +2340,7 @@ function computeTrendRows(
         rungLine: number,
         oddsType: string | null,
         multiplier: number | null,
+        odds?: { overOdds: number | null; underOdds: number | null },
       ): TrendRung | null => {
         const recent = computeHitRate(games, stat, rungLine, 10);
         const season = computeHitRate(games, stat, rungLine, 'season');
@@ -2347,6 +2349,8 @@ function computeTrendRows(
         const side: 'over' | 'under' = recentOver >= 0.5 ? 'over' : 'under';
         if (rungLine <= 0.5 && side === 'under') return null; // trivial under on a 0.5 line
         if (side === 'under' && isOverOnly(oddsType)) return null;
+        // Show the leaned side's payout for two-way priced lines (Sleeper).
+        const shownMult = sidedMultiplier({ multiplier, ...odds }, side);
         const recentRate = side === 'over' ? recentOver : 1 - recentOver;
         const seasonOver = season.hitRateOver ?? 0.5;
         const seasonRate = side === 'over' ? seasonOver : 1 - seasonOver;
@@ -2362,7 +2366,7 @@ function computeTrendRows(
         return {
           line: rungLine,
           oddsType,
-          multiplier,
+          multiplier: shownMult,
           side,
           recentRate,
           recentLower: wilsonInterval(successes, recent.decided).lower,
@@ -2384,7 +2388,7 @@ function computeTrendRows(
       const qualifying: ProvidedVariant[] = [];
       if (ladder && ladder.length > 0) {
         for (const v of ladder) {
-          const rt = evalRung(v.line, v.oddsType, v.multiplier);
+          const rt = evalRung(v.line, v.oddsType, v.multiplier, { overOdds: v.overOdds, underOdds: v.underOdds });
           if (rt) {
             rungTrends.push(rt);
             qualifying.push(v);
