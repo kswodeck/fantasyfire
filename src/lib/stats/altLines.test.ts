@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { altLineTable } from './altLines';
+import { altLineTable, overRateAt } from './altLines';
 
 describe('altLineTable', () => {
   // 10 games: values 20..29 (one each).
@@ -48,5 +48,28 @@ describe('altLineTable', () => {
     expect(rows[0].hitRateOver).toBeNull();
     expect(rows[0].wilsonLower).toBe(0);
     expect(rows[0].wilsonUpper).toBe(1);
+  });
+});
+
+describe('overRateAt', () => {
+  const values = [29, 28, 27, 26, 25, 24, 23, 22, 21, 20];
+
+  it('matches altLineTable at the same line', () => {
+    const row = altLineTable(values, 24.5, { steps: 0 })[0];
+    const r = overRateAt(values, 24.5);
+    expect(r.overs).toBe(row.overs);
+    expect(r.decided).toBe(row.decided);
+    expect(r.rate).toBeCloseTo(row.hitRateOver as number, 10);
+  });
+
+  it('excludes pushes from the denominator', () => {
+    // line 25 -> over {26..29}=4, under {20..24}=5, push {25} dropped
+    const r = overRateAt(values, 25);
+    expect(r).toMatchObject({ overs: 4, decided: 9 });
+    expect(r.rate).toBeCloseTo(4 / 9, 10);
+  });
+
+  it('returns a null rate with no decided games', () => {
+    expect(overRateAt([], 24.5)).toEqual({ overs: 0, decided: 0, rate: null });
   });
 });

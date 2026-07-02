@@ -84,7 +84,7 @@ async function main(): Promise<number> {
     line: number;
     overOdds: number | null;
     underOdds: number | null;
-    oddsType: string | null;
+    oddsType: string;
     multiplier: number | null;
   };
 
@@ -107,7 +107,9 @@ async function main(): Promise<number> {
       line: r.line,
       overOdds: r.overOdds ?? null,
       underOdds: r.underOdds ?? null,
-      oddsType: r.oddsType ?? null,
+      // The column is NOT NULL (part of the unique key): books with no variant
+      // concept store 'standard', which the app treats as the plain line.
+      oddsType: r.oddsType ?? 'standard',
       multiplier: r.multiplier ?? null,
     });
   }
@@ -118,27 +120,28 @@ async function main(): Promise<number> {
   const changed = await changedPlayerStats(resolved);
 
   const ops = resolved.map((d) => () => {
-    // Keyed by line too, so a source's alternate rungs (PrizePicks demon/goblin,
-    // Underdog alternates) coexist instead of overwriting the standard line.
+    // Keyed by line AND oddsType, so a source's variant rungs (PrizePicks demon/
+    // goblin, Underdog alternates) coexist instead of overwriting the standard
+    // line — even when a variant shares the standard line's number.
     const data = {
       overOdds: d.overOdds,
       underOdds: d.underOdds,
-      oddsType: d.oddsType,
       multiplier: d.multiplier,
       fetchedAt: new Date(),
     };
     return db.providedLine.upsert({
       where: {
-        sport_playerId_stat_source_gameDate_line: {
+        sport_playerId_stat_source_gameDate_line_oddsType: {
           sport: d.sport,
           playerId: d.playerId,
           stat: d.stat,
           source: d.source,
           gameDate: d.gameDate,
           line: d.line,
+          oddsType: d.oddsType,
         },
       },
-      create: { sport: d.sport, playerId: d.playerId, stat: d.stat, source: d.source, gameDate: d.gameDate, line: d.line, ...data },
+      create: { sport: d.sport, playerId: d.playerId, stat: d.stat, source: d.source, gameDate: d.gameDate, line: d.line, oddsType: d.oddsType, ...data },
       update: data,
     });
   });
@@ -175,6 +178,7 @@ async function changedPlayerStats(
     source: string;
     gameDate: Date;
     line: number;
+    oddsType: string;
     overOdds: number | null;
     underOdds: number | null;
   }>,
@@ -182,8 +186,8 @@ async function changedPlayerStats(
   const changed = new Set<string>();
   if (resolved.length === 0) return changed;
 
-  // Include `line` so each variant rung is compared to its own prior value (multiple
-  // rungs now share a player+stat+source+day); a page is flagged changed if any rung moved.
+  // Include `line` + `oddsType` (the unique key's tail) so each variant rung is
+  // compared to its own prior value; a page is flagged changed if any rung moved.
   const keyOf = (x: {
     sport: string;
     playerId: number;
@@ -191,7 +195,8 @@ async function changedPlayerStats(
     source: string;
     gameDate: Date;
     line: number;
-  }) => `${x.sport}|${x.playerId}|${x.stat}|${x.source}|${x.gameDate.getTime()}|${x.line}`;
+    oddsType: string;
+  }) => `${x.sport}|${x.playerId}|${x.stat}|${x.source}|${x.gameDate.getTime()}|${x.line}|${x.oddsType}`;
 
   try {
     const sports = [...new Set(resolved.map((d) => d.sport))];
@@ -200,7 +205,7 @@ async function changedPlayerStats(
       () =>
         db.providedLine.findMany({
           where: { sport: { in: sports }, gameDate: { in: gameDates } },
-          select: { sport: true, playerId: true, stat: true, source: true, gameDate: true, line: true, overOdds: true, underOdds: true },
+          select: { sport: true, playerId: true, stat: true, source: true, gameDate: true, line: true, oddsType: true, overOdds: true, underOdds: true },
         }),
       'providedLine.findMany(existing)',
     );

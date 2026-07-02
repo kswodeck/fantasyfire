@@ -1,7 +1,8 @@
 import type { PlayerVerdict } from '@/lib/types';
 import { num1, pct } from '@/lib/format';
 import { LeanArrow } from './LeanArrow';
-import { tierTextClass, tierBoxClass, gradeTextClass, heatLabel } from '@/lib/tierStyle';
+import { isOverOnly } from '@/lib/payoutVariant';
+import { tierTextClass, tierBoxClass, gradeTextClass, heatLabel, valueLabel } from '@/lib/tierStyle';
 
 /**
  * The "verdict" read for a player + stat + line. Presentational only (data via
@@ -13,20 +14,26 @@ export function VerdictPanel({
   verdict,
   statShort,
   line,
+  oddsType = null,
 }: {
   verdict: PlayerVerdict;
   statShort: string;
   line: number;
+  /** Payout tag of the current line — a variant reads in value terms (its score is
+   *  edge vs the payout breakeven), a standard line keeps the heat words. */
+  oddsType?: string | null;
 }) {
   const { fireScore, projection, consistency, matchupGrade, modelProbOver } = verdict;
+  const variant = oddsType != null && isOverOnly(oddsType);
   // Probability the leaning side hits, from the projection's distribution.
   const modelProbSide =
     modelProbOver == null ? null : fireScore.side === 'over' ? modelProbOver : 1 - modelProbOver;
   const adjusted = projection.adjustment !== 1 && projection.projection != null;
   const tierText = tierTextClass(fireScore.tier, fireScore.side);
   const tierBox = tierBoxClass(fireScore.tier, fireScore.side);
-  const headline =
-    fireScore.tier === 'Pass' || fireScore.tier === 'No lean'
+  const headline = variant
+    ? valueLabel(fireScore.tier)
+    : fireScore.tier === 'Pass' || fireScore.tier === 'No lean'
       ? 'No read'
       : `${heatLabel(fireScore.tier, fireScore.side)} ${fireScore.side}`;
 

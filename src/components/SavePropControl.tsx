@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useSavedProps } from '@/hooks/useSavedProps';
 import { isPropSaved, toggleSavedProp, type PropSide } from '@/lib/savedProps';
 import { sourceLabel } from '@/lib/providedSources';
+import { isOverOnly } from '@/lib/payoutVariant';
+import { PayoutBadge } from './PayoutBadge';
 import { track } from '@/lib/analytics';
 import type { StatKey } from '@/lib/stats';
 import type { Sport } from '@/lib/sports';
@@ -22,6 +24,8 @@ export function SavePropControl({
   stat,
   line,
   source,
+  oddsType = null,
+  multiplier = null,
   gameDate,
   gameStartTime,
 }: {
@@ -33,16 +37,23 @@ export function SavePropControl({
   line: number;
   /** The book this save is for — the page's selected source. */
   source: string;
+  /** Payout-variant tag of the current line (goblin/demon/alternate); null = plain. */
+  oddsType?: string | null;
+  /** Exact payout multiplier of the current line (UD alternates); null when none. */
+  multiplier?: number | null;
   /** The upcoming game this pick is for, so it can auto-expire once it's over. */
   gameDate: string | null;
   gameStartTime: string | null;
 }) {
   const { props } = useSavedProps();
+  // Demon/goblin/alternate lines only pay the over — no under to save.
+  const overOnly = oddsType != null && isOverOnly(oddsType);
+  const sides: PropSide[] = overOnly ? ['over'] : ['over', 'under'];
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       <div className="flex items-center gap-1.5">
-        {(['over', 'under'] as PropSide[]).map((side) => {
+        {sides.map((side) => {
           const saved = isPropSaved(props, { sport, slug, stat, line, side, source });
           return (
             <button
@@ -65,6 +76,8 @@ export function SavePropControl({
                   line,
                   side,
                   source,
+                  oddsType,
+                  multiplier,
                   gameDate,
                   gameStartTime,
                 });
@@ -81,6 +94,7 @@ export function SavePropControl({
               <span className="tabular-nums">
                 {side} {line}
               </span>
+              <PayoutBadge oddsType={oddsType} multiplier={multiplier} showLabel={false} glyphSize={11} />
             </button>
           );
         })}

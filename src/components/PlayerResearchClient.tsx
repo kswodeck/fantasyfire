@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import type { PlayerResearch } from '@/lib/types';
 import { STAT_DEFS, statKeysForSport, altLineTable, type StatKey } from '@/lib/stats';
@@ -77,8 +77,11 @@ export function PlayerResearchClient({
   const [underOdds, setUnderOdds] = useState<number | null>(null);
   const [edgeWindow, setEdgeWindow] = useState<string>('season');
   const { source: globalSource, setSource: setGlobalSource } = useSelectedSource();
+  // True when the URL pinned a book (?source=…): a shared link must open on the book
+  // it was shared from, so the visitor's own saved choice doesn't override it.
+  const urlPinnedSource = useRef(false);
 
-  // Hydrate stat/line from the URL once on mount — syncing from an external
+  // Hydrate stat/line/source from the URL once on mount — syncing from an external
   // system (the URL) into React. Done in an effect (not a lazy initializer) so
   // SSR and the first client render agree (no hydration mismatch on the active
   // chip); the URL-derived values are applied right after hydration.
@@ -92,12 +95,19 @@ export function PlayerResearchClient({
       const parsed = lineSchema.safeParse(lp);
       if (parsed.success) setLine(parsed.data);
     }
+    const srcP = params.get('source');
+    if (srcP !== null && availableSources.includes(srcP)) {
+      urlPinnedSource.current = true;
+      if (srcP !== initialSource) setSource(srcP);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Default the book to the user's saved choice (persisted across pages) when this
-  // sport offers it — keeps the selected source consistent everywhere.
+  // sport offers it — keeps the selected source consistent everywhere. A book pinned
+  // by the URL wins over the saved choice for this page view.
   useEffect(() => {
+    if (urlPinnedSource.current) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (globalSource !== source && availableSources.includes(globalSource)) setSource(globalSource);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -117,10 +127,13 @@ export function PlayerResearchClient({
   });
   const data = query.data ?? initialResearch;
 
-  function syncUrl(nextStat: StatKey, nextLine: number | undefined) {
+  function syncUrl(nextStat: StatKey, nextLine: number | undefined, nextSource: string) {
     const params = new URLSearchParams();
     params.set('stat', nextStat);
     if (nextLine !== undefined) params.set('line', String(nextLine));
+    // Record the book too (when it isn't the server default), so a copied URL opens
+    // on the same book — not on whatever the next visitor last had selected.
+    if (nextSource !== initialSource) params.set('source', nextSource);
     window.history.replaceState(null, '', `${pathname}?${params.toString()}`);
   }
 
@@ -128,17 +141,18 @@ export function PlayerResearchClient({
     track('stat_switched', { sport, stat: next });
     if (statHrefBase) {
       // On the per-stat page, switching stats is a real navigation to the hub.
-      router.push(`${statHrefBase}?stat=${next}`);
+      const src = source !== initialSource ? `&source=${source}` : '';
+      router.push(`${statHrefBase}?stat=${next}${src}`);
       return;
     }
     setStat(next);
     setLine(undefined); // reset to the new stat's default line
-    syncUrl(next, undefined);
+    syncUrl(next, undefined, source);
   }
 
   function handleLine(next: number) {
     setLine(next);
-    syncUrl(stat, next);
+    syncUrl(stat, next, source);
     track('line_entered', { sport, stat });
   }
 
@@ -146,6 +160,7 @@ export function PlayerResearchClient({
     setSource(next);
     setGlobalSource(next); // persist the choice + sync it across pages
     setLine(undefined); // show the new book's line, not a stale custom line
+    syncUrl(stat, undefined, next);
     track('source_switched', { sport, source: next });
   }
 
@@ -229,6 +244,8 @@ export function PlayerResearchClient({
           stat={stat}
           line={effectiveLine}
           source={source}
+          oddsType={data.oddsType}
+          multiplier={data.multiplier}
           // Stamp the upcoming game so the pick auto-expires once it's over.
           // The fallback (off-season "last game") isn't a future game — leave null.
           gameDate={data.matchupOpponent?.isUpcoming ? data.matchupOpponent.date : null}
@@ -244,6 +261,7 @@ export function PlayerResearchClient({
         statShort={statDef.short}
         sourceId={source}
         onSelect={handleLine}
+        seasonValues={seasonWindow?.hitRate.values ?? []}
       />
 
       {/* Injury / availability — gates the read when the player is Out */}
@@ -251,8 +269,9 @@ export function PlayerResearchClient({
         <AvailabilityBanner availability={data.availability} playerName={data.player.fullName} />
       )}
 
-      {/* Verdict — the FireFactor "good prop" read + sub-signals */}
-      <VerdictPanel verdict={data.verdict} statShort={statDef.short} line={data.line} />
+      {/* Verdict — the FireFactor "good prop" read + sub-signals. A variant line reads
+          in value terms (scored vs its payout breakeven, over-only). */}
+      <VerdictPanel verdict={data.verdict} statShort={statDef.short} line={data.line} oddsType={data.oddsType} />
 
       {/* Hit-rate cards */}
       <section aria-label="Hit rates" className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">

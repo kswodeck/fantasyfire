@@ -6,6 +6,7 @@
 // links and the league chip stay correct in a mixed list.
 import { SPORT_LIST, type Sport } from '@/lib/sports';
 import { orderSources } from '@/lib/providedSources';
+import { bestVariantScore } from '@/lib/payoutVariant';
 import type { BoardRow, TrendRow } from '@/lib/types';
 import {
   getBoard,
@@ -31,8 +32,14 @@ async function activeSports(): Promise<Sport[]> {
 }
 
 function rankBoard(rows: BoardRow[]): BoardRow[] {
+  // Same "best read on the row" key the per-sport boards sort by (shown line or any
+  // scored rung), so a strong demon survives the cross-sport merge too.
   return [...rows]
-    .sort((a, b) => b.fireScore.score - a.fireScore.score)
+    .sort(
+      (a, b) =>
+        bestVariantScore(b.fireScore.score, b.variants) -
+        bestVariantScore(a.fireScore.score, a.variants),
+    )
     .slice(0, MERGE_CAP)
     .map((r, i) => ({ ...r, rank: i + 1 }));
 }

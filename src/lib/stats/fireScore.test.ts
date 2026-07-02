@@ -60,6 +60,14 @@ describe('computeFireFactor', () => {
         projection: 16,
         overOnly: true,
       },
+      // Breakeven-calibrated variant (the "scored against ~X% breakeven" note).
+      {
+        ...base,
+        windows: [win(2, 10), win(5, 20), win(10, 40), win(16, 62)],
+        projection: 16,
+        overOnly: true,
+        benchmark: 0.3,
+      },
     ];
     for (const s of scenarios) {
       const note = computeFireFactor(s).note;
@@ -141,6 +149,56 @@ describe('computeFireFactor', () => {
     expect(pinned.side).toBe('over');
     expect(pinned.score).toBe(free.score);
     expect(pinned.tier).toBe(free.tier);
+  });
+
+  describe('benchmark (payout-variant calibration)', () => {
+    // A demon-shaped history: ~35-40% over rate on a healthy sample.
+    const demonish: FireFactorInput = {
+      line: 30,
+      windows: [win(2, 5, '5'), win(4, 10, '10'), win(7, 20, '20'), win(14, 40, 'season')],
+      projection: 28,
+      stdev: 6,
+      cv: 0.3,
+      matchup: undefined,
+      gamesPlayed: 40,
+      overOnly: true,
+    };
+
+    it('a below-50% over history is 0 vs a coin flip but positive vs its breakeven', () => {
+      const coinFlip = computeFireFactor(demonish);
+      const value = computeFireFactor({ ...demonish, benchmark: 0.25 });
+      expect(coinFlip.score).toBe(0);
+      expect(value.side).toBe('over');
+      expect(value.score).toBeGreaterThan(0);
+      expect(value.tier).not.toBe('Pass');
+      expect(value.note).toMatch(/breakeven/i);
+      expect(value.note).toMatch(/not betting advice/i);
+    });
+
+    it('a truly bad demon (≈10% chance vs a 35% breakeven) still reads 0', () => {
+      const r = computeFireFactor({
+        ...demonish,
+        windows: [win(1, 10, '5'), win(2, 20, '10'), win(4, 40, '20')],
+        projection: 22,
+        benchmark: 0.35,
+      });
+      expect(r.score).toBe(0);
+    });
+
+    it('an easier benchmark scores the same history higher', () => {
+      const tight = computeFireFactor({ ...demonish, benchmark: 0.35 });
+      const loose = computeFireFactor({ ...demonish, benchmark: 0.2 });
+      expect(loose.score).toBeGreaterThan(tight.score);
+    });
+
+    it('benchmark 0.5 reproduces the standard behavior exactly', () => {
+      const std = computeFireFactor(base);
+      const bench = computeFireFactor({ ...base, benchmark: 0.5 });
+      expect(bench.score).toBe(std.score);
+      expect(bench.tier).toBe(std.tier);
+      expect(bench.side).toBe(std.side);
+      expect(bench.trustFactor).toBeCloseTo(std.trustFactor, 10);
+    });
   });
 
   it('VALUE mode lifts the score and flags valueMode when a price gives positive EV', () => {

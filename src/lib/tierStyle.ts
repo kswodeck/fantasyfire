@@ -23,6 +23,19 @@ export function heatLabel(tier: string, side: Side): string {
   return 'Cool';
 }
 
+/**
+ * Value-framing label for payout-variant rows — an "over lean" is meaningless on an
+ * over-only line, so variant reads speak in value terms: how well the rung beats its
+ * payout breakeven (0 = fairly priced). Standard lines keep the heat words above.
+ */
+export function valueLabel(tier: string): string {
+  if (tier === 'Strong lean') return 'Strong value';
+  if (tier === 'Lean') return 'Value';
+  if (tier === 'Slight lean') return 'Slight value';
+  if (tier === 'No lean') return 'Fair price';
+  return 'No read';
+}
+
 /** Which glyph HeatIcon (LeanArrow) should draw. */
 export function heatIcon(tier: string, side: Side): 'flame' | 'snowflake' | 'dash' {
   if (isNeutral(tier)) return 'dash';

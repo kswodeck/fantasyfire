@@ -74,7 +74,13 @@ import {
   getProvidedQuotesBySource,
 } from '@/lib/server/providedLines';
 import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
-import { pickRepresentative, normalLine, isOverOnly } from '@/lib/payoutVariant';
+import {
+  pickRepresentative,
+  normalLine,
+  isOverOnly,
+  variantBreakeven,
+  bestVariantScore,
+} from '@/lib/payoutVariant';
 
 /**
  * The season the app reads for a sport. Computed from today's date, falling back
@@ -1338,8 +1344,12 @@ export async function getPlayerResearch(
     cv: consistency.cv,
     matchup: applyMatchup ? (grade ?? undefined) : undefined,
     gamesPlayed: games.length,
-    // Demon/goblin/alternate rungs only pay the over — pin the read to that side.
+    // Demon/goblin/alternate rungs only pay the over — pin the read to that side —
+    // and are scored against their payout's breakeven, not a coin flip.
     overOnly: selectedVariant ? isOverOnly(selectedVariant.oddsType) : false,
+    benchmark: selectedVariant
+      ? variantBreakeven(selectedVariant.oddsType, selectedVariant.multiplier)
+      : undefined,
   };
   // FireFactor is the pure directional signal (hit · projection · consistency · matchup)
   // so it's IDENTICAL on the board and the player page. Price/line-value info (best book,
@@ -1391,6 +1401,36 @@ export async function getPlayerResearch(
   // identically on the board, so the verdict stays consistent for the same player/line.
   const gatedFireScore = gateAvailability(fireScore, availability?.status);
 
+  // Score every rung of the ladder (each vs ITS OWN payout breakeven) so the ladder
+  // compares rungs at a glance and rung switches paint instantly. Reuses the loaded
+  // games + line-independent projection; the shown line's read IS the page verdict.
+  const scoredVariants = variants.map((v): ProvidedVariant => {
+    if (v.line === line)
+      return { ...v, read: { side: gatedFireScore.side, score: gatedFireScore.score, tier: gatedFireScore.tier } };
+    const rungWindows = STAT_WINDOWS.map((w) => {
+      const hr = computeHitRate(games, stat, v.line, w);
+      return { window: String(w), overs: hr.overs, decided: hr.decided };
+    });
+    const rungProb = lineProbabilities(stat, projection.projection, seasonResult.stdev, v.line);
+    const rungCons = computeConsistency(seasonResult.values, seasonResult.mean, seasonResult.stdev, v.line);
+    const fs = gateAvailability(
+      computeFireFactor({
+        line: v.line,
+        windows: rungWindows,
+        projection: projection.projection,
+        stdev: seasonResult.stdev,
+        modelProbOver: rungProb?.over ?? null,
+        cv: rungCons.cv,
+        matchup: applyMatchup ? (grade ?? undefined) : undefined,
+        gamesPlayed: games.length,
+        overOnly: isOverOnly(v.oddsType),
+        benchmark: variantBreakeven(v.oddsType, v.multiplier),
+      }),
+      availability?.status,
+    );
+    return { ...v, read: { side: fs.side, score: fs.score, tier: fs.tier } };
+  });
+
   return {
     player,
     bio: toBio(record),
@@ -1399,7 +1439,7 @@ export async function getPlayerResearch(
     lineSource,
     oddsType: selectedVariant?.oddsType ?? null,
     multiplier: selectedVariant?.multiplier ?? null,
-    variants,
+    variants: scoredVariants,
     lineValue,
     seasonAverage: seasonResult.mean,
     gamesPlayed: games.length,
@@ -1465,6 +1505,9 @@ export interface BoardOptions {
   /** Pure-slate mode: include ONLY props the chosen book actually offers (its
    * real line), across every market it lists — no computed-median fallback. */
   requireProvidedLine?: boolean;
+  /** Reuse an already-loaded pool (the heavy query) instead of loading a fresh one —
+   *  lets one page compute board + trends from a single load. */
+  pool?: BoardPool;
 }
 
 /** Map a PlayerInjury row (the badge-relevant columns) to the slim card shape. */
@@ -1520,7 +1563,7 @@ export async function getBoard(
   opts: BoardOptions = {},
 ): Promise<BoardRow[]> {
   const { limit = 40, scan = 120, perPlayerCap = 2, perStatCap = 10 } = opts;
-  const { players, gamesByPlayer } = await loadBoardPool(sport, scan);
+  const { players, gamesByPlayer } = opts.pool ?? (await loadBoardPool(sport, scan));
   if (players.length === 0) return [];
   // Real lines from the chosen book; empty map (no query) when the feature is off,
   // so the board falls back to the computed default line and behaves as before.
@@ -1561,7 +1604,7 @@ export async function getSourcedBoards(
 ): Promise<Record<string, BoardRow[]>> {
   const { limit = 150, scan = 120, perPlayerCap = 2, perStatCap = 30 } = opts;
   const result: Record<string, BoardRow[]> = {};
-  const { players, gamesByPlayer } = await loadBoardPool(sport, scan);
+  const { players, gamesByPlayer } = opts.pool ?? (await loadBoardPool(sport, scan));
   if (players.length === 0) {
     for (const s of sources) result[s] = [];
     return result;
@@ -1882,8 +1925,12 @@ function computeBoardRows(
         cv: consistency.cv,
         matchup: opts.matchupGrades?.get(`${p.id}:${stat}`),
         gamesPlayed: games.length,
-        // Demon/goblin/alternate rungs only pay the over — pin the read to that side.
+        // Demon/goblin/alternate rungs only pay the over — pin the read to that side —
+        // and are scored against their payout's breakeven, not a coin flip.
         overOnly: shownRung ? isOverOnly(shownRung.oddsType) : false,
+        benchmark: shownRung
+          ? variantBreakeven(shownRung.oddsType, shownRung.multiplier)
+          : undefined,
       };
       // FireFactor is the pure directional signal — IDENTICAL to the player page for the
       // same line/stat/matchup. Line-value (best price, cross-book discount) is a separate
@@ -1925,6 +1972,36 @@ function computeBoardRows(
         }
       }
 
+      // Score the OTHER rungs too, each vs its own breakeven — chips switch with a
+      // read already in hand, kind-filtered views rank by the rung they'll show, and
+      // a hot demon keeps an otherwise-passing row on the board.
+      const scoredVariants = variants?.map((v): ProvidedVariant => {
+        if (v.line === line)
+          return { ...v, read: { side: fireScore.side, score: fireScore.score, tier: fireScore.tier } };
+        const rungWindows = STAT_WINDOWS.map((w) => {
+          const hr = computeHitRate(games, stat, v.line, w);
+          return { window: String(w), overs: hr.overs, decided: hr.decided };
+        });
+        const rungProb = lineProbabilities(stat, projection.projection, seasonHr.stdev, v.line);
+        const rungCons = computeConsistency(seasonHr.values, seasonHr.mean, seasonHr.stdev, v.line);
+        const fs = gateAvailability(
+          computeFireFactor({
+            line: v.line,
+            windows: rungWindows,
+            projection: projection.projection,
+            stdev: seasonHr.stdev,
+            modelProbOver: rungProb?.over ?? null,
+            cv: rungCons.cv,
+            matchup: opts.matchupGrades?.get(`${p.id}:${stat}`),
+            gamesPlayed: games.length,
+            overOnly: isOverOnly(v.oddsType),
+            benchmark: variantBreakeven(v.oddsType, v.multiplier),
+          }),
+          avail?.status,
+        );
+        return { ...v, read: { side: fs.side, score: fs.score, tier: fs.tier } };
+      });
+
       out.push({
         player: listItem,
         stat,
@@ -1935,12 +2012,19 @@ function computeBoardRows(
         lineValue: rowLineValue,
         oddsType: shownRung?.oddsType ?? null,
         multiplier: shownRung?.multiplier ?? null,
-        variants,
+        variants: scoredVariants,
       });
     }
   }
 
-  out.sort((a, b) => b.fireScore.score - a.fireScore.score);
+  // Rank (and retain, under the caps) by the row's BEST read — its shown line or any
+  // scored rung — so a pass-at-standard row with a strong demon isn't cut. The row
+  // still displays its shown line's read; the value badge explains the placement.
+  out.sort(
+    (a, b) =>
+      bestVariantScore(b.fireScore.score, b.variants) -
+      bestVariantScore(a.fireScore.score, a.variants),
+  );
   return capBoardRows(out, limit, perPlayerCap, perStatCap);
 }
 
@@ -2034,11 +2118,12 @@ function boardStatSelect(sport: Sport) {
   return { ...BOARD_META_SELECT, ...BOARD_STAT_COLS[sport] };
 }
 
+/** The heavy board-scan load (players + every game), shareable across the board and
+ *  trends computations on one page so it's paid once. */
+export type BoardPool = { players: BoardPlayer[]; gamesByPlayer: Map<number, PlayerGame[]> };
+
 /** Top-`scan` most-active players + all their games (one batched query each). */
-async function loadBoardPool(
-  sport: Sport,
-  scan: number,
-): Promise<{ players: BoardPlayer[]; gamesByPlayer: Map<number, PlayerGame[]> }> {
+async function loadBoardPool(sport: Sport, scan: number): Promise<BoardPool> {
   const players = await db.player.findMany({
     where: { sport },
     include: { team: { select: { abbreviation: true, name: true, externalId: true } } },
@@ -2136,6 +2221,9 @@ interface BoardScanOptions {
   source?: string;
   /** Pure-slate: only props the chosen book lists (its real line), no median fallback. */
   requireProvidedLine?: boolean;
+  /** Reuse an already-loaded pool (the heavy query) instead of loading a fresh one —
+   *  lets one page compute board + trends from a single load. */
+  pool?: BoardPool;
 }
 
 /** The (stat, line) pairs to evaluate for a player — book props (pure-slate) or the
@@ -2173,6 +2261,9 @@ type ScanComputeOpts = {
   perStatCap: number;
   /** Current availability per player — badges the trend row (trends don't gate). */
   availability?: Map<number, CardAvailability>;
+  /** This source's variant ladders per `${playerId}:${stat}` — tags each trend row
+   *  with its rung's payout kind and ships the ladder for the kind filter. */
+  variantMap?: Map<string, ProvidedVariant[]>;
 };
 
 /** Trends from a loaded pool vs a line map (pure compute). Players whose RECENT
@@ -2207,6 +2298,11 @@ function computeTrendRows(
       const recentOver = recent.hitRateOver ?? 0.5;
       const side: 'over' | 'under' = recentOver >= 0.5 ? 'over' : 'under';
       if (line <= 0.5 && side === 'under') continue; // trivial under on a 0.5 line
+      // A demon/goblin/alternate rung only pays the over — an under swing on it isn't
+      // a playable trend at this book, so don't surface it.
+      const variants = opts.variantMap?.get(`${p.id}:${stat}`);
+      const shownRung = variants?.find((v) => v.line === line) ?? null;
+      if (side === 'under' && shownRung && isOverOnly(shownRung.oddsType)) continue;
       const recentRate = side === 'over' ? recentOver : 1 - recentOver;
       const seasonOver = season.hitRateOver ?? 0.5;
       const seasonRate = side === 'over' ? seasonOver : 1 - seasonOver;
@@ -2234,6 +2330,9 @@ function computeTrendRows(
           run.side !== null && run.length >= STREAK_MIN_LENGTH
             ? { side: run.side, length: run.length }
             : null,
+        oddsType: shownRung?.oddsType ?? null,
+        multiplier: shownRung?.multiplier ?? null,
+        variants,
       });
     }
   }
@@ -2246,7 +2345,7 @@ export async function getTrendBoard(
   opts: BoardScanOptions = {},
 ): Promise<TrendRow[]> {
   const { limit = 80, scan = 140, perPlayerCap = 1, perStatCap = 25 } = opts;
-  const { players, gamesByPlayer } = await loadBoardPool(sport, scan);
+  const { players, gamesByPlayer } = opts.pool ?? (await loadBoardPool(sport, scan));
   const providedLines = await getProvidedLineMap(
     sport,
     players.map((p) => p.id),
@@ -2271,7 +2370,9 @@ export async function getTrendBoard(
   );
 }
 
-/** One trends board per book from a single pool load (vs the book's real lines). */
+/** One trends board per book from a single pool load (vs the book's real lines).
+ *  Each row carries its rung's payout tag + the ladder, so the trends pages get the
+ *  same variant badges/filter the Heat Check has. */
 export async function getSourcedTrends(
   sport: Sport,
   sources: string[],
@@ -2279,19 +2380,47 @@ export async function getSourcedTrends(
 ): Promise<Record<string, TrendRow[]>> {
   const { limit = 80, scan = 140, perPlayerCap = 1, perStatCap = 25 } = opts;
   const result: Record<string, TrendRow[]> = {};
-  const { players, gamesByPlayer } = await loadBoardPool(sport, scan);
+  const { players, gamesByPlayer } = opts.pool ?? (await loadBoardPool(sport, scan));
   const ids = players.map((p) => p.id);
   const availability = await getBoardAvailability(sport, ids);
   for (const s of sources) {
-    const providedLines = await getProvidedLineMap(sport, ids, s);
+    // Full ladders (not just the representative line) so rows can be tagged/filtered
+    // by kind; the trend itself is computed vs the representative rung.
+    const variantMap = await getProvidedVariantMap(sport, ids, s);
+    const providedLines = new Map<string, number>();
+    for (const [key, variants] of variantMap) {
+      const rep = pickRepresentative(variants, null);
+      if (rep) providedLines.set(key, rep.line);
+    }
     result[s] = computeTrendRows(sport, players, gamesByPlayer, providedLines, true, {
       limit,
       perPlayerCap,
       perStatCap,
       availability,
+      variantMap,
     });
   }
   return result;
+}
+
+/**
+ * Board + trends for one sport from a SINGLE pool load — the heavy players+games
+ * query is the dominant cost of both scans, so a page that wants both (the sport
+ * home hub) pays it once. Options mirror getSourcedBoards / getSourcedTrends.
+ */
+export async function getSourcedBoardsAndTrends(
+  sport: Sport,
+  sources: string[],
+  boardOpts: BoardOptions = {},
+  trendOpts: BoardScanOptions = {},
+): Promise<{ boards: Record<string, BoardRow[]>; trends: Record<string, TrendRow[]> }> {
+  // The pool is "top-N most-active players"; load the larger N so both scans are
+  // at least as deep as they'd be standalone.
+  const scan = Math.max(boardOpts.scan ?? 120, trendOpts.scan ?? 140);
+  const pool = await loadBoardPool(sport, scan);
+  const boards = await getSourcedBoards(sport, sources, { ...boardOpts, pool });
+  const trends = await getSourcedTrends(sport, sources, { ...trendOpts, pool });
+  return { boards, trends };
 }
 
 /**

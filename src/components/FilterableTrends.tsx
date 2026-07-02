@@ -10,11 +10,14 @@ import { useListFilter } from './useListFilter';
 export function FilterableTrends({
   sport,
   rows,
+  source,
   initialVisible = 50,
   step = 50,
 }: {
   sport: Sport;
   rows: TrendRow[];
+  /** Book the shown trends belong to — carried into each row's player-page link. */
+  source?: string;
   initialVisible?: number;
   step?: number;
 }) {
@@ -40,7 +43,7 @@ export function FilterableTrends({
         </p>
       ) : (
         <>
-          <TrendBoardTable rows={f.shown} />
+          <TrendBoardTable rows={f.shown} source={source} />
           {f.visible < f.filtered.length && (
             <button
               type="button"

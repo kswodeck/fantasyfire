@@ -33,6 +33,25 @@ export interface AltLineOptions {
 const MIN_LINE = 0.5;
 
 /**
+ * Over rate at ONE line from per-game values (pushes excluded from the denominator).
+ * The single-line building block behind altLineTable — used by the variant ladder to
+ * annotate each book rung with its historical over rate.
+ */
+export function overRateAt(
+  values: number[],
+  line: number,
+): { overs: number; decided: number; rate: number | null } {
+  let overs = 0;
+  let unders = 0;
+  for (const v of values) {
+    if (v > line) overs++;
+    else if (v < line) unders++;
+  }
+  const decided = overs + unders;
+  return { overs, decided, rate: decided === 0 ? null : overs / decided };
+}
+
+/**
  * Build the hit-rate-vs-line table centered on `currentLine`. Values are
  * line-independent, so this recomputes purely on the client as the user moves the
  * line — no refetch needed. Rows are returned ascending by line.

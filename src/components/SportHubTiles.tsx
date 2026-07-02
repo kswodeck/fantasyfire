@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { Sport } from '@/lib/sports';
-import type { InjuryReportRow, TonightGame } from '@/lib/types';
+import type { InjuryReportRow, TonightGame, TrendRow } from '@/lib/types';
 import { sportSections } from '@/lib/sportNav';
 
 /**
@@ -15,6 +15,7 @@ export function SportHubTiles({
   games,
   slateWord,
   injuries,
+  topTrend = null,
 }: {
   sport: Sport;
   /** Tonight's (or this week's) slate — [] off-season / on error. */
@@ -23,12 +24,18 @@ export function SportHubTiles({
   slateWord: string;
   /** Current injury report — [] when unavailable. */
   injuries: InjuryReportRow[];
+  /** The strongest current form swing (shares the board teaser's pool load). */
+  topTrend?: TrendRow | null;
 }) {
   const sections = sportSections(sport).filter((s) => s.seg !== 'board');
   const outCount = injuries.filter((r) => r.status === 'out').length;
 
   // Live one-liner per section where the data is already loaded; null → static hint.
   const liveLine = (seg: string): string | null => {
+    if (seg === 'trends' && topTrend) {
+      const hits = Math.round(topTrend.recentRate * topTrend.recentGames);
+      return `Top swing: ${topTrend.player.fullName} — ${hits} of ${topTrend.recentGames} ${topTrend.side} ${topTrend.line} ${topTrend.statShort} (L10)`;
+    }
     if (seg === 'matchups' && games.length > 0) {
       const sample = games
         .slice(0, 3)
