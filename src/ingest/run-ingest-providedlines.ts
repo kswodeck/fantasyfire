@@ -3,9 +3,11 @@
 // Pull REAL prop lines into the ProvidedLine table, so the board / player pages can
 // show the number users actually see instead of our computed median line. Sources:
 //   • prizepicks, underdog  — direct scrapers (prizepicks.ts / underdog.ts)
-//   • rotowire              — public picks aggregator (rotowire.ts) that adds Sleeper,
-//                             DraftKings Pick6, RT Sports + sportsbooks in one call,
-//                             each fanned out to its own `source`.
+//   • sleeper, pick6        — direct scrapers (sleeper.ts / pick6.ts) carrying each
+//                             book's payout multipliers + alternate-line ladders
+//   • rotowire              — public picks aggregator (rotowire.ts) that adds RT Sports
+//                             + sportsbooks in one call, each fanned out to its own
+//                             `source`.
 //
 //   pnpm ingest:providedlines   (runs on the cloud cron — ingest-providedlines.yml)
 //
@@ -18,6 +20,8 @@ import { recordIngestRun } from './ingestRun';
 import { withDbRetry } from './dbRetry';
 import { fetchPrizePicksLines } from './prizepicks';
 import { fetchUnderdogLines } from './underdog';
+import { fetchSleeperLines } from './sleeper';
+import { fetchPick6Lines } from './pick6';
 import { fetchRotowireLines } from './rotowire';
 import type { ProvidedLineRow } from './providedTypes';
 import { normalizeName } from '../lib/slate';
@@ -29,9 +33,13 @@ import { submitRevalidate } from '../lib/revalidate';
 const SOURCES: Array<{ id: string; fetch: () => Promise<ProvidedLineRow[]> }> = [
   { id: 'prizepicks', fetch: fetchPrizePicksLines },
   { id: 'underdog', fetch: fetchUnderdogLines },
-  // RotoWire aggregator — one public, proxy-free call returns rows for many books at
-  // once (Sleeper, DraftKings Pick6, RT Sports + sportsbooks). Each row carries its
-  // own `source`; PrizePicks/Underdog are excluded there (scraped directly above).
+  // Sleeper + DK Pick6 scraped DIRECTLY (not via RotoWire) so we get their exact payout
+  // multipliers / alternate-line ladders — RotoWire only exposes the line + odds.
+  { id: 'sleeper', fetch: fetchSleeperLines },
+  { id: 'pick6', fetch: fetchPick6Lines },
+  // RotoWire aggregator — one public, proxy-free call returns rows for the remaining
+  // books (RT Sports + sportsbooks). Each row carries its own `source`; PrizePicks,
+  // Underdog, Sleeper, and Pick6 are excluded there (scraped directly above).
   { id: 'rotowire', fetch: fetchRotowireLines },
 ];
 
