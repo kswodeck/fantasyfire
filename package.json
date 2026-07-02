@@ -19,6 +19,8 @@
     "test:watch": "vitest",
     "test:nba": "vitest run src/ingest/nba",
     "e2e": "playwright test",
+    "data:refresh": "tsx scripts/refresh-data.ts",
+    "data:refresh:prod": "tsx scripts/refresh-data.ts --prod",
     "ingest": "tsx src/ingest/run-ingest.ts",
     "ingest:prod": "dotenv -e .env.prod.local -- tsx src/ingest/run-ingest.ts",
     "ingest:mlb": "tsx src/ingest/run-ingest-mlb.ts",
