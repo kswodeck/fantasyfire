@@ -32,13 +32,14 @@ async function activeSports(): Promise<Sport[]> {
 }
 
 function rankBoard(rows: BoardRow[]): BoardRow[] {
-  // Same "best read on the row" key the per-sport boards sort by (shown line or any
-  // scored rung), so a strong demon survives the cross-sport merge too.
+  // Same key as the per-sport boards: the SHOWN line's read first (the board must
+  // look strictly FireFactor-sorted), best-rung as the tie-break.
   return [...rows]
     .sort(
       (a, b) =>
+        b.fireScore.score - a.fireScore.score ||
         bestVariantScore(b.fireScore.score, b.variants) -
-        bestVariantScore(a.fireScore.score, a.variants),
+          bestVariantScore(a.fireScore.score, a.variants),
     )
     .slice(0, MERGE_CAP)
     .map((r, i) => ({ ...r, rank: i + 1 }));

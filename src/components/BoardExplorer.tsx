@@ -10,6 +10,7 @@ import { useBoardPayoutFilter } from './useBoardPayoutFilter';
 import { MatchupStrip } from './MatchupStrip';
 import { useSourced } from './useSourced';
 import { bestVariantScore } from '@/lib/payoutVariant';
+import { FIREFACTOR_TIER_CUTOFFS } from '@/lib/stats';
 import { useSelectedSlate } from './SelectedSlateProvider';
 import { formatIsoDate } from '@/lib/format';
 
@@ -43,10 +44,11 @@ export function BoardExplorer({
 }) {
   const hasSources = sources.length > 0;
   const sourced = useSourced(boardsBySource, sources, defaultSource);
-  // Drop rows with no read anywhere — neither the shown line nor any scored rung
-  // clears 0 (0 = coin flip on a standard line, fairly-priced on a variant).
+  // Keep rows where SOME line (shown or any scored rung) reaches at least a faint
+  // read — chance-floored single digits are "almost certainly not" territory and
+  // would flood the board with noise.
   const rows = (hasSources ? sourced.rows : medianRows).filter(
-    (r) => bestVariantScore(r.fireScore.score, r.variants) > 0,
+    (r) => bestVariantScore(r.fireScore.score, r.variants) >= FIREFACTOR_TIER_CUTOFFS.none,
   );
 
   const hasSlate = games.length > 0;
@@ -202,7 +204,6 @@ export function BoardExplorer({
           rows={filteredRows}
           source={hasSources ? sourced.source : undefined}
           initialLines={payout.initialLines}
-          enabledKinds={payout.enabledKinds}
           initialVisible={20}
         />
       )}

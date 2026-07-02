@@ -272,6 +272,21 @@ export interface BoardRow {
   variants?: ProvidedVariant[];
 }
 
+/** One rung's trend snapshot — the same swing metrics evaluated vs THAT rung's line,
+ *  so a goblins/demons-filtered trends view can show the goblin/demon line itself. */
+export interface TrendRung {
+  line: number;
+  oddsType: string | null;
+  multiplier: number | null;
+  side: 'over' | 'under';
+  recentRate: number;
+  recentLower: number;
+  recentGames: number;
+  seasonRate: number;
+  delta: number;
+  streak: { side: 'over' | 'under'; length: number } | null;
+}
+
 /** One row on the trends board: how recent form has swung from the season baseline,
  *  with the player's current consecutive run (the merged "Streaks" metric) alongside. */
 export interface TrendRow {
@@ -300,8 +315,13 @@ export interface TrendRow {
   oddsType?: string | null;
   /** Exact payout multiplier of that line (UD alternates); null when none. */
   multiplier?: number | null;
-  /** This source's full variant ladder for the stat — powers the kind filter. */
+  /** The rungs whose OWN trend qualifies — mirrors `rungTrends` so the shared payout
+   *  filter can pick among them. Present only on the sourced (per-book) trends. */
   variants?: ProvidedVariant[];
+  /** Per-rung snapshots (one per entry in `variants`): the swing metrics evaluated at
+   *  each qualifying rung, so a kind-filtered view displays THAT rung's trend. The
+   *  row's own top-level fields are the standard-preferred rung's snapshot. */
+  rungTrends?: TrendRung[];
 }
 
 /** One row on a defense-vs-position / pitching-allowed reference table. */

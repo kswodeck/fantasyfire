@@ -10,8 +10,7 @@ import { useHitRate } from '@/hooks/useHitRate';
 import { STAT_DEFS } from '@/lib/stats';
 import { SPORTS, SPORT_LIST, type Sport } from '@/lib/sports';
 import { pct } from '@/lib/format';
-import { tierTextClass, heatLabel, valueLabel } from '@/lib/tierStyle';
-import { isOverOnly } from '@/lib/payoutVariant';
+import { tierTextClass, heatLabel } from '@/lib/tierStyle';
 import { LeanArrow } from './LeanArrow';
 import { SideArrow } from './SideArrow';
 import { BookLogo } from './BookLogo';
@@ -394,10 +393,7 @@ function PropRow({ prop }: { prop: SavedProp }) {
               <LeanArrow tier={fs.tier} side={fs.side} size={13} />
               {fsIsLean ? (
                 <>
-                  {/* A saved variant reads in value terms (scored vs its breakeven). */}
-                  {prop.oddsType != null && isOverOnly(prop.oddsType)
-                    ? valueLabel(fs.tier)
-                    : `${heatLabel(fs.tier, fs.side)} ${fs.side}`}
+                  {heatLabel(fs.tier, fs.side)} {fs.side}
                   <span className="text-muted">· {fs.score}</span>
                   {fs.side === side ? (
                     <span className="ml-0.5 text-over">✓ your side</span>

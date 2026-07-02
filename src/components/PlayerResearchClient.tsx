@@ -28,6 +28,7 @@ import { TeammateSplitsPanel } from './TeammateSplitsPanel';
 import { LineValueTable } from './LineValueTable';
 import { SourceSelector } from './SourceSelector';
 import { VariantLadder } from './VariantLadder';
+import { VariantChips } from './VariantChips';
 import { PayoutBadge } from './PayoutBadge';
 import { useSelectedSource } from './SelectedSourceProvider';
 import { sourceLabel } from '@/lib/providedSources';
@@ -219,8 +220,13 @@ export function PlayerResearchClient({
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted">Line</span>
             <LineInput value={effectiveLine} onCommit={handleLine} />
+            {/* One-click variant switcher (same chips as the board rows) — click a
+                demon/goblin/alternate to funnel through it, click again to walk the
+                ladder and return to the standard line. The full ladder below shows
+                every rung with its own read. */}
+            <VariantChips variants={data.variants} line={effectiveLine} onSelect={handleLine} />
             {/* Payout tag whenever the current line matches a book rung — auto-picked
-                OR selected via the ladder (a hand-typed off-book number has none). */}
+                OR selected via the chips/ladder (a hand-typed off-book number has none). */}
             <PayoutBadge oddsType={data.oddsType} multiplier={data.multiplier} />
           </div>
           {availableSources.length > 0 && (
@@ -269,9 +275,8 @@ export function PlayerResearchClient({
         <AvailabilityBanner availability={data.availability} playerName={data.player.fullName} />
       )}
 
-      {/* Verdict — the FireFactor "good prop" read + sub-signals. A variant line reads
-          in value terms (scored vs its payout breakeven, over-only). */}
-      <VerdictPanel verdict={data.verdict} statShort={statDef.short} line={data.line} oddsType={data.oddsType} />
+      {/* Verdict — the FireFactor "good prop" read + sub-signals */}
+      <VerdictPanel verdict={data.verdict} statShort={statDef.short} line={data.line} />
 
       {/* Hit-rate cards */}
       <section aria-label="Hit rates" className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">

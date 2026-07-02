@@ -9,52 +9,34 @@ import { PlayerAvatar } from './PlayerAvatar';
 import { InjuryBadge } from './InjuryBadge';
 import { SportTag } from './SportTag';
 import { LeanArrow } from './LeanArrow';
-import { PayoutBadge, PayoutGlyph, formatMultiplier } from './PayoutBadge';
+import { PayoutBadge, formatMultiplier } from './PayoutBadge';
+import { VariantChips } from './VariantChips';
 import { getTeam } from '@/lib/teams';
-import { tierTextClass, heatLabel, valueLabel } from '@/lib/tierStyle';
+import { tierTextClass, heatLabel } from '@/lib/tierStyle';
 import { sourceLabel } from '@/lib/providedSources';
-import { payoutKind, variantBreakeven, type PayoutKind } from '@/lib/payoutVariant';
+import { payoutKind } from '@/lib/payoutVariant';
 import { FIREFACTOR_TIER_CUTOFFS } from '@/lib/stats';
-
-const SPECIAL_KINDS: PayoutKind[] = ['demon', 'goblin', 'alternate'];
-
-const CHIP =
-  'relative z-10 inline-flex cursor-pointer items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold leading-none transition-colors';
-
-function rungsOfKind(variants: ProvidedVariant[], kind: PayoutKind): ProvidedVariant[] {
-  return variants.filter((v) => payoutKind(v.oddsType) === kind).sort((a, b) => a.line - b.line);
-}
-
-function nearest(rungs: ProvidedVariant[], to: number): ProvidedVariant {
-  return rungs.reduce((best, r) => (Math.abs(r.line - to) < Math.abs(best.line - to) ? r : best));
-}
-
-/** The value badge's word for a special rung: the kind, or the exact multiplier. */
-function specialWord(v: ProvidedVariant): string {
-  const kind = payoutKind(v.oddsType);
-  if (kind === 'alternate') return v.multiplier != null ? formatMultiplier(v.multiplier) : 'alt';
-  return kind;
-}
 
 /**
  * One board row with an inline payout-variant switcher. The main row is a stretched
- * link to the player page (at the selected rung); the variant chips sit above it (z-10)
- * so clicking one switches the shown rung WITHOUT navigating. Switching recomputes
- * the FireFactor on click via the hitrate API (React Query caches per line).
+ * link to the player page (at the selected rung); the variant chips (see VariantChips)
+ * sit above it (z-10) so clicking one switches the shown rung WITHOUT navigating.
  *
- * Chips exist only for the SPECIAL kinds — a demon chip, a goblin chip, and a single
- * alternate chip (labelled with the shown rung's multiplier). The standard line is the
- * no-chip-highlighted state: clicking an active chip cycles that kind's whole ladder
- * (demon rungs, goblin rungs, or every alternate) and then funnels back to the plain
- * line when the book has one. `enabledKinds` (from the board's payout filter) hides
- * chips for de-selected kinds. A source with a single plain line renders with no chips.
+ * LAYOUT STABILITY CONTRACT: clicking a chip must not move the chips under the
+ * pointer (a shifted chip makes the next click fall through to the row link). The
+ * meta row therefore never wraps, the side word always renders (even on a Pass), the
+ * chips keep a fixed structure, and the payout badge sits AFTER the chips so its
+ * appearing/disappearing never displaces them.
+ *
+ * The standard line is the no-chip-highlighted state: clicking an active chip cycles
+ * that kind's ladder and then funnels back to the plain line when the book has one.
+ * Chips render for every kind the row's ladder offers, regardless of the page filter.
  */
 export function BoardRowCard({
   sport,
   row,
   source,
   initialLine,
-  enabledKinds,
   showSport = false,
 }: {
   sport: Sport;
@@ -62,9 +44,6 @@ export function BoardRowCard({
   source?: string;
   /** Rung to open on when a board filter re-picks it (else the server representative). */
   initialLine?: number;
-  /** Kinds the board's payout filter has selected — chips of other kinds are hidden
-   *  (undefined = no filter on this page → show every kind the row offers). */
-  enabledKinds?: Set<PayoutKind>;
   /** Prefix the name with a league chip — for the cross-sport ("All") board. */
   showSport?: boolean;
 }) {
@@ -97,118 +76,19 @@ export function BoardRowCard({
   const loading = !isDefault && q.isPending && !pre;
 
   const team = getTeam(sport, row.player.teamAbbreviation);
-  const dir = fireScore.tier === 'Pass' ? '' : fireScore.side === 'over' ? 'Over' : 'Under';
   const activeKind = payoutKind(currentRung?.oddsType);
-  const normals = rungsOfKind(variants, 'normal');
-  const kindEnabled = (k: PayoutKind) => enabledKinds === undefined || enabledKinds.has(k);
-  const specialKinds = SPECIAL_KINDS.filter(
-    (k) => kindEnabled(k) && variants.some((v) => payoutKind(v.oddsType) === k),
-  );
-  const hasSwitcher = specialKinds.length > 0;
-  // The strongest scored special rung — powers the "+value" badge on the default view.
+  const hasSwitcher = variants.some((v) => payoutKind(v.oddsType) !== 'normal');
+  // The strongest scored special rung — powers the small board badge on the default view.
   const bestSpecial = variants.reduce<ProvidedVariant | null>((best, v) => {
     if (payoutKind(v.oddsType) === 'normal' || !v.read) return best;
     return !best || v.read.score > (best.read?.score ?? 0) ? v : best;
   }, null);
 
-  // Funnel back to the plain/standard line (nearest normal rung) when the book has one.
-  const toNormal = () => {
-    if (normals.length > 0) setLine(nearest(normals, line).line);
-  };
-
-  // Click a demon/goblin chip: switch to that kind (nearest the current line); clicking
-  // the already-active kind cycles its rungs, then funnels back to the standard line
-  // (no chip highlighted) — so every rung AND the plain line are reachable in place.
-  const pickKind = (kind: PayoutKind) => {
-    const rungs = rungsOfKind(variants, kind);
-    if (rungs.length === 0) return;
-    if (kind === activeKind) {
-      const idx = rungs.findIndex((r) => r.line === line);
-      if (idx < rungs.length - 1) setLine(rungs[idx + 1].line);
-      else if (normals.length > 0) toNormal();
-      else setLine(rungs[0].line); // no standard line to return to — wrap around
-    } else {
-      setLine(nearest(rungs, line).line);
-    }
-  };
-
-  const glyphChip = (kind: 'demon' | 'goblin') => {
-    const active = kind === activeKind;
-    const target = active ? currentRung : nearest(rungsOfKind(variants, kind), line);
-    const bk = Math.round(variantBreakeven(kind, null) * 100);
-    const tone =
-      kind === 'demon'
-        ? active
-          ? 'border-demon/40 bg-demon/12 text-demon'
-          : 'border-line text-muted hover:text-demon'
-        : active
-          ? 'border-goblin/40 bg-goblin/12 text-goblin'
-          : 'border-line text-muted hover:text-goblin';
-    return (
-      <button
-        key={kind}
-        type="button"
-        onClick={() => pickKind(kind)}
-        aria-pressed={active}
-        title={`${
-          kind === 'demon'
-            ? 'Demon — harder line, pays more (over only).'
-            : 'Goblin — easier line, pays less (over only).'
-        } Scored vs its ~${bk}% payout breakeven${
-          target?.read ? ` (FireFactor ${target.read.score} at ${target.line})` : ''
-        }. Click again for the standard line.`}
-        className={`${CHIP} ${tone}`}
-      >
-        <PayoutGlyph kind={kind} size={12} />
-      </button>
-    );
-  };
-
-  // ONE alternate chip that works like the demon/goblin ones: click to jump to the
-  // nearest alternate rung, keep clicking to walk the whole alternate ladder, then
-  // funnel back to the standard line. The label is the shown (or next-up) rung's
-  // multiplier, so the payout is visible before and after switching.
-  const alternateChip = () => {
-    const rungs = rungsOfKind(variants, 'alternate');
-    if (rungs.length === 0) return null;
-    const active = activeKind === 'alternate';
-    const shown = active ? currentRung : nearest(rungs, line);
-    const tone = active
-      ? 'border-heat-1/40 bg-heat-1/12 text-heat-1'
-      : 'border-line text-muted hover:text-foreground';
-    const altBk =
-      shown?.multiplier != null
-        ? ` Scored vs its ~${Math.round(variantBreakeven('alternate', shown.multiplier) * 100)}% payout breakeven${
-            shown.read ? ` (FireFactor ${shown.read.score} at ${shown.line})` : ''
-          }.`
-        : '';
-    return (
-      <button
-        type="button"
-        onClick={() => pickKind('alternate')}
-        aria-pressed={active}
-        title={`Alternate line${shown?.multiplier != null ? ` — ${formatMultiplier(shown.multiplier)} payout` : ''} (over only).${altBk} ${
-          rungs.length > 1 ? 'Click to cycle the alternate ladder, then back to the standard line.' : 'Click again for the standard line.'
-        }`}
-        className={`${CHIP} ${tone}`}
-      >
-        <span className="tabular-nums">
-          {shown?.multiplier != null ? formatMultiplier(shown.multiplier) : 'alt'}
-        </span>
-        {active && rungs.length > 1 && (
-          <span className="text-[9px] font-normal opacity-70">
-            {rungs.findIndex((r) => r.line === line) + 1}/{rungs.length}
-          </span>
-        )}
-      </button>
-    );
-  };
-
   const href = `/${sport}/${row.player.slug}?stat=${row.stat}&line=${line}${source ? `&source=${source}` : ''}`;
 
   return (
     <li className="relative flex items-center gap-2.5 px-3 py-2.5 transition-colors hover:bg-surface-2">
-      <Link href={href} aria-label={`${row.player.fullName} ${dir} ${line} ${row.statShort}`} className="absolute inset-0" />
+      <Link href={href} aria-label={`${row.player.fullName} ${fireScore.side} ${line} ${row.statShort}`} className="absolute inset-0" />
       <PlayerAvatar sport={sport} externalId={row.player.externalId} name={row.player.fullName} size={36} ring={team.primary} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
@@ -216,22 +96,27 @@ export function BoardRowCard({
           <span className="truncate text-sm font-semibold">{row.player.fullName}</span>
           <InjuryBadge injury={row.player.availability} />
         </div>
-        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted">
-          <span className="truncate">
-            {row.player.teamAbbreviation} · {dir ? `${dir} ` : ''}
+        {/* One non-wrapping meta row: text | chips | badge — see the stability contract. */}
+        <div className="flex items-center gap-1.5 text-xs text-muted">
+          <span className="min-w-0 truncate">
+            {row.player.teamAbbreviation} ·{' '}
+            {fireScore.side === 'over' ? 'Over' : 'Under'}{' '}
             <span className="tabular-nums">{line}</span> {row.statShort}
           </span>
-          {/* The standard line's own payout tag (e.g. an Underdog non-1× multiplier),
-              or the shown rung's badge when this row has no switcher at all. Skipped
-              when a special rung's own chip is already highlighted. */}
-          {(!hasSwitcher || activeKind === 'normal') && (
-            <PayoutBadge oddsType={currentRung?.oddsType} multiplier={currentRung?.multiplier} showLabel={false} />
-          )}
           {hasSwitcher && (
-            <span className="flex flex-wrap items-center gap-1">
-              {specialKinds.includes('demon') && glyphChip('demon')}
-              {specialKinds.includes('goblin') && glyphChip('goblin')}
-              {specialKinds.includes('alternate') && alternateChip()}
+            <VariantChips
+              variants={variants}
+              line={line}
+              onSelect={setLine}
+              className="relative z-10 shrink-0"
+            />
+          )}
+          {/* Current rung's payout tag (e.g. an Underdog non-1× multiplier on the
+              standard line), or the shown rung's badge when there's no switcher.
+              AFTER the chips, so toggling it never moves them. */}
+          {(!hasSwitcher || activeKind === 'normal') && (
+            <span className="shrink-0">
+              <PayoutBadge oddsType={currentRung?.oddsType} multiplier={currentRung?.multiplier} showLabel={false} />
             </span>
           )}
         </div>
@@ -239,11 +124,7 @@ export function BoardRowCard({
       <div className={`shrink-0 text-right transition-opacity ${loading ? 'opacity-40' : ''}`}>
         <div className={`flex items-center justify-end gap-1 text-sm font-semibold ${tierTextClass(fireScore.tier, fireScore.side)}`}>
           <LeanArrow tier={fireScore.tier} side={fireScore.side} size={15} />
-          {/* Variant rungs read in value terms — "over lean" is meaningless on a
-              line that only takes overs; the score is edge vs the payout breakeven. */}
-          {activeKind === 'normal'
-            ? heatLabel(fireScore.tier, fireScore.side)
-            : valueLabel(fireScore.tier)}
+          {heatLabel(fireScore.tier, fireScore.side)}
         </div>
         <div className="text-[11px] tabular-nums text-muted">FireFactor {fireScore.score}</div>
         {isDefault && row.lineValue?.best && row.lineValue.best.edge >= 0.05 && (
@@ -251,14 +132,21 @@ export function BoardRowCard({
             best: {sourceLabel(row.lineValue.best.source)} +{Math.round(row.lineValue.best.edge * 100)}
           </div>
         )}
-        {/* A special rung beating the shown line by a real margin — the reason a
-            pass-at-standard row can still rank; the chips funnel straight to it. */}
+        {/* A special rung scoring a real read above the shown line — the chips funnel
+            straight to it. */}
         {isDefault && bestSpecial?.read && bestSpecial.read.score >= FIREFACTOR_TIER_CUTOFFS.slight && bestSpecial.read.score > fireScore.score && (
           <div className="text-[10px] tabular-nums text-heat-1">
-            {specialWord(bestSpecial)} value: FF {bestSpecial.read.score}
+            {specialWord(bestSpecial)}: FF {bestSpecial.read.score}
           </div>
         )}
       </div>
     </li>
   );
+}
+
+/** The badge's word for a special rung: the kind, or the exact multiplier. */
+function specialWord(v: ProvidedVariant): string {
+  const kind = payoutKind(v.oddsType);
+  if (kind === 'alternate') return v.multiplier != null ? formatMultiplier(v.multiplier) : 'alt';
+  return kind;
 }

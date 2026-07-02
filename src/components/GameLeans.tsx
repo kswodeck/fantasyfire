@@ -2,7 +2,6 @@
 
 import type { Sport } from '@/lib/sports';
 import type { BoardRow, TonightGame } from '@/lib/types';
-import type { PayoutKind } from '@/lib/payoutVariant';
 import { BoardTable } from './BoardTable';
 import { SourceSelector } from './SourceSelector';
 import { BoardPayoutControls } from './BoardPayoutControls';
@@ -62,7 +61,6 @@ export function GameLeans({
             rows={payout.rows}
             source={hasSources ? sourced.source : undefined}
             initialLines={payout.initialLines}
-            enabledKinds={payout.enabledKinds}
           />
           <TeamSection
             sport={sport}
@@ -70,7 +68,6 @@ export function GameLeans({
             rows={payout.rows}
             source={hasSources ? sourced.source : undefined}
             initialLines={payout.initialLines}
-            enabledKinds={payout.enabledKinds}
           />
         </div>
       )}
@@ -84,14 +81,12 @@ function TeamSection({
   rows,
   source,
   initialLines,
-  enabledKinds,
 }: {
   sport: Sport;
   team: TonightGame['home'];
   rows: BoardRow[];
   source?: string;
   initialLines?: Map<string, number>;
-  enabledKinds?: Set<PayoutKind>;
 }) {
   const teamRows = rows.filter((r) => r.player.teamAbbreviation === team.abbr);
   return (
@@ -112,7 +107,6 @@ function TeamSection({
           rows={teamRows}
           source={source}
           initialLines={initialLines}
-          enabledKinds={enabledKinds}
         />
       )}
     </section>
