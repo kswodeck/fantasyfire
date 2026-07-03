@@ -119,14 +119,16 @@ export function PlaybookClient() {
           <span className="font-medium text-foreground">★ Over / Under</span> under the verdict to
           track a specific prop.
         </p>
+        {/* Point at each sport's Heat Check — the reads are where saves start, not
+            the raw player directory. */}
         <p className="mt-3 flex flex-wrap gap-3">
           {SPORT_LIST.map((s) => (
             <Link
               key={s}
-              href={`/${s}/players`}
+              href={`/${s}`}
               className="font-medium text-brand hover:text-brand-strong"
             >
-              Browse {SPORTS[s].name} players →
+              Browse the {SPORTS[s].name} Heat Check →
             </Link>
           ))}
         </p>
