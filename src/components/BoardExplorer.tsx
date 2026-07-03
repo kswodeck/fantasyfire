@@ -117,8 +117,9 @@ export function BoardExplorer({
   return (
     <div>
       {/* Controls are grouped by intent, one band each, top to bottom:
-            1. SCOPE — the slate switch + game picker (both narrow WHICH slate)
-               with the book selector on the same row;
+            1. SCOPE — the slate switch with the book selector on the same row,
+               then the game picker directly beneath on the far left (it refines
+               the slate the switch turned on);
             2. LINE SHAPE — the payout kind menu + multiplier range;
             3. LIST FILTERS — search / teams / props / leans (in FilterableBoard).
           One visual band per question keeps the stack readable on phones. */}
@@ -131,30 +132,6 @@ export function BoardExplorer({
               label={`${slateWord} only`}
             />
           )}
-          {effectiveMode === 'today' && (
-            <span className="inline-flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setChooseOpen((o) => !o)}
-                aria-expanded={chooseOpen}
-                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-2"
-              >
-                {selectedGames.size > 0 ? `Games (${selectedGames.size} of ${games.length})` : 'Choose games'}
-                <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true" className={`transition-transform ${chooseOpen ? 'rotate-180' : ''}`}>
-                  <path d="M3 4.5 6 7.5 9 4.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-              {selectedGames.size > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedGames(new Set())}
-                  className="cursor-pointer text-xs font-medium text-brand hover:text-brand-strong"
-                >
-                  Clear ({selectedGames.size})
-                </button>
-              )}
-            </span>
-          )}
           {hasSources && (
             <span className="ml-auto">
               <SourceSelector
@@ -165,6 +142,31 @@ export function BoardExplorer({
             </span>
           )}
         </div>
+
+        {effectiveMode === 'today' && (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setChooseOpen((o) => !o)}
+              aria-expanded={chooseOpen}
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-2"
+            >
+              {selectedGames.size > 0 ? `Games (${selectedGames.size} of ${games.length})` : 'Choose games'}
+              <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true" className={`transition-transform ${chooseOpen ? 'rotate-180' : ''}`}>
+                <path d="M3 4.5 6 7.5 9 4.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            {selectedGames.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedGames(new Set())}
+                className="cursor-pointer text-xs font-medium text-brand hover:text-brand-strong"
+              >
+                Clear ({selectedGames.size})
+              </button>
+            )}
+          </div>
+        )}
 
         {/* The game picker expands directly under its row, above the line band. */}
         {effectiveMode === 'today' && chooseOpen && (
