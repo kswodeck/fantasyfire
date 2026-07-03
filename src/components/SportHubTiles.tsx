@@ -1,14 +1,13 @@
 import Link from 'next/link';
 import type { Sport } from '@/lib/sports';
 import type { InjuryReportRow, TonightGame, TrendRow } from '@/lib/types';
-import { sportSections } from '@/lib/sportNav';
+import { sectionHref, sportSections } from '@/lib/sportNav';
 
 /**
- * The sport-home hub grid: one tile per section (Trends, Leaders, Matchups, Injuries,
- * Players — Heat Check has its own teaser above), each with a live one-liner where the
- * data is cheap (tonight's slate, the injury count) and the section's static hint
- * otherwise. Server-rendered; keeps the home page an orientation hub instead of a
- * second copy of the Heat Check board.
+ * The sport-home section grid: one tile per section (Trends, Leaders, Matchups,
+ * Injuries, Players — the Heat Check is the board rendered above), each with a live
+ * one-liner where the data is cheap (tonight's slate, the injury count) and the
+ * section's static hint otherwise. Server-rendered.
  */
 export function SportHubTiles({
   sport,
@@ -27,7 +26,7 @@ export function SportHubTiles({
   /** The strongest current form swing (shares the board teaser's pool load). */
   topTrend?: TrendRow | null;
 }) {
-  const sections = sportSections(sport).filter((s) => s.seg !== 'board');
+  const sections = sportSections(sport).filter((s) => s.seg !== '');
   const outCount = injuries.filter((r) => r.status === 'out').length;
 
   // Live one-liner per section where the data is already loaded; null → static hint.
@@ -57,7 +56,7 @@ export function SportHubTiles({
       {sections.map((s) => (
         <Link
           key={s.seg}
-          href={`/${sport}/${s.seg}`}
+          href={sectionHref(sport, s.seg)}
           className="group rounded-xl border border-line bg-surface p-4 transition-colors hover:bg-surface-2"
         >
           <span className="flex items-center gap-1 text-sm font-semibold">

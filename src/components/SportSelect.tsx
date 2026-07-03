@@ -4,9 +4,11 @@ import { useRouter } from 'next/navigation';
 import { SPORTS, SPORT_LIST, type Sport } from '@/lib/sports';
 
 /** Where a given (sport | 'all', section) lands. "All Sports" uses the top-level
- *  cross-sport route (/board, /trends); a sport uses its scoped route. */
+ *  cross-sport route (/board, /trends); a sport uses its scoped route — except the
+ *  board, which IS the sport home (/[sport]/board redirects there). */
 function hrefFor(value: Sport | 'all', section: string): string {
-  return value === 'all' ? `/${section}` : `/${value}/${section}`;
+  if (value === 'all') return `/${section}`;
+  return section === 'board' ? `/${value}` : `/${value}/${section}`;
 }
 
 /**

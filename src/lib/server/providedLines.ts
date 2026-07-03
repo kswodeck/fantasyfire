@@ -179,10 +179,17 @@ export async function getProvidedQuotesBySource(
 
 /**
  * Batched TWO-SIDED book quotes per `${playerId}:${stat}` — every book's latest
- * (line, over/under American odds) — the raw input for MARKET-IMPLIED variant
- * breakevens (a sportsbook quoting a demon/goblin rung's exact line reveals its fair
- * probability once de-vigged). Latest quote per book; books that post no odds (DFS
- * pick'em) never appear. Empty when the feature is off.
+ * (line, over/under American odds) at EACH line it quotes — the raw input for
+ * MARKET-IMPLIED variant breakevens (a sportsbook quoting a demon/goblin rung's
+ * exact line reveals its fair probability once de-vigged). Latest quote per
+ * (book, line), so a book posting alternate lines contributes a quote at every
+ * rung it prices — which rung gets a market bar must not depend on fetch order.
+ * Books that post no odds (DFS pick'em) never appear. Empty when the feature is
+ * off.
+ *
+ * This is the ONE quote set every FireFactor surface resolves payout breakevens
+ * from (resolvedBreakeven) — the board and the player page must read the same
+ * bar for the same rung, or the same line shows two different scores.
  */
 export async function getBookQuoteMap(
   sport: Sport,
@@ -202,10 +209,10 @@ export async function getBookQuoteMap(
       orderBy: [{ gameDate: 'desc' }, { fetchedAt: 'desc' }],
       select: { playerId: true, stat: true, source: true, line: true, overOdds: true, underOdds: true },
     });
-    const seen = new Set<string>(); // `${key}|${source}` — a book's newest quote wins
+    const seen = new Set<string>(); // `${key}|${source}|${line}` — newest per book per line
     for (const r of rows) {
       const key = `${r.playerId}:${r.stat}`;
-      const bookKey = `${key}|${r.source}`;
+      const bookKey = `${key}|${r.source}|${r.line}`;
       if (seen.has(bookKey)) continue;
       seen.add(bookKey);
       let arr = map.get(key);

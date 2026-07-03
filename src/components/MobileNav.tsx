@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { SPORT_LIST, SPORTS, type Sport } from '@/lib/sports';
-import { sportSections } from '@/lib/sportNav';
+import { sectionHref, sportSections } from '@/lib/sportNav';
 
 /**
  * Mobile (sub-sm) site navigation: a hamburger button that opens a full-width panel
@@ -171,7 +171,7 @@ export function MobileNav() {
                       {isOpen && (
                         <ul className="pb-1 pl-3">
                           {sportSections(s).map((sec) => {
-                            const href = `/${s}/${sec.seg}`;
+                            const href = sectionHref(s, sec.seg);
                             const secActive = pathname === href;
                             return (
                               <li key={sec.seg}>

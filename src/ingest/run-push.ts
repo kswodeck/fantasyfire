@@ -88,7 +88,7 @@ async function main(): Promise<number> {
     const payload = JSON.stringify({
       title: "Today's hottest reads 🔥",
       body,
-      url: `/${picks[0].sport}/board`,
+      url: `/${picks[0].sport}`,
       tag: 'ff-daily',
     });
 

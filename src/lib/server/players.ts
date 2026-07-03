@@ -1339,6 +1339,13 @@ export async function getPlayerResearch(
   // be identical to the board's for the same line, and the board can't price per row.
   const quotes = await getProvidedQuotesBySource(sport, record.id, stat);
   const consensus = quotes.length > 0 ? marketConsensus(quotes, line) : null;
+  // Variant breakevens resolve from getBookQuoteMap — the SAME quote set (window,
+  // odds filter, per-line dedup) the board scan uses — so a demon/goblin rung's bar
+  // (market-implied vs configured approximation) is identical on both surfaces and
+  // the same line never shows two different FireFactors. `quotes` above stays on
+  // consensus duty: its one-row-per-book shape (any line, 14-day window) is right
+  // for the market-edge panel but wrong for exact-line breakeven matching.
+  const rungQuotes = (await getBookQuoteMap(sport, [record.id])).get(`${record.id}:${stat}`);
 
   const ffInput = {
     line,
@@ -1358,7 +1365,7 @@ export async function getPlayerResearch(
     // best-info-first: exact multiplier → market-implied (de-vigged book odds at
     // this exact line) → configured approximation.
     overOnly: selectedVariant ? isOverOnly(selectedVariant.oddsType) : false,
-    benchmark: selectedVariant ? resolvedBreakeven(selectedVariant, variants, quotes) : undefined,
+    benchmark: selectedVariant ? resolvedBreakeven(selectedVariant, variants, rungQuotes) : undefined,
   };
   // FireFactor is the pure directional signal (hit · projection · consistency · matchup)
   // so it's IDENTICAL on the board and the player page. Price/line-value info (best book,
@@ -1414,7 +1421,7 @@ export async function getPlayerResearch(
   // compares rungs at a glance and rung switches paint instantly. Reuses the loaded
   // games + line-independent projection; the shown line's read IS the page verdict.
   const scoredVariants = variants.map((v): ProvidedVariant => {
-    const rungBreakeven = resolvedBreakeven(v, variants, quotes);
+    const rungBreakeven = resolvedBreakeven(v, variants, rungQuotes);
     if (v.line === line)
       return { ...v, breakeven: rungBreakeven, multiplier: sidedMultiplier(v, gatedFireScore.side), read: { side: gatedFireScore.side, score: gatedFireScore.score, tier: gatedFireScore.tier } };
     const rungWindows = STAT_WINDOWS.map((w) => {
@@ -1583,24 +1590,29 @@ export async function getBoard(
   const { limit = 40, scan = 120, perPlayerCap = 2, perStatCap = 10 } = opts;
   const { players, gamesByPlayer } = opts.pool ?? (await loadBoardPool(sport, scan));
   if (players.length === 0) return [];
+  const ids = players.map((p) => p.id);
   // Real lines from the chosen book; empty map (no query) when the feature is off,
   // so the board falls back to the computed default line and behaves as before.
-  const providedLines = await getProvidedLineMap(
-    sport,
-    players.map((p) => p.id),
-    opts.source,
-  );
+  // The full ladder + book quotes ride along so a variant rung headlining a row is
+  // scored against its OWN payout breakeven — the same read every other surface
+  // (sourced boards, player page) produces for that line.
+  const variantMap = await getProvidedVariantMap(sport, ids, opts.source);
+  const providedLines = new Map<string, number>();
+  for (const [key, vs] of variantMap) {
+    const rep = pickRepresentative(vs, null);
+    if (rep) providedLines.set(key, rep.line);
+  }
+  const bookQuotes = await getBookQuoteMap(sport, ids);
   const season = await getActiveSeason(sport);
   const ctx = await boardMatchupContext(sport, players, season);
-  const availability = await getBoardAvailability(
-    sport,
-    players.map((p) => p.id),
-  );
+  const availability = await getBoardAvailability(sport, ids);
   return computeBoardRows(sport, players, gamesByPlayer, providedLines, {
     limit,
     perPlayerCap,
     perStatCap,
     requireProvided: opts.requireProvidedLine === true,
+    variantMap,
+    bookQuotes,
     matchupGrades: ctx.grades,
     opponentMults: ctx.opponentMults,
     paceMultByPlayer: ctx.paceMultByPlayer,

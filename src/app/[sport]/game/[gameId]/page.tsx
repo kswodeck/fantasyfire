@@ -19,7 +19,7 @@ import { formatIsoDate } from '@/lib/format';
 import { SPORTS, isSport, type Sport } from '@/lib/sports';
 import type { BoardRow, TonightGame } from '@/lib/types';
 
-export const revalidate = 1800; // 30 min — rows come from the same scan as /board
+export const revalidate = 900; // 15 min — rows come from the same scan as /board
 export const dynamicParams = true;
 
 export function generateStaticParams() {
@@ -77,8 +77,7 @@ export default async function GamePage({ params }: PageProps) {
       className="mb-4"
       items={[
         { label: 'Home', href: '/' },
-        { label: cfg.name, href: `/${sport}` },
-        { label: 'Heat Check', href: `/${sport}/board` },
+        { label: `${cfg.name} Heat Check`, href: `/${sport}` },
         { label },
       ]}
     />
@@ -93,7 +92,7 @@ export default async function GamePage({ params }: PageProps) {
         <p className="mt-2 text-sm text-muted">
           This matchup isn&rsquo;t on {cfg.name}&rsquo;s upcoming slate — it may have already been
           played. See the{' '}
-          <Link href={`/${sport}/board`} className="text-brand hover:text-brand-strong">
+          <Link href={`/${sport}`} className="text-brand hover:text-brand-strong">
             current {cfg.name} board
           </Link>{' '}
           for live leans.

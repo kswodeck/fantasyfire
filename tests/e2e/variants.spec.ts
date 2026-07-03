@@ -9,9 +9,9 @@ const DEMON_CHIP = 'button[title^="Demon"]';
 const GOBLIN_CHIP = 'button[title^="Goblin"]';
 const ALT_CHIP = 'button[title^="Alternate line"]';
 
-/** Open the NBA Heat Check and wait for either rows or the empty state. */
+/** Open the NBA Heat Check (the sport home) and wait for rows or the empty state. */
 async function gotoBoard(page: Page): Promise<void> {
-  await page.goto('/nba/board');
+  await page.goto('/nba');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 }
 

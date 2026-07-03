@@ -1,13 +1,11 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { FlameMark } from '@/components/FlameMark';
-import { SearchForm } from '@/components/SearchForm';
-import { BoardTable } from '@/components/BoardTable';
-import { SourcedBoardTable } from '@/components/SourcedBoardTable';
-import { HomeLeadersFallback } from '@/components/HomeLeadersFallback';
-import { SportHubTiles } from '@/components/SportHubTiles';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
+import { BoardExplorer } from '@/components/BoardExplorer';
+import { SearchForm } from '@/components/SearchForm';
+import { SportHubTiles } from '@/components/SportHubTiles';
+import { SportSelect } from '@/components/SportSelect';
 import {
   getBoard,
   getInjuryReport,
@@ -20,8 +18,11 @@ import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import { isOverOnly } from '@/lib/payoutVariant';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
 import type { BoardRow, InjuryReportRow, TonightGame, TrendRow } from '@/lib/types';
+import { RelatedLinks } from '@/components/RelatedLinks';
+import { OffSeasonFallback } from '@/components/OffSeasonFallback';
+import { sportMeshLinks } from '@/lib/relatedLinks';
 
-export const revalidate = 1800; // 30 min — keep the leans close to the ~15-min lines ingest (prod is on Pro; board reads are optimized)
+export const revalidate = 900; // 15 min — matches the lines ingest cadence, bounding board↔player-page score skew to one cycle
 export const dynamicParams = false;
 
 export function generateStaticParams() {
@@ -34,8 +35,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { sport } = await params;
   if (!isSport(sport)) return { title: 'Not found' };
   const cfg = SPORTS[sport];
-  const title = `${cfg.name} Player Props & Hit Rates`;
-  const description = `${cfg.name} prop research: ${cfg.tagline} Hit rates, matchups, sample-size confidence, and fair-price math from public game logs.`;
+  const title = `${cfg.name} Heat Check — Today's Slate & Player Props`;
+  const description = `The strongest recent-form ${cfg.name} player-prop reads, ranked by a sample-size-adjusted FireFactor from public game logs. Filter to today's slate or a single matchup, switch books, and open any player for the full read. Research, not picks.`;
   return {
     title,
     description,
@@ -44,132 +45,134 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
+/**
+ * The sport home IS the Heat Check — the full board (filters, matchups, every read)
+ * with player search above it and the section tiles (Trends, Injuries, Players, …)
+ * below. The old /[sport]/board URL permanently redirects here (next.config.ts), so
+ * there is exactly one ranked list per sport instead of a hub that mirrored it.
+ */
 export default async function SportHome({ params }: PageProps) {
   const { sport: raw } = await params;
   if (!isSport(raw)) notFound();
   const sport: Sport = raw;
   const cfg = SPORTS[sport];
-
-  // The heat-check describes upcoming/current games, so gate it on the schedule: with
-  // nothing on the board the provided lines are for games that already happened. When
-  // there are no upcoming games we show a season-leaders fallback instead of stale picks.
-  const upcoming = await hasUpcomingGames(sport).catch(() => true);
-  // NFL plays weekly, so "today's slate" is framed as the week (same as the board).
+  // NFL plays weekly, so "today's slate" is framed as the week.
   const slateWord = sport === 'nfl' ? 'This week' : 'Today';
 
-  // Home is the orientation HUB, not a second Heat Check: a short top-reads teaser
-  // (the full board lives at /[sport]/board) plus live section tiles. The tile data
-  // (slate + injuries) is cheap; the teaser reuses the board scan at a small limit.
-  let sources: string[] = [];
+  // Off-season (no scheduled games) → the auto board's "current" reads are stale,
+  // so we show a season-leaders fallback instead. Default to in-season on error.
+  const upcoming = await hasUpcomingGames(sport).catch(() => true);
+
+  // Real book lines available for this sport (PrizePicks, Underdog, …). Empty when
+  // the feature is off / nothing's ingested — then we fall back to our median line.
+  const sources = upcoming
+    ? await getAvailableSources(sport).catch((): string[] => [])
+    : [];
+  const hasSources = sources.length > 0;
+  const initialSource = sources.includes(DEFAULT_PROVIDED_SOURCE)
+    ? DEFAULT_PROVIDED_SOURCE
+    : (sources[0] ?? DEFAULT_PROVIDED_SOURCE);
+
+  // One board per book (ranked vs that book's real line) + the slate, so the client
+  // can switch books / toggle today / filter by matchup instantly (static/ISR). The
+  // Trends tile's headline row shares the boards' pool load (no extra egress).
   let boardsBySource: Record<string, BoardRow[]> = {};
-  let leans: BoardRow[] = [];
-  let initialSource = DEFAULT_PROVIDED_SOURCE;
-  let games: TonightGame[] = [];
-  let injuries: InjuryReportRow[] = [];
+  let medianRows: BoardRow[] = [];
+  let slate: { date: string | null; games: TonightGame[] } = { date: null, games: [] };
   let topTrend: TrendRow | null = null;
   if (upcoming) {
     try {
-      sources = await getAvailableSources(sport);
-      if (sources.length > 0) {
-        initialSource = sources.includes(DEFAULT_PROVIDED_SOURCE) ? DEFAULT_PROVIDED_SOURCE : sources[0];
-        // Board teaser + the Trends tile's headline row from ONE pool load — the
-        // heavy players+games query is shared, so the tile costs no extra egress.
-        const { boards, trends } = await getSourcedBoardsAndTrends(
-          sport,
-          sources,
-          { limit: 5, standardOnly: true },
-          { limit: 3 },
-        );
+      if (hasSources) {
+        const [s, { boards, trends }] = await Promise.all([
+          getTonightSlate(sport),
+          getSourcedBoardsAndTrends(sport, sources, { limit: 150, perStatCap: 30 }, { limit: 3 }),
+        ]);
+        slate = s;
         boardsBySource = boards;
-        leans = boardsBySource[initialSource] ?? [];
         // The tile headlines a STANDARD-line trend when one exists (matching the
         // site-wide standard-first default); variant-only swings are the fallback.
         const trendList = trends[initialSource] ?? [];
         topTrend = trendList.find((r) => !isOverOnly(r.oddsType ?? null)) ?? trendList[0] ?? null;
       } else {
-        leans = await getBoard(sport, { limit: 5 });
+        [slate, medianRows] = await Promise.all([
+          getTonightSlate(sport),
+          getBoard(sport, { limit: 150, perStatCap: 30 }),
+        ]);
       }
-      games = (await getTonightSlate(sport)).games;
     } catch {
-      // DB unavailable — render the hero without the leans.
+      // DB unavailable — render the empty state.
     }
   }
+  let injuries: InjuryReportRow[] = [];
   try {
     injuries = await getInjuryReport(sport);
   } catch {
     // Injuries are a nice-to-have on the tile — degrade to the static hint.
   }
-  const hasSources = sources.length > 0;
-  const hasHeatCheck = upcoming && (hasSources || leans.length > 0);
+
+  const hasBoard = hasSources
+    ? Object.values(boardsBySource).some((r) => r.length > 0)
+    : medianRows.length > 0;
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-2 sm:px-4">
-      <div className="px-0 pt-6">
-        <Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: cfg.name }]} />
+    <div className="mx-auto w-full max-w-3xl px-2 py-8 sm:px-4">
+      <Breadcrumbs
+        className="mb-4"
+        items={[{ label: 'Home', href: '/' }, { label: cfg.name }]}
+      />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h1 className="text-3xl font-bold tracking-tight">{cfg.name} Heat Check</h1>
+        <SportSelect section="board" value={sport} includeAll />
+      </div>
+      <p className="mt-2 max-w-2xl text-sm text-muted">
+        The strongest recent-form reads across the most active {cfg.name} players, ranked
+        by our sample-size-adjusted{' '}
+        <strong className="text-foreground">FireFactor</strong>.{' '}
+        {hasSources ? (
+          <>Lines are the real book numbers — switch books with the selector. </>
+        ) : (
+          <>
+            The lines shown are our own typical-game (median) line, not a sportsbook
+            line.{' '}
+          </>
+        )}
+        Filter to {slateWord.toLowerCase()}&rsquo;s slate or a single matchup, and open a
+        player to enter your own line and odds.
+      </p>
+
+      <div className="mt-4 max-w-xl">
+        <SearchForm sport={sport} />
       </div>
 
-      <section className="flex flex-col items-center gap-5 py-12 text-center">
-        <FlameMark className="h-12 w-12" style={{ color: cfg.accent }} />
-        <h1 className="max-w-2xl text-4xl font-bold tracking-tight sm:text-5xl">
-          {cfg.name} player-prop research
-        </h1>
-        <p className="max-w-xl text-lg text-muted">{cfg.tagline}</p>
-        <div className="w-full max-w-xl">
-          <SearchForm sport={sport} />
+      {!upcoming ? (
+        <div className="mt-6">
+          <OffSeasonFallback sport={sport} what="live reads" />
         </div>
-        <div className="flex flex-wrap items-center justify-center gap-3">
-          <Link
-            href={`/${sport}/board`}
-            className="rounded-full px-5 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-            style={{ backgroundColor: cfg.accent }}
-          >
-            {cfg.name} Heat Check →
-          </Link>
-          <Link
-            href={`/${sport}/players`}
-            className="rounded-full border border-line px-5 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-surface-2"
-          >
-            Browse all players
-          </Link>
+      ) : hasBoard || slate.games.length > 0 ? (
+        <div className="mt-6">
+          <BoardExplorer
+            sport={sport}
+            boardsBySource={boardsBySource}
+            sources={sources}
+            defaultSource={initialSource}
+            medianRows={medianRows}
+            games={slate.games}
+            slateWord={slateWord}
+            slateDate={slate.date}
+          />
         </div>
-      </section>
-
-      {hasHeatCheck ? (
-        <section className="mx-auto max-w-3xl pb-10">
-          {hasSources ? (
-            <SourcedBoardTable
-              boardsBySource={boardsBySource}
-              sources={sources}
-              defaultSource={initialSource}
-              heading={
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-                  Heat Check — top reads
-                </h2>
-              }
-            />
-          ) : (
-            <>
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
-                Heat Check — top reads
-              </h2>
-              <BoardTable rows={leans} />
-            </>
-          )}
-          <Link
-            href={`/${sport}/board`}
-            className="mt-4 inline-block text-sm font-medium text-brand transition-colors hover:text-brand-strong"
-          >
-            See the full {cfg.name} Heat Check — filters, matchups & every read →
+      ) : (
+        <p className="mt-6 rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
+          No board data yet — check back after the next nightly update, or{' '}
+          <Link href={`/${sport}/players`} className="text-brand hover:text-brand-strong">
+            browse all {cfg.name} players
           </Link>
-        </section>
-      ) : !upcoming ? (
-        <section className="mx-auto max-w-3xl pb-10">
-          <HomeLeadersFallback sport={sport} />
-        </section>
-      ) : null}
+          .
+        </p>
+      )}
 
-      {/* Section hub — what makes home a launchpad instead of a second board. */}
-      <section aria-labelledby="explore-heading" className="mx-auto max-w-3xl pb-12">
+      {/* Section hub — Trends, Injuries, Players, Leaders, Matchups at a glance. */}
+      <section aria-labelledby="explore-heading" className="mt-10">
         <h2
           id="explore-heading"
           className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted"
@@ -178,12 +181,21 @@ export default async function SportHome({ params }: PageProps) {
         </h2>
         <SportHubTiles
           sport={sport}
-          games={games}
+          games={slate.games}
           slateWord={slateWord}
           injuries={injuries}
           topTrend={topTrend}
         />
       </section>
+
+      <RelatedLinks links={sportMeshLinks(sport, 'board')} />
+
+      <p className="mt-4 text-xs leading-relaxed text-muted">
+        Descriptive research from public game logs, ranked by a sample-size–adjusted
+        FireFactor (recent hit rate vs the line, discounted for thin samples via a 95%
+        Wilson interval) — not predictions, picks, or betting advice. We don&rsquo;t track
+        who&rsquo;s active; confirm lineups, scratches, and injuries yourself.
+      </p>
     </div>
   );
 }
