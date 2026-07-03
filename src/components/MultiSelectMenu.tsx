@@ -21,6 +21,7 @@ export function MultiSelectMenu({
   options,
   isSelected,
   onToggle,
+  stretch = false,
 }: {
   /** Small text label rendered before the button (e.g. "Props"). */
   label: string;
@@ -29,6 +30,8 @@ export function MultiSelectMenu({
   options: MultiSelectOption[];
   isSelected: (value: string) => boolean;
   onToggle: (value: string) => void;
+  /** Fill the container width below sm (for aligned filter grids). */
+  stretch?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -53,7 +56,10 @@ export function MultiSelectMenu({
   }, [open]);
 
   return (
-    <div ref={rootRef} className="relative inline-flex items-center gap-2 text-xs">
+    <div
+      ref={rootRef}
+      className={`relative items-center gap-2 text-xs ${stretch ? 'flex w-full sm:inline-flex sm:w-auto' : 'inline-flex'}`}
+    >
       {label && <span className="text-muted">{label}</span>}
       <button
         type="button"
@@ -61,7 +67,9 @@ export function MultiSelectMenu({
         aria-expanded={open}
         aria-controls={menuId}
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-2"
+        className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-2 ${
+          stretch ? 'w-full justify-between sm:w-auto sm:justify-start' : ''
+        }`}
       >
         {caption}
         <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true" className={`transition-transform ${open ? 'rotate-180' : ''}`}>

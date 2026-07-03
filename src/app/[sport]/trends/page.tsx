@@ -11,6 +11,7 @@ import {
   getTrendBoard,
   getSourcedTrends,
   getDataFreshness,
+  getTonightSlate,
   hasUpcomingGames,
 } from '@/lib/server/players';
 import { getAvailableSources } from '@/lib/server/providedLines';
@@ -62,16 +63,26 @@ export default async function TrendsPage({ params }: PageProps) {
   let rows: TrendRow[] = [];
   let bySource: Record<string, TrendRow[]> = {};
   let freshness: string | null = null;
+  let todayTeams: string[] = [];
   try {
     if (!upcoming) {
       freshness = await getDataFreshness(sport);
     } else if (hasSources) {
       // One pool load → a trends board per book (vs that book's real lines).
-      [bySource, freshness] = await Promise.all([
+      let slate: { games: { home: { abbr: string | null }; away: { abbr: string | null } }[] };
+      [bySource, freshness, slate] = await Promise.all([
         getSourcedTrends(sport, sources),
         getDataFreshness(sport),
+        getTonightSlate(sport).catch(() => ({ games: [] })),
       ]);
       rows = bySource[initialSource] ?? [];
+      todayTeams = [
+        ...new Set(
+          slate.games
+            .flatMap((g) => [g.home.abbr, g.away.abbr])
+            .filter((a): a is string => !!a),
+        ),
+      ];
     } else {
       [rows, freshness] = await Promise.all([
         getTrendBoard(sport),
@@ -131,6 +142,8 @@ export default async function TrendsPage({ params }: PageProps) {
             bySource={bySource}
             sources={sources}
             defaultSource={initialSource}
+            todayTeams={todayTeams}
+            slateWord={sport === 'nfl' ? 'This week' : 'Today'}
           />
         </div>
       ) : rows.length === 0 ? (
