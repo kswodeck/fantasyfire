@@ -352,6 +352,7 @@ export function PlayerResearchClient({
           statShort={statDef.short}
           selectableSources={availableSources}
           onSelectSource={handleSource}
+          currentSource={source}
         />
       )}
 
