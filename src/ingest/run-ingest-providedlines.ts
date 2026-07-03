@@ -162,14 +162,99 @@ async function main(): Promise<number> {
     await withDbRetry(() => Promise.all(batch.map((fn) => fn())), `upsert batch ${i / BATCH}`);
   }
 
+  // Authoritative sync: a successful scrape returns a source's ENTIRE current board for
+  // a slate, so any stored row for that (source, sport, gameDate) we did NOT just write
+  // is stale — a line the book dropped, or (the reason this exists) a variant the source
+  // re-classified. Because oddsType is part of the unique key, re-tagging a rung (e.g.
+  // DK Pick6 goblin/demon → alternate) inserts a NEW row beside the old one instead of
+  // replacing it, which would otherwise keep a dead "Demons"/"Goblins" chip alive. We
+  // only touch slates we actually fetched (a failed source contributes no rows → no
+  // deletes), so this never wipes a book that was merely unreachable this run.
+  const pruned = await pruneStaleVariants(resolved);
+
   const summary = [...perSource.entries()].map(([s, n]) => `${s}=${n}`).join(', ');
-  console.log(`[providedlines] upserted ${ops.length} (${summary}); ${unmatched} skipped (unmatched/ambiguous).`);
+  console.log(
+    `[providedlines] upserted ${ops.length} (${summary}); ${unmatched} skipped; ${pruned} stale row(s) removed.`,
+  );
 
   // Revalidate the changed pages — best-effort, only when the site actually shows
   // these lines (PROVIDED_LINES_ENABLED). Never fail the ingest on a revalidate blip.
   await revalidateChanged(changed);
 
   return ops.length;
+}
+
+/**
+ * Delete stored rows left behind when a source RE-CLASSIFIES a line — writes the same
+ * (player, stat, line) under a different oddsType than before (e.g. DK Pick6 goblin/
+ * demon → alternate). Because oddsType is part of the unique key, the new row inserts
+ * beside the old one instead of replacing it, and the orphan keeps a dead chip alive.
+ *
+ * Deliberately NARROW: a row is removed only when this run wrote SOME variant at its
+ * exact (source, sport, gameDate, playerId, stat, line) but not its oddsType. Lines /
+ * players we didn't touch this run are never deleted, so a partial scrape can't wipe
+ * valid rows. Best-effort per slate; a failure is logged, never fatal.
+ */
+async function pruneStaleVariants(
+  resolved: Array<{
+    sport: Sport;
+    playerId: number;
+    stat: string;
+    source: string;
+    gameDate: Date;
+    line: number;
+    oddsType: string;
+  }>,
+): Promise<number> {
+  if (resolved.length === 0) return 0;
+  const lineKey = (x: { playerId: number; stat: string; line: number }) =>
+    `${x.playerId}|${x.stat}|${x.line}`;
+
+  // Per slate: the oddsType(s) we wrote at each (playerId, stat, line).
+  const writtenBySlate = new Map<string, Map<string, Set<string>>>();
+  const slates = new Map<string, { source: string; sport: Sport; gameDate: Date }>();
+  for (const d of resolved) {
+    const slate = `${d.source}|${d.sport}|${d.gameDate.getTime()}`;
+    if (!slates.has(slate)) slates.set(slate, { source: d.source, sport: d.sport, gameDate: d.gameDate });
+    let byLine = writtenBySlate.get(slate);
+    if (!byLine) writtenBySlate.set(slate, (byLine = new Map()));
+    const lk = lineKey(d);
+    let types = byLine.get(lk);
+    if (!types) byLine.set(lk, (types = new Set()));
+    types.add(d.oddsType);
+  }
+
+  let removed = 0;
+  for (const [slate, { source, sport, gameDate }] of slates) {
+    const byLine = writtenBySlate.get(slate)!;
+    try {
+      const existing = await withDbRetry(
+        () =>
+          db.providedLine.findMany({
+            where: { source, sport, gameDate },
+            select: { id: true, playerId: true, stat: true, line: true, oddsType: true },
+          }),
+        `stale scan ${slate}`,
+      );
+      const staleIds = existing
+        .filter((e) => {
+          const types = byLine.get(lineKey(e));
+          return types !== undefined && !types.has(e.oddsType); // touched this line, other tag
+        })
+        .map((e) => e.id);
+      for (let i = 0; i < staleIds.length; i += 200) {
+        const chunk = staleIds.slice(i, i + 200);
+        await withDbRetry(
+          () => db.providedLine.deleteMany({ where: { id: { in: chunk } } }),
+          `stale delete ${slate}`,
+        );
+      }
+      removed += staleIds.length;
+    } catch (e) {
+      console.warn(`[providedlines] stale prune failed for ${slate}: ${(e as Error).message}`);
+    }
+  }
+  return removed;
 }
 
 /**
