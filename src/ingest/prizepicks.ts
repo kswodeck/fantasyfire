@@ -50,6 +50,9 @@ const PP_STAT_MAP: Record<Sport, Record<string, StatKey>> = {
     Turnovers: 'tov',
     'Offensive Rebounds': 'oreb',
     'Defensive Rebounds': 'dreb',
+    // PrizePicks' own scoring — ONLY PrizePicks FS markets may map to the FS keys
+    // (other books score fantasy differently; see the block in stats/types.ts).
+    'Fantasy Score': 'fs',
   },
   mlb: {
     Hits: 'hits',
@@ -67,6 +70,9 @@ const PP_STAT_MAP: Record<Sport, Record<string, StatKey>> = {
     'Pitching Outs': 'outs',
     'Hits Allowed': 'ha',
     'Walks Allowed': 'bba',
+    // Hitters only — Pitcher Fantasy Score stays unmapped (scored on the pitching
+    // WIN, a decision our box scores don't carry, so history can't be computed).
+    'Hitter Fantasy Score': 'hitterFs',
   },
   nfl: {
     'Pass Yards': 'passYds',
@@ -80,6 +86,8 @@ const PP_STAT_MAP: Record<Sport, Record<string, StatKey>> = {
     'Receiving Yards': 'recYds',
     Receptions: 'rec',
     'Receiving TDs': 'recTds',
+    // PrizePicks' own scoring — see the NBA note above.
+    'Fantasy Score': 'fantasyScore',
   },
 };
 

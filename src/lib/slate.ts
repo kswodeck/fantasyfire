@@ -17,6 +17,10 @@ export interface ParsedSlateEntry {
 // Most-specific aliases FIRST (combo stats before their parts), matched on word
 // boundaries. Single ambiguous letters are avoided on purpose.
 const STAT_ALIASES: Array<[StatKey, string[]]> = [
+  // Fantasy score — the bare phrase doesn't identify the sport, so it lands on the
+  // NBA key here and analyzeSlate normalizes it to the sport's own FS key.
+  ['hitterFs', ['hitter fantasy score', 'hitter fs']],
+  ['fs', ['fantasy score', 'fantasy points', 'fantasy pts', 'fs']],
   ['pra', ['pra', 'pts+reb+ast', 'p+r+a', 'points rebounds assists', 'points+rebounds+assists']],
   ['pr', ['pr', 'pts+reb', 'p+r', 'points rebounds']],
   ['pa', ['pa', 'pts+ast', 'p+a', 'points assists']],

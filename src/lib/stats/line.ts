@@ -40,9 +40,13 @@ export function defaultPropLine(games: GameStatLine[], stat: StatKey): number {
   // sitting at the center, so use it as-is.
   if (Math.abs(m % 1) === 0.5) return Math.max(0.5, m);
 
-  // Whole-number median: choose the straddling half-point with the most balanced
-  // over-rate. Half-point lines never push, so every game is decided.
-  const candidates = [m - 0.5, m + 0.5].filter((l) => l >= 0.5);
+  // Otherwise choose the straddling half-point with the most balanced over-rate.
+  // Half-point lines never push, so every game is decided. The median is rounded
+  // first so continuous stats (fantasy score's 1.2/1.5-weighted sums can median
+  // at e.g. 27.3) still land on a familiar x.5 book line — a no-op for the
+  // whole-number medians every counting stat produces.
+  const base = Math.round(m);
+  const candidates = [base - 0.5, base + 0.5].filter((l) => l >= 0.5);
   if (candidates.length <= 1) return Math.max(0.5, candidates[0] ?? 0.5);
 
   const mean = values.reduce((sum, v) => sum + v, 0) / values.length;

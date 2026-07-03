@@ -16,6 +16,8 @@ import {
   buildWhyText,
   statValue,
   statKeysForSport,
+  FANTASY_SCORE_KEYS,
+  FANTASY_SCORE_KEY_BY_SPORT,
   defaultStatForSport,
   blendedRoleThreshold,
   RECENT_GAMES_WINDOW,
@@ -159,6 +161,8 @@ const NBA_STAT_SQL: Partial<Record<StatKey, string>> = {
   pa: '(s.points + s.assists)',
   ra: '(s.rebounds + s.assists)',
   stocks: '(s.steals + s.blocks)',
+  // PrizePicks NBA Fantasy Score (see fantasyScore block in stats/types.ts).
+  fs: '(s.points + 1.2*s.rebounds + 1.5*s.assists + 3*s.steals + 3*s.blocks - s.turnovers)',
 };
 
 // SQL expression per MLB hitting stat (for the opposing-pitching matchup).
@@ -173,6 +177,11 @@ const MLB_HIT_SQL: Partial<Record<StatKey, string>> = {
   so: 's.strikeouts',
   doubles: 's.doubles',
   hrr: '(s.hits + s.runs + s.rbi)',
+  // PrizePicks MLB Hitter Fantasy Score — singles derived, GREATEST guards the
+  // same inconsistent-data clamp as the TS value function; triples/hbp COALESCEd
+  // (nullable on rows ingested before those columns existed).
+  hitterFs:
+    '(3*GREATEST(0, s.hits - s.doubles - COALESCE(s.triples,0) - s."homeRuns") + 5*s.doubles + 8*COALESCE(s.triples,0) + 10*s."homeRuns" + 2*s.runs + 2*s.rbi + 2*s.walks + 2*COALESCE(s.hbp,0) + 5*s."stolenBases")',
 };
 
 // SQL expression per NFL stat (for defense-vs-position). Whitelisted, not input.
@@ -190,6 +199,10 @@ const NFL_STAT_SQL: Partial<Record<StatKey, string>> = {
   recYds: 's."recYards"',
   recTds: 's."recTds"',
   fumbles: 's."fumblesLost"',
+  // PrizePicks NFL Fantasy Score — every column COALESCEd (NFL rows are sparse
+  // by position: a QB row has no receptions, a WR row no pass yards).
+  fantasyScore:
+    '(0.04*COALESCE(s."passYards",0) + 4*COALESCE(s."passTds",0) - COALESCE(s."passInts",0) + 0.1*COALESCE(s."rushYards",0) + 6*COALESCE(s."rushTds",0) + COALESCE(s.receptions,0) + 0.1*COALESCE(s."recYards",0) + 6*COALESCE(s."recTds",0) - 2*COALESCE(s."fumblesLost",0))',
 };
 
 // Per-position involvement gate for DvP: only count games where a player of this
@@ -1487,14 +1500,17 @@ export async function getPlayerResearch(
 }
 
 // The popular, well-lined stats we scan for the board (keeps it focused + fast).
-const BOARD_NBA_STATS: StatKey[] = ['pts', 'reb', 'ast', 'pra', 'fg3m'];
-const BOARD_MLB_HITTER_STATS: StatKey[] = ['hits', 'tb', 'hr', 'rbi', 'runs'];
+// Fantasy Score is a headline PrizePicks market — sourced boards only surface it
+// when a book actually posts a line (requireProvided), so scanning it is free
+// noise-wise and gives FS lines the same board presence as any other prop.
+const BOARD_NBA_STATS: StatKey[] = ['pts', 'reb', 'ast', 'pra', 'fg3m', 'fs'];
+const BOARD_MLB_HITTER_STATS: StatKey[] = ['hits', 'tb', 'hr', 'rbi', 'runs', 'hitterFs'];
 // NFL board stats by position — 1–2 well-bet markets each, given small samples.
 const BOARD_NFL_STATS: Record<string, StatKey[]> = {
-  QB: ['passYds', 'passTds'],
-  RB: ['rushYds', 'rec'],
-  WR: ['recYds', 'rec'],
-  TE: ['recYds', 'rec'],
+  QB: ['passYds', 'passTds', 'fantasyScore'],
+  RB: ['rushYds', 'rec', 'fantasyScore'],
+  WR: ['recYds', 'rec', 'fantasyScore'],
+  TE: ['recYds', 'rec', 'fantasyScore'],
 };
 
 function boardStatsFor(sport: Sport, posBucket: string | null): StatKey[] {
@@ -2689,6 +2705,10 @@ export async function analyzeSlate(sport: Sport, text: string): Promise<SlateRes
       results.push({ raw: e.raw, matched: false, reason: 'Stat not recognized' });
       continue;
     }
+    // "Fantasy score" in pasted text doesn't identify the sport — the parser lands
+    // it on one FS key; swap in THIS sport's FS key (a pitcher then correctly fails
+    // the offered-stats check below, since only hitters have an FS market).
+    if (FANTASY_SCORE_KEYS.has(e.stat)) e.stat = FANTASY_SCORE_KEY_BY_SPORT[sport];
     if (!statKeysForSport(sport, match.posBucket).includes(e.stat)) {
       results.push({
         raw: e.raw,
