@@ -1,28 +1,54 @@
 import { FlameMark } from '@/components/FlameMark';
 import { HomeTopLeans, type HomeCard } from '@/components/HomeTopLeans';
-import { getBoard, getSourcedBoards, hasUpcomingGames } from '@/lib/server/players';
+import { getBoard, getSourcedBoards, getTonightSlate, hasUpcomingGames } from '@/lib/server/players';
 import { getAvailableSources } from '@/lib/server/providedLines';
-import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import { SITE } from '@/lib/site';
 import { SPORT_LIST, SPORTS, type Sport } from '@/lib/sports';
-import type { BoardRow } from '@/lib/types';
+import type { BoardRow, TonightGame } from '@/lib/types';
 
 export const revalidate = 900; // 15 min — matches the lines ingest cadence, bounding board↔player-page score skew to one cycle
 
-async function loadSport(sport: Sport): Promise<{ leans: BoardRow[] }> {
-  // A taste of the default book's top reads (our median line only when no book lines
-  // are ingested). Home is deliberately controls-free — the book selector, slate
-  // toggle, and filters all live on the sport's Heat Check — so one small board per
-  // sport is all the teaser needs.
-  const sources = await getAvailableSources(sport).catch(() => [] as string[]);
+function slateTeams(games: TonightGame[]): Set<string> {
+  return new Set(
+    games.flatMap((g) => [g.home.abbr, g.away.abbr]).filter((a): a is string => !!a),
+  );
+}
+
+/** Teaser rows shown per sport card. */
+const TEASER_ROWS = 4;
+
+async function loadSport(sport: Sport): Promise<{
+  boardsBySource: Record<string, BoardRow[]>;
+  medianLeans: BoardRow[];
+}> {
+  // A taste of each book's top reads, switched by the page-wide site source selector
+  // (our median line only when no book lines are ingested). The teaser defaults to
+  // PLAYERS WITH GAMES TODAY (this week for NFL) — filtered server-side against the
+  // slate, since the card has no toggle — falling back to all players only when
+  // there's no slate to filter against. We pull deeper than the rows we show so the
+  // filter still yields a full teaser.
+  const [sources, slate] = await Promise.all([
+    getAvailableSources(sport).catch(() => [] as string[]),
+    getTonightSlate(sport).catch(() => ({ date: null, games: [] as TonightGame[] })),
+  ]);
+  const teams = slateTeams(slate.games);
+  const onSlate = (rows: BoardRow[]): BoardRow[] =>
+    teams.size === 0
+      ? rows.slice(0, TEASER_ROWS)
+      : rows
+          .filter((r) => r.player.teamAbbreviation && teams.has(r.player.teamAbbreviation))
+          .slice(0, TEASER_ROWS);
   if (sources.length > 0) {
-    const source = sources.includes(DEFAULT_PROVIDED_SOURCE) ? DEFAULT_PROVIDED_SOURCE : sources[0];
-    const boards = await getSourcedBoards(sport, [source], { limit: 3, standardOnly: true }).catch(
-      () => ({}) as Record<string, BoardRow[]>,
-    );
-    return { leans: boards[source] ?? [] };
+    const boards = await getSourcedBoards(sport, sources, {
+      limit: 24,
+      standardOnly: true,
+    }).catch(() => ({}) as Record<string, BoardRow[]>);
+    const boardsBySource: Record<string, BoardRow[]> = {};
+    for (const [s, rows] of Object.entries(boards)) boardsBySource[s] = onSlate(rows);
+    return { boardsBySource, medianLeans: [] };
   }
-  return { leans: await getBoard(sport, { limit: 3 }).catch(() => [] as BoardRow[]) };
+  const medianLeans = onSlate(await getBoard(sport, { limit: 24 }).catch(() => [] as BoardRow[]));
+  return { boardsBySource: {}, medianLeans };
 }
 
 export default async function Home() {
@@ -43,7 +69,8 @@ export default async function Home() {
       name: cfg.name,
       accent: cfg.accent,
       tagline: cfg.tagline,
-      leans: d.leans,
+      boardsBySource: d.boardsBySource,
+      medianLeans: d.medianLeans,
     };
   });
 
@@ -61,8 +88,8 @@ export default async function Home() {
         </p>
       </section>
 
-      {/* Controls-free teaser cards — the full Heat Check (books, filters, slate) is
-          each sport's home page, one tap away. */}
+      {/* Teaser cards with the one page-wide (site-synced) book selector — everything
+          else (filters, slate toggle) is each sport's Heat Check, one tap away. */}
       {cards.length > 0 ? (
         <HomeTopLeans cards={cards} />
       ) : (

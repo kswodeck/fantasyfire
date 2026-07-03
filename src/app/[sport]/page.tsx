@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { BoardExplorer } from '@/components/BoardExplorer';
-import { SearchForm } from '@/components/SearchForm';
 import { SportHubTiles } from '@/components/SportHubTiles';
 import { SportSelect } from '@/components/SportSelect';
 import {
@@ -46,8 +45,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 /**
- * The sport home IS the Heat Check — the full board (filters, matchups, every read)
- * with player search above it and the section tiles (Trends, Injuries, Players, …)
+ * The sport home IS the Heat Check — the full board (filters, player search,
+ * matchups, every read) with the section tiles (Trends, Injuries, Players, …)
  * below. The old /[sport]/board URL permanently redirects here (next.config.ts), so
  * there is exactly one ranked list per sport instead of a hub that mirrored it.
  */
@@ -139,10 +138,6 @@ export default async function SportHome({ params }: PageProps) {
         Filter to {slateWord.toLowerCase()}&rsquo;s slate or a single matchup, and open a
         player to enter your own line and odds.
       </p>
-
-      <div className="mt-4 max-w-xl">
-        <SearchForm sport={sport} />
-      </div>
 
       {!upcoming ? (
         <div className="mt-6">
