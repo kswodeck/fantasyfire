@@ -24,6 +24,7 @@ import { fetchSleeperLines } from './sleeper';
 import { fetchPick6Lines } from './pick6';
 import { fetchRotowireLines } from './rotowire';
 import type { ProvidedLineRow } from './providedTypes';
+import { staleRows, type RowKey } from './providedSync';
 import { normalizeName } from '../lib/slate';
 import type { Sport } from '../lib/sports';
 import { isPropStat } from '../lib/propStats';
@@ -164,38 +165,36 @@ async function main(): Promise<number> {
 
   // Authoritative sync: a successful scrape returns a source's ENTIRE current board for
   // a slate, so any stored row for that (source, sport, gameDate) we did NOT just write
-  // is stale — a line the book dropped, or (the reason this exists) a variant the source
-  // re-classified. Because oddsType is part of the unique key, re-tagging a rung (e.g.
-  // DK Pick6 goblin/demon → alternate) inserts a NEW row beside the old one instead of
-  // replacing it, which would otherwise keep a dead "Demons"/"Goblins" chip alive. We
-  // only touch slates we actually fetched (a failed source contributes no rows → no
-  // deletes), so this never wipes a book that was merely unreachable this run.
-  const pruned = await pruneStaleVariants(resolved);
+  // is a line the book no longer offers — dropped (scratch, news, board tightening) or
+  // re-classified under a different oddsType — and is deleted so the site stops showing
+  // it. We only touch slates we actually fetched (a failed source contributes no rows →
+  // no deletes), and a suspiciously thin slate falls back to the narrow
+  // re-classification-only prune (see providedSync.ts), so a half-broken scraper can't
+  // erase a valid board.
+  const pruned = await pruneStaleRows(resolved);
 
   const summary = [...perSource.entries()].map(([s, n]) => `${s}=${n}`).join(', ');
   console.log(
-    `[providedlines] upserted ${ops.length} (${summary}); ${unmatched} skipped; ${pruned} stale row(s) removed.`,
+    `[providedlines] upserted ${ops.length} (${summary}); ${unmatched} skipped; ${pruned.removed} stale row(s) removed.`,
   );
 
   // Revalidate the changed pages — best-effort, only when the site actually shows
-  // these lines (PROVIDED_LINES_ENABLED). Never fail the ingest on a revalidate blip.
+  // these lines (PROVIDED_LINES_ENABLED). Removed lines count as changes too: the
+  // player page's static HTML must stop showing a rung the book pulled.
+  for (const key of pruned.changedKeys) changed.add(key);
   await revalidateChanged(changed);
 
   return ops.length;
 }
 
 /**
- * Delete stored rows left behind when a source RE-CLASSIFIES a line — writes the same
- * (player, stat, line) under a different oddsType than before (e.g. DK Pick6 goblin/
- * demon → alternate). Because oddsType is part of the unique key, the new row inserts
- * beside the old one instead of replacing it, and the orphan keeps a dead chip alive.
- *
- * Deliberately NARROW: a row is removed only when this run wrote SOME variant at its
- * exact (source, sport, gameDate, playerId, stat, line) but not its oddsType. Lines /
- * players we didn't touch this run are never deleted, so a partial scrape can't wipe
- * valid rows. Best-effort per slate; a failure is logged, never fatal.
+ * Delete the stored rows of each fetched slate that this run proved stale — the
+ * decision logic lives in providedSync.ts (pure, unit-tested): full boards sync
+ * authoritatively, thin boards only prune re-classifications. Best-effort per
+ * slate; a failure is logged, never fatal. Returns the count plus the
+ * `${sport}|${playerId}|${stat}` keys of removed rows for revalidation.
  */
-async function pruneStaleVariants(
+async function pruneStaleRows(
   resolved: Array<{
     sport: Sport;
     playerId: number;
@@ -205,28 +204,23 @@ async function pruneStaleVariants(
     line: number;
     oddsType: string;
   }>,
-): Promise<number> {
-  if (resolved.length === 0) return 0;
-  const lineKey = (x: { playerId: number; stat: string; line: number }) =>
-    `${x.playerId}|${x.stat}|${x.line}`;
+): Promise<{ removed: number; changedKeys: Set<string> }> {
+  const changedKeys = new Set<string>();
+  if (resolved.length === 0) return { removed: 0, changedKeys };
 
-  // Per slate: the oddsType(s) we wrote at each (playerId, stat, line).
-  const writtenBySlate = new Map<string, Map<string, Set<string>>>();
+  // Group this run's writes per slate (source, sport, gameDate).
+  const writtenBySlate = new Map<string, RowKey[]>();
   const slates = new Map<string, { source: string; sport: Sport; gameDate: Date }>();
   for (const d of resolved) {
     const slate = `${d.source}|${d.sport}|${d.gameDate.getTime()}`;
     if (!slates.has(slate)) slates.set(slate, { source: d.source, sport: d.sport, gameDate: d.gameDate });
-    let byLine = writtenBySlate.get(slate);
-    if (!byLine) writtenBySlate.set(slate, (byLine = new Map()));
-    const lk = lineKey(d);
-    let types = byLine.get(lk);
-    if (!types) byLine.set(lk, (types = new Set()));
-    types.add(d.oddsType);
+    let written = writtenBySlate.get(slate);
+    if (!written) writtenBySlate.set(slate, (written = []));
+    written.push({ playerId: d.playerId, stat: d.stat, line: d.line, oddsType: d.oddsType });
   }
 
   let removed = 0;
   for (const [slate, { source, sport, gameDate }] of slates) {
-    const byLine = writtenBySlate.get(slate)!;
     try {
       const existing = await withDbRetry(
         () =>
@@ -236,12 +230,8 @@ async function pruneStaleVariants(
           }),
         `stale scan ${slate}`,
       );
-      const staleIds = existing
-        .filter((e) => {
-          const types = byLine.get(lineKey(e));
-          return types !== undefined && !types.has(e.oddsType); // touched this line, other tag
-        })
-        .map((e) => e.id);
+      const stale = staleRows(existing, writtenBySlate.get(slate)!);
+      const staleIds = stale.map((e) => e.id);
       for (let i = 0; i < staleIds.length; i += 200) {
         const chunk = staleIds.slice(i, i + 200);
         await withDbRetry(
@@ -249,12 +239,13 @@ async function pruneStaleVariants(
           `stale delete ${slate}`,
         );
       }
+      for (const e of stale) changedKeys.add(`${sport}|${e.playerId}|${e.stat}`);
       removed += staleIds.length;
     } catch (e) {
       console.warn(`[providedlines] stale prune failed for ${slate}: ${(e as Error).message}`);
     }
   }
-  return removed;
+  return { removed, changedKeys };
 }
 
 /**
