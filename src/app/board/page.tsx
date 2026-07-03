@@ -7,7 +7,7 @@ import { getAllSportsBoard } from '@/lib/server/allSports';
 import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import type { AllSportsBoard } from '@/lib/server/allSports';
 
-export const revalidate = 1800; // 30 min — matches the per-sport Heat Check cadence
+export const revalidate = 900; // 15 min — matches the per-sport Heat Check cadence
 
 export const metadata: Metadata = {
   title: 'Heat Check — All Sports Player Props, Ranked by FireFactor',

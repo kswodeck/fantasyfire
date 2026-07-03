@@ -6,7 +6,7 @@ import { SITE } from '@/lib/site';
 import { SPORT_LIST, SPORTS, type Sport } from '@/lib/sports';
 import type { BoardRow, TonightGame } from '@/lib/types';
 
-export const revalidate = 1800; // 30 min — keep the leans close to the ~15-min lines ingest (prod is on Pro; board reads are optimized)
+export const revalidate = 900; // 15 min — matches the lines ingest cadence, bounding board↔player-page score skew to one cycle
 
 function slateTeams(games: TonightGame[]): string[] {
   return [

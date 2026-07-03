@@ -21,7 +21,7 @@ import { isOverOnly } from '@/lib/payoutVariant';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
 import type { BoardRow, InjuryReportRow, TonightGame, TrendRow } from '@/lib/types';
 
-export const revalidate = 1800; // 30 min — keep the leans close to the ~15-min lines ingest (prod is on Pro; board reads are optimized)
+export const revalidate = 900; // 15 min — matches the lines ingest cadence, bounding board↔player-page score skew to one cycle
 export const dynamicParams = false;
 
 export function generateStaticParams() {

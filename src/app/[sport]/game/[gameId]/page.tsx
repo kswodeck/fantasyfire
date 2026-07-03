@@ -19,7 +19,7 @@ import { formatIsoDate } from '@/lib/format';
 import { SPORTS, isSport, type Sport } from '@/lib/sports';
 import type { BoardRow, TonightGame } from '@/lib/types';
 
-export const revalidate = 1800; // 30 min — rows come from the same scan as /board
+export const revalidate = 900; // 15 min — rows come from the same scan as /board
 export const dynamicParams = true;
 
 export function generateStaticParams() {
