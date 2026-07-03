@@ -24,7 +24,14 @@ export function FilterableTrends({
   initialVisible?: number;
   step?: number;
 }) {
-  const f = useListFilter(sport, rows, initialVisible, step, (r) => r.side);
+  const f = useListFilter(
+    sport,
+    rows,
+    initialVisible,
+    step,
+    (r) => r.side,
+    (r) => r.stat,
+  );
   return (
     <div>
       <ListFilters
@@ -41,6 +48,10 @@ export function FilterableTrends({
         onQueryChange={f.setQuery}
         lean={f.lean}
         onLeanChange={f.setLean}
+        statOptions={f.statOptions}
+        selectedStats={f.stats}
+        onToggleStat={f.toggleStat}
+        onClearStats={f.clearStats}
       />
       {f.filtered.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
