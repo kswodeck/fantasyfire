@@ -1,11 +1,13 @@
 'use client';
 
 import type { FilterOption } from '@/lib/filters';
+import type { LeanFilter } from './useListFilter';
 
 /**
  * Shared team + position filter controls with a live result count. Controlled.
- * Pass `onQueryChange` to also render a small player-name search on the same row
- * (opt-in, so boards that don't want it — or have their own — stay unchanged).
+ * Pass `onQueryChange` to also render a small player-name search on the same row,
+ * and `onLeanChange` to render a lean-direction (Over / Under) select — both
+ * opt-in, so boards that don't want them stay unchanged.
  */
 export function ListFilters({
   teamOptions,
@@ -19,6 +21,8 @@ export function ListFilters({
   noun = 'results',
   query,
   onQueryChange,
+  lean,
+  onLeanChange,
 }: {
   teamOptions: FilterOption[];
   positionOptions: FilterOption[];
@@ -33,9 +37,14 @@ export function ListFilters({
   query?: string;
   /** When provided, a small name-search input renders first on the filter row. */
   onQueryChange?: (value: string) => void;
+  /** Current lean-direction filter ('' = both sides). */
+  lean?: LeanFilter;
+  /** When provided, an Over/Under lean select renders on the filter row. */
+  onLeanChange?: (value: LeanFilter) => void;
 }) {
   const hasSearch = onQueryChange != null;
-  const hasFilters = team !== '' || position !== '' || (query ?? '') !== '';
+  const hasLean = onLeanChange != null;
+  const hasFilters = team !== '' || position !== '' || (query ?? '') !== '' || (lean ?? '') !== '';
   const selectCls =
     'rounded-lg border border-line bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-brand';
 
@@ -79,6 +88,19 @@ export function ListFilters({
         ))}
       </select>
 
+      {hasLean && (
+        <select
+          aria-label="Filter by lean direction"
+          value={lean ?? ''}
+          onChange={(e) => onLeanChange(e.target.value as LeanFilter)}
+          className={selectCls}
+        >
+          <option value="">All leans</option>
+          <option value="over">Over</option>
+          <option value="under">Under</option>
+        </select>
+      )}
+
       {hasFilters && (
         <button
           type="button"
@@ -86,6 +108,7 @@ export function ListFilters({
             onTeamChange('');
             onPositionChange('');
             onQueryChange?.('');
+            onLeanChange?.('');
           }}
           className="rounded-lg px-3 py-2 text-sm font-medium text-brand transition-colors hover:text-brand-strong"
         >

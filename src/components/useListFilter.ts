@@ -6,22 +6,28 @@ import type { PlayerListItem } from '@/lib/types';
 import { positionFilterOptions, playerMatchesPosition, teamFilterOptions } from '@/lib/filters';
 import { normalizeName } from '@/lib/slate';
 
+/** Lean-direction filter value: '' = both sides (the default). */
+export type LeanFilter = '' | 'over' | 'under';
+
 /**
  * Shared name-search + team + position filtering and a "show more" reveal for the
  * player-list boards (board / leaders / trends). All in memory over the
  * already-fetched rows, so the pages stay statically rendered. Changing a filter
  * resets the reveal to `initialVisible`. The name match is accent/punctuation
- * insensitive (same normalizeName as the Players browser).
+ * insensitive (same normalizeName as the Players browser). Pass `sideOf` to also
+ * enable the lean-direction (Over / Under) filter — rows without a side always pass.
  */
 export function useListFilter<T extends { player: PlayerListItem }>(
   sport: Sport,
   rows: T[],
   initialVisible: number,
   step: number,
+  sideOf?: (row: T) => 'over' | 'under',
 ) {
   const [team, setTeamState] = useState('');
   const [position, setPositionState] = useState('');
   const [query, setQueryState] = useState('');
+  const [lean, setLeanState] = useState<LeanFilter>('');
   const [visible, setVisible] = useState(initialVisible);
 
   const teamOptions = useMemo(
@@ -37,15 +43,17 @@ export function useListFilter<T extends { player: PlayerListItem }>(
         (r) =>
           (team === '' || r.player.teamAbbreviation === team) &&
           playerMatchesPosition(sport, position, r.player.position, r.player.posBucket) &&
-          (nq === '' || normalizeName(r.player.fullName).includes(nq)),
+          (nq === '' || normalizeName(r.player.fullName).includes(nq)) &&
+          (lean === '' || sideOf === undefined || sideOf(r) === lean),
       ),
-    [rows, team, position, nq, sport],
+    [rows, team, position, nq, lean, sideOf, sport],
   );
 
   return {
     team,
     position,
     query,
+    lean,
     visible,
     teamOptions,
     positionOptions,
@@ -61,6 +69,10 @@ export function useListFilter<T extends { player: PlayerListItem }>(
     },
     setQuery: (v: string) => {
       setQueryState(v);
+      setVisible(initialVisible);
+    },
+    setLean: (v: LeanFilter) => {
+      setLeanState(v);
       setVisible(initialVisible);
     },
     showMore: () => setVisible((v) => v + step),

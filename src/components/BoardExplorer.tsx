@@ -12,6 +12,7 @@ import { useSourced } from './useSourced';
 import { bestVariantScore } from '@/lib/payoutVariant';
 import { FIREFACTOR_TIER_CUTOFFS } from '@/lib/stats';
 import { useSelectedSlate } from './SelectedSlateProvider';
+import { SlateSwitch } from './SlateSwitch';
 import { formatIsoDate } from '@/lib/format';
 
 /**
@@ -111,30 +112,15 @@ export function BoardExplorer({
       return next;
     });
 
-  const toggleBtn = (m: 'today' | 'all', text: string) => (
-    <button
-      type="button"
-      onClick={() => setMode(m)}
-      aria-pressed={mode === m}
-      className={
-        'cursor-pointer rounded-md px-3 py-1.5 transition-colors sm:py-1 ' +
-        (mode === m
-          ? 'bg-brand text-brand-foreground'
-          : 'text-muted hover:text-foreground')
-      }
-    >
-      {text}
-    </button>
-  );
-
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         {hasSlate ? (
-          <div className="inline-flex items-center rounded-lg border border-line bg-surface p-0.5 text-xs font-semibold">
-            {toggleBtn('today', slateWord)}
-            {toggleBtn('all', 'All players')}
-          </div>
+          <SlateSwitch
+            on={mode === 'today'}
+            onChange={(on) => setMode(on ? 'today' : 'all')}
+            label={`${slateWord} only`}
+          />
         ) : (
           <span />
         )}

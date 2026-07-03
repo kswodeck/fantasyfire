@@ -40,25 +40,31 @@ test('demon/goblin chip cycles its ladder and funnels back to the standard line'
   expect(returned, 'cycling an active chip should funnel back to the standard line').toBe(true);
 });
 
-test('kind filter defaults to Standard only, adds kinds on click, and persists in the URL', async ({ page }) => {
+test('kind filter defaults to Standard only, adds kinds via the menu, and persists in the URL', async ({ page }) => {
   await gotoBoard(page);
-  const goblinFilter = page.getByRole('button', { name: 'Goblins' });
-  test.skip(!(await goblinFilter.isVisible().catch(() => false)), 'no kind filter on today\'s board');
+  // The kind multiselect is a dropdown whose button captions the selection
+  // ("Standard", "Standard +1", …). Absent = no variants on today's board.
+  const linesMenu = page.getByRole('button', { name: /^Standard( \+\d+)?$/ });
+  test.skip(!(await linesMenu.isVisible().catch(() => false)), 'no kind filter on today\'s board');
 
-  // Default = Standard only: the standard chip is on, the variant kinds are off,
+  // Default = Standard only: the menu opens with Standard checked, Goblins not —
   // but the rows' variant chips stay clickable regardless.
-  await expect(page.getByRole('button', { name: 'Standard' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(goblinFilter).toHaveAttribute('aria-pressed', 'false');
+  await linesMenu.click();
+  const goblinBox = page.getByRole('checkbox', { name: 'Goblins' });
+  test.skip(!(await goblinBox.isVisible().catch(() => false)), 'no goblins offered today');
+  await expect(page.getByRole('checkbox', { name: 'Standard' })).toBeChecked();
+  await expect(goblinBox).not.toBeChecked();
   await expect(page.locator(GOBLIN_CHIP).first()).toBeVisible();
 
   // Turning Goblins on records the non-default selection in the URL…
-  await goblinFilter.click();
-  await expect(goblinFilter).toHaveAttribute('aria-pressed', 'true');
+  await goblinBox.check();
+  await expect(goblinBox).toBeChecked();
   await expect(page).toHaveURL(/kinds=/);
 
   // …and the selection survives a reload (the URL is the state).
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Goblins' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: /^Standard( \+\d+)?$/ }).click();
+  await expect(page.getByRole('checkbox', { name: 'Goblins' })).toBeChecked();
 });
 
 test('a variant line is over-only on the player page (no under odds input)', async ({ page }) => {
