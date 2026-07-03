@@ -119,18 +119,12 @@ export function PlaybookClient() {
           <span className="font-medium text-foreground">★ Over / Under</span> under the verdict to
           track a specific prop.
         </p>
-        {/* Point at each sport's Heat Check — the reads are where saves start, not
-            the raw player directory. */}
-        <p className="mt-3 flex flex-wrap gap-3">
-          {SPORT_LIST.map((s) => (
-            <Link
-              key={s}
-              href={`/${s}`}
-              className="font-medium text-brand hover:text-brand-strong"
-            >
-              Browse the {SPORTS[s].name} Heat Check →
-            </Link>
-          ))}
+        {/* One door: the All Sports Heat Check — every in-season league's reads,
+            where saves actually start. */}
+        <p className="mt-3">
+          <Link href="/board" className="font-medium text-brand hover:text-brand-strong">
+            Browse players on the Heat Check →
+          </Link>
         </p>
       </div>
     );
