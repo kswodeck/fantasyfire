@@ -57,6 +57,8 @@ export function BoardExplorer({
   // No slate on this page → always show all players, whatever the saved choice was.
   const effectiveMode = hasSlate ? mode : 'all';
   const [selectedGames, setSelectedGames] = useState<Set<string>>(new Set());
+  // The matchups picker starts collapsed — the full slate is a long list on phones.
+  const [chooseOpen, setChooseOpen] = useState(false);
 
   // Local clock, set after mount (null on the server + first render so SSR and
   // hydration agree — nothing counts as "started" until the client takes over).
@@ -139,17 +141,24 @@ export function BoardExplorer({
         </div>
       )}
 
+      {/* Matchups picker — COLLAPSED by default (the full slate is a long list on
+          phones); "Choose games" expands the strip to narrow the board to specific
+          matchups, and the button captions the active selection so a filter is
+          never invisible while collapsed. */}
       {effectiveMode === 'today' && (
         <div className="mb-4">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
-              Matchups
-              {slateDate && (
-                <span className="ml-2 font-normal normal-case text-muted">
-                  {formatIsoDate(slateDate)}
-                </span>
-              )}
-            </h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setChooseOpen((o) => !o)}
+              aria-expanded={chooseOpen}
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-2"
+            >
+              {selectedGames.size > 0 ? `Games (${selectedGames.size} of ${games.length})` : 'Choose games'}
+              <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true" className={`transition-transform ${chooseOpen ? 'rotate-180' : ''}`}>
+                <path d="M3 4.5 6 7.5 9 4.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
             {selectedGames.size > 0 && (
               <button
                 type="button"
@@ -159,26 +168,35 @@ export function BoardExplorer({
                 Clear ({selectedGames.size})
               </button>
             )}
+            {slateDate && (
+              <span className="ml-auto text-xs text-muted">
+                {games.length} {games.length === 1 ? 'game' : 'games'} · {formatIsoDate(slateDate)}
+              </span>
+            )}
           </div>
-          <MatchupStrip
-            sport={sport}
-            games={games}
-            selected={selectedGames}
-            startedIds={startedIds}
-            onToggle={toggleGame}
-          />
-          <p className="mt-1.5 text-[11px] text-muted">
-            {startedIds.size > 0
-              ? 'Games already underway are dimmed and hidden by default — tap one to include its players.'
-              : 'Tap a game to filter the reads to that matchup.'}
-          </p>
+          {chooseOpen && (
+            <div className="mt-2">
+              <MatchupStrip
+                sport={sport}
+                games={games}
+                selected={selectedGames}
+                startedIds={startedIds}
+                onToggle={toggleGame}
+              />
+              <p className="mt-1.5 text-[11px] text-muted">
+                {startedIds.size > 0
+                  ? 'Games already underway are dimmed and hidden by default — tap one to include its players.'
+                  : 'Tap a game to filter the reads to that matchup.'}
+              </p>
+            </div>
+          )}
         </div>
       )}
 
       {filteredRows.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
           {allStarted
-            ? 'Every game today has already started. Tap a game above to see its players, or switch to All players.'
+            ? 'Every game today has already started. Use Choose games above to include one, or switch off the slate filter for all players.'
             : effectiveMode === 'today'
               ? 'No reads for this selection right now.'
               : 'No props for this book right now.'}
