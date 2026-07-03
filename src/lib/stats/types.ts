@@ -88,6 +88,7 @@ export type StatKey =
   | 'pa'
   | 'ra'
   | 'stocks'
+  | 'fs'
   // MLB hitting
   | 'hits'
   | 'tb'
@@ -99,6 +100,7 @@ export type StatKey =
   | 'so'
   | 'doubles'
   | 'hrr'
+  | 'hitterFs'
   // MLB pitching
   | 'k'
   | 'er'
@@ -121,7 +123,8 @@ export type StatKey =
   | 'recYds'
   | 'recTds'
   // NFL — misc
-  | 'fumbles';
+  | 'fumbles'
+  | 'fantasyScore';
 
 export interface StatDef {
   key: StatKey;
@@ -129,6 +132,62 @@ export interface StatDef {
   label: string;
   short: string;
   value: (g: GameStatLine) => number;
+}
+
+// ---- Fantasy Score (PrizePicks scoring) ---------------------------------------
+// Historical per-game fantasy points computed from the stored box scores, so FS
+// props get the same hit rates / windows / FireFactor as any counting stat. These
+// are PRIZEPICKS' published scoring tables — hand-maintained editorial data, same
+// contract as PP_BREAKEVEN_STEPS (ppPayouts.ts): VERIFY against the PrizePicks app
+// when updating; other books score fantasy differently, so ONLY PrizePicks FS
+// markets map onto these keys (see PP_STAT_MAP) — never another book's FS line.
+//
+//   NBA:  PTS ×1 · REB ×1.2 · AST ×1.5 · STL ×3 · BLK ×3 · TOV ×(−1)
+//   MLB (hitter): 1B ×3 · 2B ×5 · 3B ×8 · HR ×10 · R ×2 · RBI ×2 · BB ×2 ·
+//                 HBP ×2 · SB ×5  (singles derived: H − 2B − 3B − HR)
+//   NFL:  pass yds ×0.04 · pass TD ×4 · INT ×(−1) · rush/rec yds ×0.1 ·
+//         rush/rec TD ×6 · reception ×1 · fumble lost ×(−2)
+//         (2-pt conversions aren't in our box scores — omitted, a rare rounding)
+//
+// MLB pitcher FS is deliberately absent: PrizePicks scores it on the pitching WIN
+// (a decision we don't store), so we can't compute honest historical values.
+export function nbaFantasyScore(g: GameStatLine): number {
+  return (
+    n(g.points) +
+    1.2 * n(g.rebounds) +
+    1.5 * n(g.assists) +
+    3 * n(g.steals) +
+    3 * n(g.blocks) -
+    n(g.turnovers)
+  );
+}
+export function mlbHitterFantasyScore(g: GameStatLine): number {
+  // Clamped so a data oddity (extra-base hits exceeding hits) can't go negative.
+  const singles = Math.max(0, n(g.hits) - n(g.doubles) - n(g.triples) - n(g.homeRuns));
+  return (
+    3 * singles +
+    5 * n(g.doubles) +
+    8 * n(g.triples) +
+    10 * n(g.homeRuns) +
+    2 * n(g.runs) +
+    2 * n(g.rbi) +
+    2 * n(g.walks) +
+    2 * n(g.hbp) +
+    5 * n(g.stolenBases)
+  );
+}
+export function nflFantasyScore(g: GameStatLine): number {
+  return (
+    0.04 * n(g.passYards) +
+    4 * n(g.passTds) -
+    n(g.passInts) +
+    0.1 * n(g.rushYards) +
+    6 * n(g.rushTds) +
+    n(g.receptions) +
+    0.1 * n(g.recYards) +
+    6 * n(g.recTds) -
+    2 * n(g.fumblesLost)
+  );
 }
 
 export const STAT_DEFS: Record<StatKey, StatDef> = {
@@ -148,6 +207,7 @@ export const STAT_DEFS: Record<StatKey, StatDef> = {
   pa: { key: 'pa', sport: 'nba', label: 'Points + Assists', short: 'PA', value: (g) => n(g.points) + n(g.assists) },
   ra: { key: 'ra', sport: 'nba', label: 'Rebounds + Assists', short: 'RA', value: (g) => n(g.rebounds) + n(g.assists) },
   stocks: { key: 'stocks', sport: 'nba', label: 'Steals + Blocks', short: 'STOCKS', value: (g) => n(g.steals) + n(g.blocks) },
+  fs: { key: 'fs', sport: 'nba', label: 'Fantasy Score (PrizePicks)', short: 'FS', value: nbaFantasyScore },
 
   // ---- MLB hitting ----
   hits: { key: 'hits', sport: 'mlb', label: 'Hits', short: 'H', value: (g) => n(g.hits) },
@@ -160,6 +220,7 @@ export const STAT_DEFS: Record<StatKey, StatDef> = {
   so: { key: 'so', sport: 'mlb', label: 'Strikeouts (batter)', short: 'SO', value: (g) => n(g.strikeouts) },
   doubles: { key: 'doubles', sport: 'mlb', label: 'Doubles', short: '2B', value: (g) => n(g.doubles) },
   hrr: { key: 'hrr', sport: 'mlb', label: 'Hits + Runs + RBIs', short: 'H+R+RBI', value: (g) => n(g.hits) + n(g.runs) + n(g.rbi) },
+  hitterFs: { key: 'hitterFs', sport: 'mlb', label: 'Hitter Fantasy Score (PrizePicks)', short: 'FS', value: mlbHitterFantasyScore },
 
   // ---- MLB pitching ----
   k: { key: 'k', sport: 'mlb', label: 'Strikeouts (pitcher)', short: 'K', value: (g) => n(g.strikeoutsPitched) },
@@ -188,25 +249,26 @@ export const STAT_DEFS: Record<StatKey, StatDef> = {
 
   // ---- NFL misc ----
   fumbles: { key: 'fumbles', sport: 'nfl', label: 'Fumbles Lost', short: 'FUM', value: (g) => n(g.fumblesLost) },
+  fantasyScore: { key: 'fantasyScore', sport: 'nfl', label: 'Fantasy Score (PrizePicks)', short: 'FS', value: nflFantasyScore },
 };
 
 export const STAT_KEYS = Object.keys(STAT_DEFS) as StatKey[];
 
 export const NBA_STAT_KEYS: StatKey[] = [
-  'pts', 'reb', 'oreb', 'dreb', 'ast', 'fg3m', 'stl', 'blk', 'tov', 'fouls', 'pra', 'pr', 'pa', 'ra', 'stocks',
+  'pts', 'reb', 'oreb', 'dreb', 'ast', 'fg3m', 'stl', 'blk', 'tov', 'fouls', 'pra', 'pr', 'pa', 'ra', 'stocks', 'fs',
 ];
 export const MLB_HITTING_KEYS: StatKey[] = [
-  'hits', 'tb', 'hr', 'rbi', 'runs', 'sb', 'bb', 'so', 'doubles', 'hrr',
+  'hits', 'tb', 'hr', 'rbi', 'runs', 'sb', 'bb', 'so', 'doubles', 'hrr', 'hitterFs',
 ];
 export const MLB_PITCHING_KEYS: StatKey[] = ['k', 'er', 'outs', 'ha', 'bba'];
 
 // NFL stat keys are position-specific: a QB's markets (passing, plus rushing for
 // mobile QBs) are disjoint from a pass-catcher's (receiving). RBs span both the
-// ground game and the passing game.
-export const NFL_QB_KEYS: StatKey[] = ['passYds', 'passTds', 'passCmp', 'passAtt', 'ints', 'rushYds'];
-export const NFL_RB_KEYS: StatKey[] = ['rushYds', 'carries', 'rushTds', 'rec', 'targets', 'recYds', 'recTds', 'fumbles'];
-export const NFL_WR_KEYS: StatKey[] = ['rec', 'targets', 'recYds', 'recTds'];
-export const NFL_TE_KEYS: StatKey[] = ['rec', 'targets', 'recYds', 'recTds'];
+// ground game and the passing game. Fantasy Score spans every skill position.
+export const NFL_QB_KEYS: StatKey[] = ['passYds', 'passTds', 'passCmp', 'passAtt', 'ints', 'rushYds', 'fantasyScore'];
+export const NFL_RB_KEYS: StatKey[] = ['rushYds', 'carries', 'rushTds', 'rec', 'targets', 'recYds', 'recTds', 'fumbles', 'fantasyScore'];
+export const NFL_WR_KEYS: StatKey[] = ['rec', 'targets', 'recYds', 'recTds', 'fantasyScore'];
+export const NFL_TE_KEYS: StatKey[] = ['rec', 'targets', 'recYds', 'recTds', 'fantasyScore'];
 
 /** Ordered stat keys offered for a sport (and role: MLB hitter/pitcher, NFL position). */
 export function statKeysForSport(sport: Sport, posBucket?: string | null): StatKey[] {
@@ -253,6 +315,19 @@ export function defaultStatForSport(sport: Sport, posBucket?: string | null): St
 export function statValue(stat: StatKey, g: GameStatLine): number {
   return STAT_DEFS[stat].value(g);
 }
+
+/** The fantasy-score keys (one per sport) and the sport → key lookup — used to
+ *  normalize a generic "fantasy score" mention to the right sport's key. */
+export const FANTASY_SCORE_KEYS: ReadonlySet<StatKey> = new Set<StatKey>([
+  'fs',
+  'hitterFs',
+  'fantasyScore',
+]);
+export const FANTASY_SCORE_KEY_BY_SPORT: Record<Sport, StatKey> = {
+  nba: 'fs',
+  mlb: 'hitterFs',
+  nfl: 'fantasyScore',
+};
 
 /** Analysis windows. Numeric = last N games; 'season' = all games. */
 export type StatWindow = 5 | 10 | 20 | 'season';

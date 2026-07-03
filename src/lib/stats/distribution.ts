@@ -25,11 +25,16 @@ export interface LineProbabilities {
   push: number;
 }
 
-/** Stats modeled as continuous (Normal); everything else is a non-negative count. */
+/** Stats modeled as continuous (Normal); everything else is a non-negative count.
+ *  Fantasy scores are weighted sums with fractional coefficients (NBA/NFL) or
+ *  wide multi-point steps (MLB) — nothing like a unit-step Poisson count. */
 const CONTINUOUS_STATS: ReadonlySet<StatKey> = new Set<StatKey>([
   'passYds',
   'rushYds',
   'recYds',
+  'fs',
+  'hitterFs',
+  'fantasyScore',
 ]);
 
 export type DistributionFamily = 'continuous' | 'count';
