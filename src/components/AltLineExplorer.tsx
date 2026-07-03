@@ -66,12 +66,18 @@ export function AltLineExplorer({
               const lowerW = Math.round(r.wilsonLower * 100);
               const bandW = Math.max(1, Math.round((r.wilsonUpper - r.wilsonLower) * 100));
               const centerW = overPct === null ? null : Math.round(overPct * 100);
+              const clickable = onSelect !== undefined && !r.isCurrent;
               return (
                 <tr
                   key={r.line}
+                  // The WHOLE row swaps the read (same feel as the payout-ladder rungs);
+                  // the line-number button inside is the keyboard path — its click
+                  // bubbles here, so the handler lives on the row alone.
+                  onClick={clickable ? () => onSelect(r.line) : undefined}
                   className={
                     'border-t border-line ' +
-                    (r.isCurrent ? 'bg-surface' : '')
+                    (r.isCurrent ? 'bg-surface ' : '') +
+                    (clickable ? 'cursor-pointer transition-colors hover:bg-surface' : '')
                   }
                 >
                   <th
@@ -79,10 +85,9 @@ export function AltLineExplorer({
                     className="py-2 pr-3 text-left font-medium tabular-nums"
                   >
                     <span className="inline-flex items-center gap-1.5">
-                      {onSelect && !r.isCurrent ? (
+                      {clickable ? (
                         <button
                           type="button"
-                          onClick={() => onSelect(r.line)}
                           className="cursor-pointer rounded text-brand underline-offset-2 transition-colors hover:text-brand-strong hover:underline"
                           aria-label={`Run the full read at ${r.line} ${statShort}`}
                         >

@@ -286,8 +286,13 @@ export function PlayerResearchClient({
       </section>
 
       {/* Alternate lines — how the over rate moves around the selected line; click one
-          to funnel the full read (verdict, charts, splits) through that number. */}
-      <AltLineExplorer rows={altRows} statShort={statDef.short} onSelect={handleLine} />
+          to funnel the full read (verdict, charts, splits) through that number. Hidden
+          whenever the payout-variant ladder above renders (2+ rungs): the ladder shows
+          the same nearby lines with their over rates AND the payout context, so this
+          section would just repeat it. */}
+      {!(data.variants && data.variants.length >= 2) && (
+        <AltLineExplorer rows={altRows} statShort={statDef.short} onSelect={handleLine} />
+      )}
 
       {/* Chart */}
       <section aria-label="Game-by-game" className="mb-6">
@@ -339,8 +344,16 @@ export function PlayerResearchClient({
       )}
 
       {/* Line shopping — best number across books (sits above the fair-price calculator;
-          updates live with the stat/book since it reads the current research). */}
-      {data.lineValue && <LineValueTable data={data.lineValue} statShort={statDef.short} />}
+          updates live with the stat/book since it reads the current research). Clicking
+          a book's row switches the whole read to that book — same as the dropdown. */}
+      {data.lineValue && (
+        <LineValueTable
+          data={data.lineValue}
+          statShort={statDef.short}
+          selectableSources={availableSources}
+          onSelectSource={handleSource}
+        />
+      )}
 
       {/* Odds -> fair price */}
       <section className="mb-6 space-y-4 rounded-xl border border-line bg-surface-2 p-4">

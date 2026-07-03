@@ -8,15 +8,25 @@ import { BookLogo } from './BookLogo';
  * season hit rate on the leaning side at that number, scored against the market
  * consensus (median). A softer number you clear more often is a discount (positive
  * edge), and the best one is highlighted — it's the same edge that lifts FireFactor.
+ * When `onSelectSource` is provided (the player page), a row whose book is available
+ * as a site source is clickable and switches the whole read to that book — the same
+ * switch as the source dropdown.
  */
 export function LineValueTable({
   data,
   statShort,
+  selectableSources = [],
+  onSelectSource,
 }: {
   data: LineValueComparison;
   statShort: string;
+  /** Books offered by the site source selector — only these rows switch on click. */
+  selectableSources?: string[];
+  /** Switch the page's book (same path as the source dropdown). */
+  onSelectSource?: (source: string) => void;
 }) {
   const sideWord = data.side === 'over' ? 'over' : 'under';
+  const selectable = new Set(onSelectSource ? selectableSources : []);
   return (
     <section className="mt-6">
       <h2 className="text-base font-semibold">Line shopping — {statShort}</h2>
@@ -24,6 +34,7 @@ export function LineValueTable({
         Each book&rsquo;s line and your season {sideWord} rate at that number, vs the market
         consensus ({data.consensusLine} {statShort}). A softer number you&rsquo;d clear more often is
         a discount — the best one lifts the FireFactor read.
+        {selectable.size > 0 && <> Click a book to switch the whole read to it.</>}
       </p>
       <ol className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
         <li className="flex items-center gap-3 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
@@ -36,11 +47,8 @@ export function LineValueTable({
           const isBest = data.best?.source === b.source;
           const edgeCls =
             b.edge > 0.005 ? 'text-over' : b.edge < -0.005 ? 'text-under' : 'text-muted';
-          return (
-            <li
-              key={b.source}
-              className={`flex items-center gap-3 px-3 py-2.5 text-sm ${isBest ? 'bg-over-soft' : ''}`}
-            >
+          const rowContent = (
+            <>
               <span className="flex min-w-0 flex-1 items-center gap-2">
                 <BookLogo source={b.source} />
                 <span className="truncate font-medium">{sourceLabel(b.source)}</span>
@@ -58,6 +66,22 @@ export function LineValueTable({
                 {b.edge > 0 ? '+' : ''}
                 {Math.round(b.edge * 100)}
               </span>
+            </>
+          );
+          return (
+            <li key={b.source} className={isBest ? 'bg-over-soft' : ''}>
+              {selectable.has(b.source) ? (
+                <button
+                  type="button"
+                  onClick={() => onSelectSource!(b.source)}
+                  aria-label={`Switch the read to ${sourceLabel(b.source)}`}
+                  className="flex w-full cursor-pointer items-center gap-3 px-3 py-2.5 text-left text-sm transition-colors hover:bg-surface-2"
+                >
+                  {rowContent}
+                </button>
+              ) : (
+                <div className="flex items-center gap-3 px-3 py-2.5 text-sm">{rowContent}</div>
+              )}
             </li>
           );
         })}
