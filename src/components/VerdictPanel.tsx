@@ -12,10 +12,14 @@ import { tierTextClass, tierBoxClass, gradeTextClass, heatLabel } from '@/lib/ti
 export function VerdictPanel({
   verdict,
   statShort,
+  statLabel,
   line,
 }: {
   verdict: PlayerVerdict;
   statShort: string;
+  /** Full stat name ("Walks", "Strikeouts (batter)") — spelled out next to the
+   *  abbreviation so the prop is never a mystery code. */
+  statLabel?: string;
   line: number;
 }) {
   const { fireScore, projection, consistency, matchupGrade, modelProbOver } = verdict;
@@ -34,8 +38,9 @@ export function VerdictPanel({
     <section aria-label="Verdict" className={`mb-6 rounded-xl border p-4 ${tierBox}`}>
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold">Verdict</h3>
-        <span className="text-xs text-muted">
+        <span className="text-right text-xs text-muted">
           vs {line} {statShort}
+          {statLabel && <span className="block text-[10px]">{statLabel}</span>}
         </span>
       </div>
 

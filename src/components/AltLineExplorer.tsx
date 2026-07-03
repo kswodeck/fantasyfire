@@ -12,11 +12,14 @@ import { pct } from '@/lib/format';
 export function AltLineExplorer({
   rows,
   statShort,
+  statLabel,
   windowLabel = 'season',
   onSelect,
 }: {
   rows: AltLineRow[];
   statShort: string;
+  /** Full stat name — spelled out in the heading so the abbreviation is defined. */
+  statLabel?: string;
   windowLabel?: string;
   /** Recompute the whole read at this line (the same path as the line input). */
   onSelect?: (line: number) => void;
@@ -30,6 +33,7 @@ export function AltLineExplorer({
         <div className="mb-3">
           <h3 id="alt-lines-heading" className="text-sm font-semibold">
             Alternate lines
+            {statLabel && <span className="font-normal text-muted"> — {statLabel} ({statShort})</span>}
           </h3>
           <p className="mt-1 text-xs text-muted">
             {statShort} over rate across nearby lines ({windowLabel}) — find where the

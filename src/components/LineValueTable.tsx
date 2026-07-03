@@ -16,12 +16,15 @@ import { BookLogo } from './BookLogo';
 export function LineValueTable({
   data,
   statShort,
+  statLabel,
   selectableSources = [],
   onSelectSource,
   currentSource,
 }: {
   data: LineValueComparison;
   statShort: string;
+  /** Full stat name — spelled out in the heading so "BB"/"SO" is never a mystery. */
+  statLabel?: string;
   /** Books offered by the site source selector — only these rows switch on click. */
   selectableSources?: string[];
   /** Switch the page's book (same path as the source dropdown). */
@@ -33,7 +36,9 @@ export function LineValueTable({
   const selectable = new Set(onSelectSource ? selectableSources : []);
   return (
     <section className="mt-6">
-      <h2 className="text-base font-semibold">Line shopping — {statShort}</h2>
+      <h2 className="text-base font-semibold">
+        Line shopping — {statLabel ? `${statLabel} (${statShort})` : statShort}
+      </h2>
       <p className="mb-3 mt-1 max-w-2xl text-sm text-muted">
         Each book&rsquo;s line and your season {sideWord} rate at that number, vs the market
         consensus ({data.consensusLine} {statShort}). A softer number you&rsquo;d clear more often is

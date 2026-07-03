@@ -265,6 +265,7 @@ export function PlayerResearchClient({
         variants={data.variants}
         selectedLine={effectiveLine}
         statShort={statDef.short}
+        statLabel={statDef.label}
         sourceId={source}
         onSelect={handleLine}
         seasonValues={seasonWindow?.hitRate.values ?? []}
@@ -276,7 +277,12 @@ export function PlayerResearchClient({
       )}
 
       {/* Verdict — the FireFactor "good prop" read + sub-signals */}
-      <VerdictPanel verdict={data.verdict} statShort={statDef.short} line={data.line} />
+      <VerdictPanel
+        verdict={data.verdict}
+        statShort={statDef.short}
+        statLabel={statDef.label}
+        line={data.line}
+      />
 
       {/* Hit-rate cards */}
       <section aria-label="Hit rates" className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -291,7 +297,12 @@ export function PlayerResearchClient({
           the same nearby lines with their over rates AND the payout context, so this
           section would just repeat it. */}
       {!(data.variants && data.variants.length >= 2) && (
-        <AltLineExplorer rows={altRows} statShort={statDef.short} onSelect={handleLine} />
+        <AltLineExplorer
+          rows={altRows}
+          statShort={statDef.short}
+          statLabel={statDef.label}
+          onSelect={handleLine}
+        />
       )}
 
       {/* Chart */}
@@ -350,6 +361,7 @@ export function PlayerResearchClient({
         <LineValueTable
           data={data.lineValue}
           statShort={statDef.short}
+          statLabel={statDef.label}
           selectableSources={availableSources}
           onSelectSource={handleSource}
           currentSource={source}
