@@ -2,27 +2,30 @@ import { FlameMark } from '@/components/FlameMark';
 import { HomeTopLeans, type HomeCard } from '@/components/HomeTopLeans';
 import { getBoard, getSourcedBoards, hasUpcomingGames } from '@/lib/server/players';
 import { getAvailableSources } from '@/lib/server/providedLines';
-import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import { SITE } from '@/lib/site';
 import { SPORT_LIST, SPORTS, type Sport } from '@/lib/sports';
 import type { BoardRow } from '@/lib/types';
 
 export const revalidate = 900; // 15 min — matches the lines ingest cadence, bounding board↔player-page score skew to one cycle
 
-async function loadSport(sport: Sport): Promise<{ leans: BoardRow[] }> {
-  // A taste of the default book's top reads (our median line only when no book lines
-  // are ingested). Home is deliberately controls-free — the book selector, slate
-  // toggle, and filters all live on the sport's Heat Check — so one small board per
-  // sport is all the teaser needs.
+async function loadSport(sport: Sport): Promise<{
+  boardsBySource: Record<string, BoardRow[]>;
+  medianLeans: BoardRow[];
+}> {
+  // A taste of each book's top reads, switched by the page-wide site source selector
+  // (our median line only when no book lines are ingested). The slate toggle and
+  // filters live on the sport's Heat Check — home keeps just the book choice, since
+  // that selection carries across the whole site.
   const sources = await getAvailableSources(sport).catch(() => [] as string[]);
   if (sources.length > 0) {
-    const source = sources.includes(DEFAULT_PROVIDED_SOURCE) ? DEFAULT_PROVIDED_SOURCE : sources[0];
-    const boards = await getSourcedBoards(sport, [source], { limit: 3, standardOnly: true }).catch(
-      () => ({}) as Record<string, BoardRow[]>,
-    );
-    return { leans: boards[source] ?? [] };
+    const boardsBySource = await getSourcedBoards(sport, sources, {
+      limit: 3,
+      standardOnly: true,
+    }).catch(() => ({}) as Record<string, BoardRow[]>);
+    return { boardsBySource, medianLeans: [] };
   }
-  return { leans: await getBoard(sport, { limit: 3 }).catch(() => [] as BoardRow[]) };
+  const medianLeans = await getBoard(sport, { limit: 3 }).catch(() => [] as BoardRow[]);
+  return { boardsBySource: {}, medianLeans };
 }
 
 export default async function Home() {
@@ -43,7 +46,8 @@ export default async function Home() {
       name: cfg.name,
       accent: cfg.accent,
       tagline: cfg.tagline,
-      leans: d.leans,
+      boardsBySource: d.boardsBySource,
+      medianLeans: d.medianLeans,
     };
   });
 
@@ -61,8 +65,8 @@ export default async function Home() {
         </p>
       </section>
 
-      {/* Controls-free teaser cards — the full Heat Check (books, filters, slate) is
-          each sport's home page, one tap away. */}
+      {/* Teaser cards with the one page-wide (site-synced) book selector — everything
+          else (filters, slate toggle) is each sport's Heat Check, one tap away. */}
       {cards.length > 0 ? (
         <HomeTopLeans cards={cards} />
       ) : (
