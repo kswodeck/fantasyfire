@@ -22,6 +22,7 @@ export default async function AllBoardPage() {
     boardsBySource: {},
     sources: [],
     medianRows: [],
+    todayTeamsBySport: {},
     anyUpcoming: false,
   };
   try {
@@ -29,7 +30,7 @@ export default async function AllBoardPage() {
   } catch {
     // DB unavailable — render the empty state.
   }
-  const { boardsBySource, sources, medianRows, anyUpcoming } = data;
+  const { boardsBySource, sources, medianRows, todayTeamsBySport, anyUpcoming } = data;
   const initialSource = sources.includes(DEFAULT_PROVIDED_SOURCE)
     ? DEFAULT_PROVIDED_SOURCE
     : (sources[0] ?? DEFAULT_PROVIDED_SOURCE);
@@ -68,6 +69,7 @@ export default async function AllBoardPage() {
             sources={sources}
             defaultSource={initialSource}
             medianRows={medianRows}
+            todayTeamsBySport={todayTeamsBySport}
           />
         </div>
       )}
