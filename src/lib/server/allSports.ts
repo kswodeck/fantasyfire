@@ -11,6 +11,7 @@ import type { BoardRow, TrendRow } from '@/lib/types';
 import {
   getBoard,
   getSourcedBoards,
+  getTonightSlate,
   getTrendBoard,
   getSourcedTrends,
   hasUpcomingGames,
@@ -59,6 +60,9 @@ export interface AllSportsBoard {
   sources: string[];
   /** Median-line fallback merged across sports — used only when no book lines exist. */
   medianRows: BoardRow[];
+  /** Teams playing on each sport's current slate — drives the "Today only" switch
+   *  (a row is on the slate when its player's team appears under its sport). */
+  todayTeamsBySport: Record<string, string[]>;
   /** false when every sport is off-season (no games anywhere). */
   anyUpcoming: boolean;
 }
@@ -66,7 +70,13 @@ export interface AllSportsBoard {
 export async function getAllSportsBoard(): Promise<AllSportsBoard> {
   const active = await activeSports();
   if (active.length === 0)
-    return { boardsBySource: {}, sources: [], medianRows: [], anyUpcoming: false };
+    return {
+      boardsBySource: {},
+      sources: [],
+      medianRows: [],
+      todayTeamsBySport: {},
+      anyUpcoming: false,
+    };
 
   // Per sport: its real-book boards when any book is ingested, else its median board
   // (mirrors the single-sport Heat Check page's source/median split).
@@ -98,7 +108,23 @@ export async function getAllSportsBoard(): Promise<AllSportsBoard> {
   }
   const medianRows = rankBoard(perSport.flatMap((p) => p.median));
 
-  return { boardsBySource, sources, medianRows, anyUpcoming: true };
+  // Each sport's slate teams (today; this week for NFL) for the "Today only" switch.
+  const todayTeamsBySport: Record<string, string[]> = {};
+  await Promise.all(
+    active.map(async (sport) => {
+      const slate = await getTonightSlate(sport).catch(() => ({ games: [] }));
+      const teams = [
+        ...new Set(
+          slate.games
+            .flatMap((g) => [g.home.abbr, g.away.abbr])
+            .filter((a): a is string => !!a),
+        ),
+      ];
+      if (teams.length > 0) todayTeamsBySport[sport] = teams;
+    }),
+  );
+
+  return { boardsBySource, sources, medianRows, todayTeamsBySport, anyUpcoming: true };
 }
 
 export interface AllSportsTrends {
