@@ -27,7 +27,7 @@ export function FilterableBoard({
   initialVisible?: number;
   step?: number;
 }) {
-  const f = useListFilter(sport, rows, initialVisible, step);
+  const f = useListFilter(sport, rows, initialVisible, step, (r) => r.fireScore.side);
   return (
     <div>
       <ListFilters
@@ -42,6 +42,8 @@ export function FilterableBoard({
         noun="reads"
         query={f.query}
         onQueryChange={f.setQuery}
+        lean={f.lean}
+        onLeanChange={f.setLean}
       />
       {f.filtered.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
