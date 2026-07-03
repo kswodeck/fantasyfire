@@ -20,8 +20,9 @@ export interface HomeCard {
 }
 
 /** Leans shown per sport card — a taste, not a board; the full Heat Check (filters,
- *  slate toggle, every read) is one tap away at /[sport]. */
-const DISPLAY = 3;
+ *  slate toggle, every read) is one tap away at /[sport]. Rows arrive already
+ *  filtered to today's slate (the server applies the default; see loadSport). */
+const DISPLAY = 4;
 
 /**
  * Home "Heat Check" teaser cards driven by ONE page-wide book selector — the same
@@ -87,7 +88,7 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
                 {rows.length === 0 ? (
                   <p className="px-1 py-4 text-sm text-muted">
                     {hasSources
-                      ? 'No props on this book right now.'
+                      ? 'No reads on this book for the current slate.'
                       : 'No data available yet.'}
                   </p>
                 ) : (
