@@ -116,82 +116,83 @@ export function BoardExplorer({
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        {hasSlate ? (
-          <SlateSwitch
-            on={mode === 'today'}
-            onChange={(on) => setMode(on ? 'today' : 'all')}
-            label={`${slateWord} only`}
-          />
-        ) : (
-          <span />
-        )}
-        {hasSources && (
-          <SourceSelector
-            sources={sourced.liveSources}
-            value={sourced.source}
-            onChange={sourced.setSource}
-          />
-        )}
-      </div>
-
-      {hasSources && (payout.kindOptions.length >= 2 || payout.hasMult) && (
-        <div className="mb-4">
-          <BoardPayoutControls filter={payout} />
-        </div>
-      )}
-
-      {/* Matchups picker — COLLAPSED by default (the full slate is a long list on
-          phones); "Choose games" expands the strip to narrow the board to specific
-          matchups, and the button captions the active selection so a filter is
-          never invisible while collapsed. */}
-      {effectiveMode === 'today' && (
-        <div className="mb-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setChooseOpen((o) => !o)}
-              aria-expanded={chooseOpen}
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-2"
-            >
-              {selectedGames.size > 0 ? `Games (${selectedGames.size} of ${games.length})` : 'Choose games'}
-              <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true" className={`transition-transform ${chooseOpen ? 'rotate-180' : ''}`}>
-                <path d="M3 4.5 6 7.5 9 4.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-            {selectedGames.size > 0 && (
+      {/* Controls are grouped by intent, one band each, top to bottom:
+            1. SCOPE — the slate switch + game picker (both narrow WHICH slate)
+               with the book selector on the same row;
+            2. LINE SHAPE — the payout kind menu + multiplier range;
+            3. LIST FILTERS — search / teams / props / leans (in FilterableBoard).
+          One visual band per question keeps the stack readable on phones. */}
+      <div className="mb-4 space-y-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          {hasSlate && (
+            <SlateSwitch
+              on={mode === 'today'}
+              onChange={(on) => setMode(on ? 'today' : 'all')}
+              label={`${slateWord} only`}
+            />
+          )}
+          {effectiveMode === 'today' && (
+            <span className="inline-flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setSelectedGames(new Set())}
-                className="cursor-pointer text-xs font-medium text-brand hover:text-brand-strong"
+                onClick={() => setChooseOpen((o) => !o)}
+                aria-expanded={chooseOpen}
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-2"
               >
-                Clear ({selectedGames.size})
+                {selectedGames.size > 0 ? `Games (${selectedGames.size} of ${games.length})` : 'Choose games'}
+                <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true" className={`transition-transform ${chooseOpen ? 'rotate-180' : ''}`}>
+                  <path d="M3 4.5 6 7.5 9 4.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </button>
-            )}
-            {slateDate && (
-              <span className="ml-auto text-xs text-muted">
-                {games.length} {games.length === 1 ? 'game' : 'games'} · {formatIsoDate(slateDate)}
-              </span>
-            )}
-          </div>
-          {chooseOpen && (
-            <div className="mt-2">
-              <MatchupStrip
-                sport={sport}
-                games={games}
-                selected={selectedGames}
-                startedIds={startedIds}
-                onToggle={toggleGame}
+              {selectedGames.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedGames(new Set())}
+                  className="cursor-pointer text-xs font-medium text-brand hover:text-brand-strong"
+                >
+                  Clear ({selectedGames.size})
+                </button>
+              )}
+            </span>
+          )}
+          {hasSources && (
+            <span className="ml-auto">
+              <SourceSelector
+                sources={sourced.liveSources}
+                value={sourced.source}
+                onChange={sourced.setSource}
               />
-              <p className="mt-1.5 text-[11px] text-muted">
-                {startedIds.size > 0
-                  ? 'Games already underway are dimmed and hidden by default — tap one to include its players.'
-                  : 'Tap a game to filter the reads to that matchup.'}
-              </p>
-            </div>
+            </span>
           )}
         </div>
-      )}
+
+        {/* The game picker expands directly under its row, above the line band. */}
+        {effectiveMode === 'today' && chooseOpen && (
+          <div>
+            {slateDate && (
+              <p className="mb-1.5 text-xs text-muted">
+                {games.length} {games.length === 1 ? 'game' : 'games'} · {formatIsoDate(slateDate)}
+              </p>
+            )}
+            <MatchupStrip
+              sport={sport}
+              games={games}
+              selected={selectedGames}
+              startedIds={startedIds}
+              onToggle={toggleGame}
+            />
+            <p className="mt-1.5 text-[11px] text-muted">
+              {startedIds.size > 0
+                ? 'Games already underway are dimmed and hidden by default — tap one to include its players.'
+                : 'Tap a game to filter the reads to that matchup.'}
+            </p>
+          </div>
+        )}
+
+        {hasSources && (payout.kindOptions.length >= 2 || payout.hasMult) && (
+          <BoardPayoutControls filter={payout} />
+        )}
+      </div>
 
       {filteredRows.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">

@@ -76,7 +76,10 @@ export function ListFilters({
     'rounded-lg border border-line bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-brand';
 
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-2">
+    // Phones get an aligned two-column grid (search spanning the top, then the
+    // selects in tidy pairs, the count bottom-right) instead of a ragged wrap;
+    // sm+ flows everything on one flex row as before.
+    <div className="mb-4 grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
       {hasSearch && (
         <input
           type="search"
@@ -84,14 +87,14 @@ export function ListFilters({
           value={query ?? ''}
           onChange={(e) => onQueryChange(e.target.value)}
           placeholder="Search players…"
-          className={`${selectCls} w-40 sm:w-44`}
+          className={`${selectCls} col-span-2 w-full sm:w-44`}
         />
       )}
       <select
         aria-label="Filter by team"
         value={team}
         onChange={(e) => onTeamChange(e.target.value)}
-        className={selectCls}
+        className={`${selectCls} w-full sm:w-auto`}
       >
         <option value="">All teams</option>
         {teamOptions.map((o) => (
@@ -111,13 +114,14 @@ export function ListFilters({
           }))}
           isSelected={(v) => stats.has(v as StatKey)}
           onToggle={(v) => onToggleStat(v as StatKey)}
+          stretch
         />
       ) : (
         <select
           aria-label="Filter by position"
           value={position}
           onChange={(e) => onPositionChange(e.target.value)}
-          className={selectCls}
+          className={`${selectCls} w-full sm:w-auto`}
         >
           <option value="">All positions</option>
           {positionOptions.map((o) => (
@@ -133,7 +137,7 @@ export function ListFilters({
           aria-label="Filter by lean direction"
           value={lean ?? ''}
           onChange={(e) => onLeanChange(e.target.value as LeanFilter)}
-          className={selectCls}
+          className={`${selectCls} w-full sm:w-auto`}
         >
           <option value="">All leans</option>
           <option value="over">Over</option>
@@ -141,26 +145,33 @@ export function ListFilters({
         </select>
       )}
 
-      {hasFilters && (
-        <button
-          type="button"
-          onClick={() => {
-            onTeamChange('');
-            onPositionChange('');
-            onQueryChange?.('');
-            onLeanChange?.('');
-            onClearStats?.();
-          }}
-          className="rounded-lg px-3 py-2 text-sm font-medium text-brand transition-colors hover:text-brand-strong"
-        >
-          Clear
-        </button>
-      )}
-
-      <span className="ml-auto text-xs tabular-nums text-muted">
-        {resultCount === totalCount
-          ? `${totalCount} ${noun}`
-          : `${resultCount} of ${totalCount} ${noun}`}
+      {/* Trailing cell: Clear (only while something is set) + the live count,
+          right-aligned; spans the row on phones so it reads as a footer line. */}
+      <span
+        className={`flex items-center justify-end gap-3 sm:ml-auto ${
+          hasFilters || !hasLean ? 'col-span-2' : ''
+        }`}
+      >
+        {hasFilters && (
+          <button
+            type="button"
+            onClick={() => {
+              onTeamChange('');
+              onPositionChange('');
+              onQueryChange?.('');
+              onLeanChange?.('');
+              onClearStats?.();
+            }}
+            className="cursor-pointer rounded-lg text-sm font-medium text-brand transition-colors hover:text-brand-strong"
+          >
+            Clear
+          </button>
+        )}
+        <span className="text-xs tabular-nums text-muted">
+          {resultCount === totalCount
+            ? `${totalCount} ${noun}`
+            : `${resultCount} of ${totalCount} ${noun}`}
+        </span>
       </span>
     </div>
   );
