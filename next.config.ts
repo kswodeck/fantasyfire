@@ -90,9 +90,13 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
-      // /[sport]/today merged into the Top Leans board (which now has a "today's
-      // slate" toggle). Keep the old URL as a permanent redirect to preserve SEO.
-      { source: '/:sport/today', destination: '/:sport/board', permanent: true },
+      // /[sport]/board merged into the sport home — the hub was a near-copy of the
+      // Heat Check, so the sport home IS the board now. Permanent to preserve SEO.
+      // (/board — the cross-sport Heat Check — is a single segment and never matches.)
+      { source: '/:sport/board', destination: '/:sport', permanent: true },
+      // /[sport]/today merged into the board (now the sport home), which has a
+      // "today's slate" toggle. Straight to the final URL — no double hop.
+      { source: '/:sport/today', destination: '/:sport', permanent: true },
       // /[sport]/streaks merged into Trends (each row now shows the current streak
       // alongside the L10 swing). Permanent redirect to preserve SEO.
       { source: '/:sport/streaks', destination: '/:sport/trends', permanent: true },

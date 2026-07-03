@@ -3,20 +3,21 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { Sport } from '@/lib/sports';
-import { sportSections } from '@/lib/sportNav';
+import { sectionHref, sportSections } from '@/lib/sportNav';
 
 // Per-sport secondary nav — same section list the header sport buttons show as a
 // hover menu. Scrollable on mobile; highlights the current section.
 export function SportNav({ sport }: { sport: Sport }) {
   const pathname = usePathname();
-  // The sport home owns its own hero CTAs — keep that page clean.
-  if (pathname === `/${sport}`) return null;
   return (
     <nav aria-label={`${sport.toUpperCase()} sections`} className="-mx-4 overflow-x-auto px-4">
       <ul className="flex gap-1 whitespace-nowrap text-sm">
         {sportSections(sport).map((it) => {
-          const href = `/${sport}/${it.seg}`;
-          const active = pathname === href || pathname.startsWith(`${href}/`);
+          const href = sectionHref(sport, it.seg);
+          // Heat Check IS the sport home — prefix-matching '/' would light it up on
+          // every subpage, so it only matches exactly.
+          const active =
+            pathname === href || (it.seg !== '' && pathname.startsWith(`${href}/`));
           return (
             <li key={it.seg}>
               <Link

@@ -1,51 +1,38 @@
 import { FlameMark } from '@/components/FlameMark';
 import { HomeTopLeans, type HomeCard } from '@/components/HomeTopLeans';
-import { getBoard, getSourcedBoards, getTonightSlate, hasUpcomingGames } from '@/lib/server/players';
+import { getBoard, getSourcedBoards, hasUpcomingGames } from '@/lib/server/players';
 import { getAvailableSources } from '@/lib/server/providedLines';
+import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import { SITE } from '@/lib/site';
 import { SPORT_LIST, SPORTS, type Sport } from '@/lib/sports';
-import type { BoardRow, TonightGame } from '@/lib/types';
+import type { BoardRow } from '@/lib/types';
 
 export const revalidate = 900; // 15 min — matches the lines ingest cadence, bounding board↔player-page score skew to one cycle
 
-function slateTeams(games: TonightGame[]): string[] {
-  return [
-    ...new Set(games.flatMap((g) => [g.home.abbr, g.away.abbr]).filter((a): a is string => !!a)),
-  ];
-}
-
-async function loadSport(sport: Sport): Promise<{
-  boardsBySource: Record<string, BoardRow[]>;
-  medianLeans: BoardRow[];
-  todayTeams: string[];
-}> {
-  // Prefer real book lines (one board per book, switched by the page-wide selector);
-  // fall back to our computed median line only when no book lines are ingested. We
-  // pull a bit more than the 6 we show so the page-wide "today's slate" filter still
-  // yields a full teaser — `limit` only caps the rows returned, not the DB reads.
+async function loadSport(sport: Sport): Promise<{ leans: BoardRow[] }> {
+  // A taste of the default book's top reads (our median line only when no book lines
+  // are ingested). Home is deliberately controls-free — the book selector, slate
+  // toggle, and filters all live on the sport's Heat Check — so one small board per
+  // sport is all the teaser needs.
   const sources = await getAvailableSources(sport).catch(() => [] as string[]);
-  const slate = getTonightSlate(sport).catch(() => ({ date: null, games: [] as TonightGame[] }));
   if (sources.length > 0) {
-    const [s, boardsBySource] = await Promise.all([
-      slate,
-      getSourcedBoards(sport, sources, { limit: 24, standardOnly: true }).catch(
-        () => ({}) as Record<string, BoardRow[]>,
-      ),
-    ]);
-    return { boardsBySource, medianLeans: [], todayTeams: slateTeams(s.games) };
+    const source = sources.includes(DEFAULT_PROVIDED_SOURCE) ? DEFAULT_PROVIDED_SOURCE : sources[0];
+    const boards = await getSourcedBoards(sport, [source], { limit: 3, standardOnly: true }).catch(
+      () => ({}) as Record<string, BoardRow[]>,
+    );
+    return { leans: boards[source] ?? [] };
   }
-  const [s, medianLeans] = await Promise.all([
-    slate,
-    getBoard(sport, { limit: 24 }).catch(() => [] as BoardRow[]),
-  ]);
-  return { boardsBySource: {}, medianLeans, todayTeams: slateTeams(s.games) };
+  return { leans: await getBoard(sport, { limit: 3 }).catch(() => [] as BoardRow[]) };
 }
 
 export default async function Home() {
   // Only surface sports with an upcoming slate — off-season "leans" are computed
   // from past games and aren't actionable props, so those sports are hidden here.
+  // DB unavailable → no sports (the no-slate empty state), never a 500.
   const activeSports = (
-    await Promise.all(SPORT_LIST.map(async (s) => ((await hasUpcomingGames(s)) ? s : null)))
+    await Promise.all(
+      SPORT_LIST.map(async (s) => ((await hasUpcomingGames(s).catch(() => false)) ? s : null)),
+    )
   ).filter((s): s is Sport => s !== null);
 
   const loaded = await Promise.all(activeSports.map(async (s) => [s, await loadSport(s)] as const));
@@ -56,9 +43,7 @@ export default async function Home() {
       name: cfg.name,
       accent: cfg.accent,
       tagline: cfg.tagline,
-      boardsBySource: d.boardsBySource,
-      medianLeans: d.medianLeans,
-      todayTeams: d.todayTeams,
+      leans: d.leans,
     };
   });
 
@@ -76,7 +61,8 @@ export default async function Home() {
         </p>
       </section>
 
-      {/* One page-wide book selector + today's-slate toggle drive every sport's Heat Check. */}
+      {/* Controls-free teaser cards — the full Heat Check (books, filters, slate) is
+          each sport's home page, one tap away. */}
       {cards.length > 0 ? (
         <HomeTopLeans cards={cards} />
       ) : (

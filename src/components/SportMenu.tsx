@@ -4,7 +4,7 @@ import { useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { SPORTS, type Sport } from '@/lib/sports';
-import { sportSections } from '@/lib/sportNav';
+import { sectionHref, sportSections } from '@/lib/sportNav';
 
 /**
  * Header sport button with a hover/focus dropdown of that sport's section pages.
@@ -80,7 +80,7 @@ export function SportMenu({ sport }: { sport: Sport }) {
             {sportSections(sport).map((s) => (
               <Link
                 key={s.seg}
-                href={`/${sport}/${s.seg}`}
+                href={sectionHref(sport, s.seg)}
                 role="menuitem"
                 onClick={() => setOpen(false)}
                 className="block px-3 py-2 transition-colors hover:bg-surface-2"
