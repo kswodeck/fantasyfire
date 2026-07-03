@@ -17,9 +17,7 @@ import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import { isOverOnly } from '@/lib/payoutVariant';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
 import type { BoardRow, InjuryReportRow, TonightGame, TrendRow } from '@/lib/types';
-import { RelatedLinks } from '@/components/RelatedLinks';
 import { OffSeasonFallback } from '@/components/OffSeasonFallback';
-import { sportMeshLinks } from '@/lib/relatedLinks';
 
 export const revalidate = 900; // 15 min — matches the lines ingest cadence, bounding board↔player-page score skew to one cycle
 export const dynamicParams = false;
@@ -166,7 +164,11 @@ export default async function SportHome({ params }: PageProps) {
         </p>
       )}
 
-      {/* Section hub — Trends, Injuries, Players, Leaders, Matchups at a glance. */}
+      {/* Section hub — Trends, Injuries, Players, Leaders, Matchups at a glance.
+          This IS the page's internal-link mesh: the tiles cover every section the
+          old "Keep exploring" RelatedLinks listed (plus Injuries) with live
+          one-liners instead of static hints, so a second links section would just
+          repeat them. Sub-pages without tiles keep their RelatedLinks mesh. */}
       <section aria-labelledby="explore-heading" className="mt-10">
         <h2
           id="explore-heading"
@@ -182,8 +184,6 @@ export default async function SportHome({ params }: PageProps) {
           topTrend={topTrend}
         />
       </section>
-
-      <RelatedLinks links={sportMeshLinks(sport, 'board')} />
 
       <p className="mt-4 text-xs leading-relaxed text-muted">
         Descriptive research from public game logs, ranked by a sample-size–adjusted
