@@ -10,13 +10,15 @@ import { BookLogo } from './BookLogo';
  * edge), and the best one is highlighted — it's the same edge that lifts FireFactor.
  * When `onSelectSource` is provided (the player page), a row whose book is available
  * as a site source is clickable and switches the whole read to that book — the same
- * switch as the source dropdown.
+ * switch as the source dropdown — and the currently selected book's row is
+ * highlighted (same active treatment as the payout ladder's chosen rung).
  */
 export function LineValueTable({
   data,
   statShort,
   selectableSources = [],
   onSelectSource,
+  currentSource,
 }: {
   data: LineValueComparison;
   statShort: string;
@@ -24,6 +26,8 @@ export function LineValueTable({
   selectableSources?: string[];
   /** Switch the page's book (same path as the source dropdown). */
   onSelectSource?: (source: string) => void;
+  /** The book the page is currently on — its row renders highlighted. */
+  currentSource?: string;
 }) {
   const sideWord = data.side === 'over' ? 'over' : 'under';
   const selectable = new Set(onSelectSource ? selectableSources : []);
@@ -45,13 +49,21 @@ export function LineValueTable({
         </li>
         {data.books.map((b) => {
           const isBest = data.best?.source === b.source;
+          const isCurrent = b.source === currentSource;
           const edgeCls =
             b.edge > 0.005 ? 'text-over' : b.edge < -0.005 ? 'text-under' : 'text-muted';
           const rowContent = (
             <>
               <span className="flex min-w-0 flex-1 items-center gap-2">
                 <BookLogo source={b.source} />
-                <span className="truncate font-medium">{sourceLabel(b.source)}</span>
+                <span className={`truncate font-medium ${isCurrent ? 'text-brand' : ''}`}>
+                  {sourceLabel(b.source)}
+                </span>
+                {isCurrent && (
+                  <span className="shrink-0 rounded-full bg-brand/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand">
+                    selected
+                  </span>
+                )}
                 {isBest && (
                   <span className="shrink-0 rounded-full bg-over/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-over">
                     best
@@ -68,12 +80,16 @@ export function LineValueTable({
               </span>
             </>
           );
+          // The chosen book's highlight (matches the ladder's active rung) wins over
+          // the "best price" tint so the current selection always reads at a glance.
+          const rowTint = isCurrent ? 'bg-brand/10' : isBest ? 'bg-over-soft' : '';
           return (
-            <li key={b.source} className={isBest ? 'bg-over-soft' : ''}>
+            <li key={b.source} className={rowTint}>
               {selectable.has(b.source) ? (
                 <button
                   type="button"
                   onClick={() => onSelectSource!(b.source)}
+                  aria-pressed={isCurrent}
                   aria-label={`Switch the read to ${sourceLabel(b.source)}`}
                   className="flex w-full cursor-pointer items-center gap-3 px-3 py-2.5 text-left text-sm transition-colors hover:bg-surface-2"
                 >

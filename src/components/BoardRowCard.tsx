@@ -131,7 +131,11 @@ export function BoardRowCard({
           <LeanArrow tier={fireScore.tier} side={fireScore.side} size={15} />
           {heatLabel(fireScore.tier, fireScore.side)}
         </div>
-        <div className="text-[11px] tabular-nums text-muted">FireFactor {fireScore.score}</div>
+        {/* Abbreviate on narrow screens (< md) so the row's left text truncates less. */}
+        <div className="text-[11px] tabular-nums text-muted">
+          <span className="hidden md:inline">FireFactor</span>
+          <span className="md:hidden" aria-label="FireFactor">FF</span> {fireScore.score}
+        </div>
         {/* The default-line context lines stay MOUNTED (merely invisible) off the
             default rung — losing them would change the row height and re-center the
             chips vertically mid-click. Presence keys off the row's server read so it
