@@ -24,7 +24,7 @@ import { fetchSleeperLines } from './sleeper';
 import { fetchPick6Lines } from './pick6';
 import { fetchRotowireLines } from './rotowire';
 import type { ProvidedLineRow } from './providedTypes';
-import { staleRows, type RowKey } from './providedSync';
+import { staleRows, RETIRED_SOURCE_TAGS, type RowKey } from './providedSync';
 import { normalizeName } from '../lib/slate';
 import type { Sport } from '../lib/sports';
 import { isPropStat } from '../lib/propStats';
@@ -173,18 +173,53 @@ async function main(): Promise<number> {
   // erase a valid board.
   const pruned = await pruneStaleRows(resolved);
 
+  // Retired tag vocabularies (see RETIRED_SOURCE_TAGS): rows tagged with a kind a
+  // source's scraper no longer emits are definitionally stale, and the slate-scoped
+  // prune above can't reach them on past game days that are never re-fetched but
+  // still sit inside the read windows. Swept every run — indexed, idempotent, and
+  // empty once the backlog clears.
+  const retired = await sweepRetiredTags();
+
   const summary = [...perSource.entries()].map(([s, n]) => `${s}=${n}`).join(', ');
   console.log(
-    `[providedlines] upserted ${ops.length} (${summary}); ${unmatched} skipped; ${pruned.removed} stale row(s) removed.`,
+    `[providedlines] upserted ${ops.length} (${summary}); ${unmatched} skipped; ${pruned.removed} stale + ${retired.removed} retired-tag row(s) removed.`,
   );
 
   // Revalidate the changed pages — best-effort, only when the site actually shows
   // these lines (PROVIDED_LINES_ENABLED). Removed lines count as changes too: the
   // player page's static HTML must stop showing a rung the book pulled.
   for (const key of pruned.changedKeys) changed.add(key);
+  for (const key of retired.changedKeys) changed.add(key);
   await revalidateChanged(changed);
 
   return ops.length;
+}
+
+/** Delete rows whose oddsType a source's scraper has retired (RETIRED_SOURCE_TAGS).
+ *  Best-effort: a failure is logged, never fatal. Returns the count plus the
+ *  `${sport}|${playerId}|${stat}` keys of removed rows for revalidation. */
+async function sweepRetiredTags(): Promise<{ removed: number; changedKeys: Set<string> }> {
+  const changedKeys = new Set<string>();
+  let removed = 0;
+  for (const [source, tags] of Object.entries(RETIRED_SOURCE_TAGS)) {
+    try {
+      const where = { source, oddsType: { in: [...tags] } };
+      const stale = await withDbRetry(
+        () => db.providedLine.findMany({ where, select: { sport: true, playerId: true, stat: true } }),
+        `retired-tag scan ${source}`,
+      );
+      if (stale.length === 0) continue;
+      await withDbRetry(
+        () => db.providedLine.deleteMany({ where }),
+        `retired-tag delete ${source}`,
+      );
+      for (const r of stale) changedKeys.add(`${r.sport}|${r.playerId}|${r.stat}`);
+      removed += stale.length;
+    } catch (e) {
+      console.warn(`[providedlines] retired-tag sweep failed for ${source}: ${(e as Error).message}`);
+    }
+  }
+  return { removed, changedKeys };
 }
 
 /**

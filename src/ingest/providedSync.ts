@@ -18,6 +18,21 @@
  *  below this the scrape is more likely broken than the book's board this small. */
 export const AUTHORITATIVE_MIN_ROWS = 10;
 
+/**
+ * Tag vocabularies a source's scraper has RETIRED — DK Pick6 and Sleeper once
+ * tagged their harder/easier rungs demon/goblin, and both now model every
+ * off-standard rung as an `alternate` with its exact multiplier (like Underdog).
+ * Any stored row still carrying a retired tag is definitionally stale, but the
+ * slate-scoped authoritative prune can't see it when its slate is never
+ * re-fetched (past game days linger in the 14-day research window) — so the
+ * ingest sweeps these every run. Keep in sync with each scraper's oddsType
+ * output; PrizePicks legitimately still emits demon/goblin.
+ */
+export const RETIRED_SOURCE_TAGS: Readonly<Record<string, readonly string[]>> = {
+  pick6: ['demon', 'goblin'],
+  sleeper: ['demon', 'goblin'],
+};
+
 export interface RowKey {
   playerId: number;
   stat: string;
