@@ -340,7 +340,15 @@ function PlayerCard({ entry }: { entry: PlayerEntry }) {
   );
 }
 
-/** A single saved prop with a live read fetched on demand (only while expanded). */
+/**
+ * A single saved prop with a live read fetched on demand (only while expanded).
+ * Laid out like a Heat Check board row so the Playbook reads in the site's one
+ * visual language: the whole row is a stretched link to the prop's full read
+ * (no separate "View" link to float around); the left column says WHAT you
+ * saved (prop + side/line + payout, then book + when), the right column is the
+ * aligned read (heat word, FF + season rate, and whether the current lean is
+ * still your side); the remove ✕ sits above the link at the far right.
+ */
 function PropRow({ prop }: { prop: SavedProp }) {
   const { sport, slug, stat, line, side, source, savedAt } = prop;
   const def = STAT_DEFS[stat];
@@ -355,8 +363,13 @@ function PropRow({ prop }: { prop: SavedProp }) {
   const fsIsLean = fs ? fs.tier !== 'No lean' && fs.tier !== 'Pass' : false;
 
   return (
-    <li className="flex flex-col gap-1.5 border-b border-line px-4 py-3 last:border-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-      <div className="min-w-0">
+    <li className="relative flex items-center gap-3 border-b border-line px-4 py-3 transition-colors last:border-0 hover:bg-surface-2">
+      <Link
+        href={`/${sport}/${slug}/${stat}?line=${line}&source=${source}`}
+        aria-label={`View ${def.label} ${side} ${line} (${sourceLabel(source)})`}
+        className="absolute inset-0"
+      />
+      <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
           <span>
             {def.label}{' '}
@@ -373,51 +386,47 @@ function PropRow({ prop }: { prop: SavedProp }) {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:flex-nowrap">
+      <div className="shrink-0 text-right">
         {query.isPending ? (
-          <span className="text-muted">loading…</span>
+          <span className="text-xs text-muted">loading…</span>
         ) : !fs ? (
-          <span className="text-muted">no read</span>
+          <span className="text-xs text-muted">no read</span>
         ) : (
-          <div className="flex flex-col items-start gap-0.5 sm:items-end">
-            <span className="text-muted">
-              Season{' '}
-              <span className="font-semibold tabular-nums text-foreground">{pct(sideRate)}</span>{' '}
-              {side}
-            </span>
-            <span className={`inline-flex flex-wrap items-center gap-1 font-medium ${tierTextClass(fs.tier, fs.side)}`}>
-              <LeanArrow tier={fs.tier} side={fs.side} size={13} />
-              {fsIsLean ? (
+          <>
+            <div className={`flex items-center justify-end gap-1 text-sm font-semibold ${tierTextClass(fs.tier, fs.side)}`}>
+              <LeanArrow tier={fs.tier} side={fs.side} size={15} />
+              {fsIsLean ? `${heatLabel(fs.tier, fs.side)} ${fs.side}` : 'No read'}
+            </div>
+            <div className="text-[11px] tabular-nums text-muted">
+              FF {fs.score}
+              {sideRate != null ? (
                 <>
-                  {heatLabel(fs.tier, fs.side)} {fs.side}
-                  <span className="text-muted">· {fs.score}</span>
-                  {fs.side === side ? (
-                    <span className="ml-0.5 text-over">✓ your side</span>
-                  ) : (
-                    <span className="ml-0.5 text-under">opposite</span>
-                  )}
+                  {' '}· Season {pct(sideRate)} {side}
                 </>
-              ) : (
-                <span className="text-muted">no read · {fs.score}</span>
-              )}
-            </span>
-          </div>
+              ) : null}
+            </div>
+            {fsIsLean && (
+              <div
+                className={`text-[10px] font-medium ${
+                  fs.side === side ? 'text-sig-green' : 'text-sig-amber'
+                }`}
+              >
+                {fs.side === side ? '✓ your side' : '✗ lean is opposite'}
+              </div>
+            )}
+          </>
         )}
-        <Link
-          href={`/${sport}/${slug}/${stat}?line=${line}&source=${source}`}
-          className="font-medium text-brand hover:text-brand-strong"
-        >
-          View →
-        </Link>
-        <button
-          type="button"
-          onClick={() => removeSavedProp({ sport, slug, stat, line, side, source })}
-          aria-label={`Remove ${def.label} ${side} ${line} (${sourceLabel(source)})`}
-          className="text-muted transition-colors hover:text-under"
-        >
-          ✕
-        </button>
       </div>
+
+      {/* Above the row link (z-10) so removing never navigates. */}
+      <button
+        type="button"
+        onClick={() => removeSavedProp({ sport, slug, stat, line, side, source })}
+        aria-label={`Remove ${def.label} ${side} ${line} (${sourceLabel(source)})`}
+        className="relative z-10 -mr-1 shrink-0 cursor-pointer rounded p-1 text-muted transition-colors hover:text-under"
+      >
+        ✕
+      </button>
     </li>
   );
 }
