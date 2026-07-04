@@ -86,6 +86,15 @@ const nextConfig: NextConfig = {
       { source: '/embed/:path*', headers: embedHeaders },
       // …everything else keeps the strict, frame-banning set.
       { source: '/((?!embed/).*)', headers: securityHeaders },
+      // The service worker must never be served stale — a cached sw.js pins
+      // users to old precache lists until the HTTP cache expires.
+      {
+        source: '/sw.js',
+        headers: [
+          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+          { key: 'Content-Type', value: 'application/javascript; charset=utf-8' },
+        ],
+      },
     ];
   },
   async redirects() {
