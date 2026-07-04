@@ -45,10 +45,10 @@ export function VariantLadder({
 
   return (
     <div className="mb-5 rounded-xl border border-line bg-surface-2 p-4">
-      <h3 className="text-sm font-semibold">
+      <h2 className="text-sm font-semibold">
         {sourceLabel(sourceId)} payout options
         {statLabel && <span className="font-normal text-muted"> — {statLabel} ({statShort})</span>}
-      </h3>
+      </h2>
       <p className="mb-3 mt-1 text-xs text-muted">
         Pick any line — standard, <span className="font-medium text-demon">demon</span>{' '}
         (harder, pays more), <span className="font-medium text-goblin">goblin</span>{' '}

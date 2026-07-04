@@ -2763,8 +2763,11 @@ export async function analyzeSlate(sport: Sport, text: string): Promise<SlateRes
  * season with an actionable slate. Drives the home page, which hides off-season
  * sports (whose board "leans" are past games, not upcoming props). Read from the
  * nightly schedule feed; cheap COUNT, no joins.
+ *
+ * cache(): re-asked per sport by the sport pages AND the all-sports aggregators
+ * within one render — memoize so each render pays one query per sport.
  */
-export async function hasUpcomingGames(sport: Sport): Promise<boolean> {
+export const hasUpcomingGames = cache(async (sport: Sport): Promise<boolean> => {
   const now = new Date();
   const todayUtc = new Date();
   todayUtc.setUTCHours(0, 0, 0, 0);
@@ -2789,16 +2792,19 @@ export async function hasUpcomingGames(sport: Sport): Promise<boolean> {
     },
   });
   return unstarted > 0;
-}
+});
 
 /**
  * The next slate of scheduled games for a sport (the soonest date on/after today
  * that has games). Read-only from ScheduledGame, populated by the nightly
  * schedule feed. Returns an empty slate in the off-season.
+ *
+ * cache(): the sport page and the all-sports aggregators both ask for the same
+ * slate within one render.
  */
-export async function getTonightSlate(
+export const getTonightSlate = cache(async (
   sport: Sport,
-): Promise<{ date: string | null; games: TonightGame[] }> {
+): Promise<{ date: string | null; games: TonightGame[] }> => {
   const todayUtc = new Date();
   todayUtc.setUTCHours(0, 0, 0, 0);
 
@@ -2842,7 +2848,7 @@ export async function getTonightSlate(
   }));
 
   return { date: dayStart.toISOString().slice(0, 10), games };
-}
+});
 
 /** One scheduled game by its external id — for the per-game page reached from a player's
  *  "next matchup" card. Upcoming only (date >= today); past/unknown ids return null so

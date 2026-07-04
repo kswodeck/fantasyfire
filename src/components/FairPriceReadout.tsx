@@ -27,7 +27,7 @@ export function FairPriceReadout({
 
   return (
     <div className="rounded-xl border border-line bg-surface p-4">
-      <h3 className="mb-3 text-sm font-semibold">Fair price</h3>
+      <h2 className="mb-3 text-sm font-semibold">Fair price</h2>
 
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
         {readout.impliedOver !== null && (

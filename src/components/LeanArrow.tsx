@@ -19,11 +19,14 @@ export function LeanArrow({
   side,
   size = 14,
   className = '',
+  decorative = false,
 }: {
   tier: FireFactorResult['tier'];
   side: FireFactorResult['side'];
   size?: number;
   className?: string;
+  /** Hide from AT when the adjacent visible text already says the same thing. */
+  decorative?: boolean;
 }) {
   const glyph = heatIcon(tier, side);
   const label = glyph === 'dash' ? 'No directional read' : `${heatLabel(tier, side)} ${side}`;
@@ -34,8 +37,7 @@ export function LeanArrow({
       height={size}
       viewBox="0 0 24 24"
       className={`inline-block shrink-0 ${className}`}
-      role="img"
-      aria-label={label}
+      {...(decorative ? { 'aria-hidden': true } : { role: 'img', 'aria-label': label })}
     >
       {glyph === 'flame' ? (
         <path d={FLAME} fill="currentColor" />

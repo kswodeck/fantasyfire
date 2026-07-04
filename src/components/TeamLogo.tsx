@@ -25,6 +25,7 @@ export function TeamLogo({
       width={size}
       height={size}
       loading="lazy"
+      decoding="async"
       className={className}
       style={{ width: size, height: size, objectFit: 'contain' }}
     />

@@ -69,8 +69,9 @@ export function MultiSelect({
     <div ref={ref} className="relative">
       <button
         type="button"
-        aria-haspopup="listbox"
+        aria-haspopup="true"
         aria-expanded={open}
+        aria-controls={open ? listId : undefined}
         aria-label={label}
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-brand"
@@ -87,11 +88,12 @@ export function MultiSelect({
         </svg>
       </button>
 
+      {/* role="group" of native checkboxes — listbox/option roles over checkbox
+          inputs double-announce and promise arrow-key behavior that isn't there. */}
       {open && (
         <div
           id={listId}
-          role="listbox"
-          aria-multiselectable
+          role="group"
           aria-label={label}
           className="absolute left-0 z-20 mt-1 max-h-72 w-56 overflow-auto rounded-lg border border-line bg-surface p-1 shadow-lg"
         >
@@ -109,8 +111,6 @@ export function MultiSelect({
             return (
               <label
                 key={o.value}
-                role="option"
-                aria-selected={checked}
                 className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-surface-2"
               >
                 <input

@@ -6,6 +6,7 @@
 // computed line and nothing changes. Each lookup is SOURCE-EXPLICIT: it returns the
 // line from exactly the requested book, or null (→ caller falls back to its own
 // line). It never silently substitutes a different book.
+import { cache } from 'react';
 import { db } from '@/lib/db';
 import type { Sport } from '@/lib/sports';
 import type { StatKey } from '@/lib/stats';
@@ -32,8 +33,11 @@ function recentCutoff(days: number = RECENT_WINDOW_DAYS, now: Date = new Date())
 /**
  * The books that currently have recent lines for a sport, display-ordered — used to
  * populate the source dropdown. Empty when the feature is off or nothing's ingested.
+ *
+ * cache(): asked per sport by both the sport pages and the all-sports
+ * aggregators within one render — memoize to one query per sport.
  */
-export async function getAvailableSources(sport: Sport): Promise<string[]> {
+export const getAvailableSources = cache(async (sport: Sport): Promise<string[]> => {
   if (!providedLinesEnabled()) return [];
   // Fail safe: a missing table (flag enabled before the migration runs) or a DB
   // hiccup must degrade to "no books" (computed lines), never 500 a page.
@@ -48,7 +52,7 @@ export async function getAvailableSources(sport: Sport): Promise<string[]> {
     console.warn('[providedLines] getAvailableSources failed; treating as none:', e instanceof Error ? e.message : e);
     return [];
   }
-}
+});
 
 /**
  * One source's variant ladder (every rung — PrizePicks demon/goblin, Underdog

@@ -37,7 +37,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ sport: 
     if (!research) {
       return jsonResponse({ error: 'Player not found' }, { status: 404, request });
     }
-    return jsonResponse(research, { request });
+    return jsonResponse(research, { request, cacheSeconds: 60 });
   } catch {
     return jsonResponse({ error: 'Service unavailable' }, { status: 503, request });
   }

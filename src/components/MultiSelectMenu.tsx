@@ -17,6 +17,7 @@ export interface MultiSelectOption {
  */
 export function MultiSelectMenu({
   label,
+  ariaLabel,
   caption,
   options,
   isSelected,
@@ -25,6 +26,9 @@ export function MultiSelectMenu({
 }: {
   /** Small text label rendered before the button (e.g. "Props"). */
   label: string;
+  /** Accessible name for the trigger when `label` is empty or too terse —
+   *  otherwise the button is named only by its caption (e.g. "All props"). */
+  ariaLabel?: string;
   /** Button caption summarizing the selection (e.g. "All props", "H +2"). */
   caption: string;
   options: MultiSelectOption[];
@@ -65,7 +69,8 @@ export function MultiSelectMenu({
         type="button"
         aria-haspopup="true"
         aria-expanded={open}
-        aria-controls={menuId}
+        aria-controls={open ? menuId : undefined}
+        aria-label={ariaLabel ? `${ariaLabel}: ${caption}` : undefined}
         onClick={() => setOpen((o) => !o)}
         className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-2 ${
           stretch ? 'w-full justify-between sm:w-auto sm:justify-start' : ''
@@ -79,6 +84,8 @@ export function MultiSelectMenu({
       {open && (
         <div
           id={menuId}
+          role="group"
+          aria-label={ariaLabel || label || caption}
           className="absolute left-0 top-full z-30 mt-1 max-h-72 w-56 overflow-y-auto rounded-xl border border-line bg-surface p-1 shadow-xl shadow-black/40"
         >
           {options.map((o) => (

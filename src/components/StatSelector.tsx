@@ -13,17 +13,20 @@ export function StatSelector({
   onChange: (stat: StatKey) => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Choose stat">
+    // role="group" of toggle buttons, not role="tablist" — tab semantics demand
+    // roving tabindex + arrow-key handling and a labelled tabpanel, none of which
+    // fit this simple chip row.
+    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Choose stat">
       {keys.map((k) => {
         const active = k === value;
         return (
           <button
             key={k}
             type="button"
-            role="tab"
-            aria-selected={active}
+            aria-pressed={active}
             onClick={() => onChange(k)}
             title={STAT_DEFS[k].label}
+            aria-label={STAT_DEFS[k].label}
             className={
               'rounded-full border px-3 py-1 text-xs font-medium transition-colors ' +
               (active

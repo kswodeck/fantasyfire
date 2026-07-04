@@ -96,7 +96,7 @@ export function InjuriesClient({
           selected={selected}
           onChange={setSelected}
         />
-        <span className="ml-auto text-xs tabular-nums text-muted">
+        <span role="status" className="ml-auto text-xs tabular-nums text-muted">
           {filtered.length === rows.length
             ? `${rows.length} players`
             : `${filtered.length} of ${rows.length} players`}
@@ -104,7 +104,7 @@ export function InjuriesClient({
       </div>
 
       {filtered.length === 0 ? (
-        <p className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
+        <p role="status" className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
           No players match{nq !== '' ? ' this search' : ''}
           {nq !== '' && selectedSet.size > 0 ? ' and' : ''}
           {selectedSet.size > 0 ? ' the selected designations' : ''}.

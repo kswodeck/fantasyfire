@@ -76,7 +76,12 @@ export function PayoutBadge({
 
   if (kind === 'demon') {
     return (
-      <span className={`${PILL} bg-demon/12 text-demon ${className}`}>
+      <span
+        // Glyph-only mode is otherwise invisible to screen readers (the SVG is
+        // decorative and the demon/goblin difference is color + silhouette).
+        {...(showLabel ? {} : { 'aria-label': 'Demon line — pays more' })}
+        className={`${PILL} bg-demon/12 text-demon ${className}`}
+      >
         <PayoutGlyph kind="demon" size={glyphSize} />
         {showLabel && <span>pays more</span>}
       </span>
@@ -84,7 +89,10 @@ export function PayoutBadge({
   }
   if (kind === 'goblin') {
     return (
-      <span className={`${PILL} bg-goblin/12 text-goblin ${className}`}>
+      <span
+        {...(showLabel ? {} : { 'aria-label': 'Goblin line — pays less' })}
+        className={`${PILL} bg-goblin/12 text-goblin ${className}`}
+      >
         <PayoutGlyph kind="goblin" size={glyphSize} />
         {showLabel && <span>pays less</span>}
       </span>

@@ -16,7 +16,12 @@ export function SportTag({
   return (
     <span
       className={`inline-flex shrink-0 items-center rounded px-1 py-0.5 text-[10px] font-bold leading-none ${className}`}
-      style={{ color: cfg.accent, backgroundColor: `${cfg.accent}1a` }} // 1a = ~10% alpha
+      // light-dark(): the 700-level accent fails AA as text on the dark theme,
+      // so dark mode swaps to the 400-level accent. 1a = ~10% alpha tint.
+      style={{
+        color: `light-dark(${cfg.accent}, ${cfg.accentDark})`,
+        backgroundColor: `${cfg.accent}1a`,
+      }}
       title={cfg.name}
     >
       {cfg.name}

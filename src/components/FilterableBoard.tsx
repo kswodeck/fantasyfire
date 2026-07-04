@@ -57,7 +57,7 @@ export function FilterableBoard({
         onClearStats={f.clearStats}
       />
       {f.filtered.length === 0 ? (
-        <p className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
+        <p role="status" className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
           No reads match these filters.
         </p>
       ) : (

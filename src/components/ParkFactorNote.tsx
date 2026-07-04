@@ -33,7 +33,7 @@ export function ParkFactorNote({
 
   return (
     <div className="rounded-xl border border-line bg-surface p-4">
-      <h3 className="text-sm font-semibold">{context === 'game' ? 'Ballpark' : 'Home park'}</h3>
+      <h2 className="text-sm font-semibold">{context === 'game' ? 'Ballpark' : 'Home park'}</h2>
       <p className="mt-1 text-sm">
         <span className="font-medium">{park.name}</span>
         {teamName ? <span className="text-muted"> · {teamName}</span> : null}

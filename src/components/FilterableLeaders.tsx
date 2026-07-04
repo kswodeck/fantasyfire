@@ -40,7 +40,7 @@ export function FilterableLeaders({
         onQueryChange={f.setQuery}
       />
       {f.filtered.length === 0 ? (
-        <p className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
+        <p role="status" className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
           No leaders match these filters.
         </p>
       ) : (

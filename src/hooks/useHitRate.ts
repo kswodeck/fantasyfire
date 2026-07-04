@@ -20,6 +20,7 @@ export function useHitRate({
   line,
   source,
   initialData,
+  hasLiveLines = true,
 }: {
   sport: Sport;
   slug: string;
@@ -28,6 +29,10 @@ export function useHitRate({
   /** Which book's line to prefer (when the user hasn't typed a custom line). */
   source?: string;
   initialData?: PlayerResearch;
+  /** Whether book lines exist for this sport. Off (median-line pages), the SSR
+   *  seed only goes stale with the nightly ingest, so the always-refetch on
+   *  mount would be a wasted duplicate DB read. */
+  hasLiveLines?: boolean;
 }) {
   return useQuery<PlayerResearch>({
     queryKey: ['hitrate', sport, slug, stat, line ?? null, source ?? null],
@@ -41,9 +46,10 @@ export function useHitRate({
     },
     initialData,
     placeholderData: (prev) => prev,
-    // The SSR seed comes from the page's ISR cache (daily), but lines move intraday.
-    // Always revalidate on mount so the rendered line tracks the live API, not the
-    // cached HTML. Costs one call to the already-dynamic /hitrate route per load.
-    refetchOnMount: 'always',
+    // The SSR seed comes from the page's ISR cache (daily), but book lines move
+    // intraday — when they exist, always revalidate on mount so the rendered
+    // line tracks the live API, not the cached HTML. Costs one call to the
+    // already-dynamic /hitrate route per load.
+    refetchOnMount: hasLiveLines ? 'always' : true,
   });
 }

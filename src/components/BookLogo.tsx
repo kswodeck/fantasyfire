@@ -64,6 +64,7 @@ export function BookLogo({
           width={size}
           height={size}
           loading="lazy"
+          decoding="async"
           className="absolute inset-0 h-full w-full object-contain"
           style={{ opacity: loaded ? 1 : 0 }}
           onLoad={(e) => {

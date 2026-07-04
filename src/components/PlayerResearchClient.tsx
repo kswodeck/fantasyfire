@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { usePathname, useRouter } from 'next/navigation';
 import type { PlayerResearch } from '@/lib/types';
 import { STAT_DEFS, statKeysForSport, altLineTable, type StatKey } from '@/lib/stats';
@@ -14,18 +15,12 @@ import { LineInput } from './LineInput';
 import { OddsInputs } from './OddsInputs';
 import { FairPriceReadout } from './FairPriceReadout';
 import { HitRateCard } from './HitRateCard';
-import { AltLineExplorer } from './AltLineExplorer';
-import { GameBarChart } from './GameBarChart';
-import { DvpBlock } from './DvpBlock';
 import { WhyReadout } from './WhyReadout';
 import { ParkFactorNote } from './ParkFactorNote';
 import { VerdictPanel } from './VerdictPanel';
 import { AvailabilityBanner } from './AvailabilityBanner';
 import { MarketEdgePanel } from './MarketEdgePanel';
 import { SavePropControl } from './SavePropControl';
-import { SplitsPanel } from './SplitsPanel';
-import { TeammateSplitsPanel } from './TeammateSplitsPanel';
-import { LineValueTable } from './LineValueTable';
 import { SourceSelector } from './SourceSelector';
 import { VariantLadder } from './VariantLadder';
 import { VariantChips } from './VariantChips';
@@ -33,6 +28,22 @@ import { PayoutBadge } from './PayoutBadge';
 import { useSelectedSource } from './SelectedSourceProvider';
 import { sourceLabel } from '@/lib/providedSources';
 import { isOverOnly } from '@/lib/payoutVariant';
+
+// Below-the-fold panels are code-split so the verdict above the fold hydrates
+// without their JS. They still render on the server (SSR HTML is unchanged for
+// SEO); only the client chunks load lazily.
+const AltLineExplorer = dynamic(() =>
+  import('./AltLineExplorer').then((m) => m.AltLineExplorer),
+);
+const GameBarChart = dynamic(() => import('./GameBarChart').then((m) => m.GameBarChart));
+const DvpBlock = dynamic(() => import('./DvpBlock').then((m) => m.DvpBlock));
+const SplitsPanel = dynamic(() => import('./SplitsPanel').then((m) => m.SplitsPanel));
+const TeammateSplitsPanel = dynamic(() =>
+  import('./TeammateSplitsPanel').then((m) => m.TeammateSplitsPanel),
+);
+const LineValueTable = dynamic(() =>
+  import('./LineValueTable').then((m) => m.LineValueTable),
+);
 
 /** Sanitize raw odds: treat 0 / non-finite as "not entered". */
 function cleanOdds(x: number | null): number | null {
@@ -125,6 +136,7 @@ export function PlayerResearchClient({
     line,
     source,
     initialData: isInitialKey ? initialResearch : undefined,
+    hasLiveLines: availableSources.length > 0,
   });
   const data = query.data ?? initialResearch;
 
@@ -371,7 +383,7 @@ export function PlayerResearchClient({
       {/* Odds -> fair price */}
       <section className="mb-6 space-y-4 rounded-xl border border-line bg-surface-2 p-4">
         <div>
-          <h3 className="text-sm font-semibold">Fair-price calculator</h3>
+          <h2 className="text-sm font-semibold">Fair-price calculator</h2>
           <p className="mt-1 text-xs text-muted">
             Enter the book&apos;s American odds to see implied probability, the no-vig
             fair price, and the edge vs. this player&apos;s season hit rate.

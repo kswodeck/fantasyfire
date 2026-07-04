@@ -49,12 +49,15 @@ function KindMenu({ filter }: { filter: BoardPayoutFilter }) {
 
   return (
     <div ref={rootRef} className="relative inline-flex items-center gap-2 text-xs">
-      <span className="text-muted">Lines</span>
+      <span aria-hidden="true" className="text-muted">
+        Lines
+      </span>
       <button
         type="button"
         aria-haspopup="true"
         aria-expanded={open}
-        aria-controls={menuId}
+        aria-controls={open ? menuId : undefined}
+        aria-label={`Lines: ${kindSummary(filter.kindOptions, filter.selectedKinds)}`}
         onClick={() => setOpen((o) => !o)}
         className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-2"
       >
@@ -66,6 +69,8 @@ function KindMenu({ filter }: { filter: BoardPayoutFilter }) {
       {open && (
         <div
           id={menuId}
+          role="group"
+          aria-label="Line kinds"
           className="absolute left-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-xl border border-line bg-surface p-1 shadow-xl shadow-black/40"
         >
           {filter.kindOptions.map((k) => {

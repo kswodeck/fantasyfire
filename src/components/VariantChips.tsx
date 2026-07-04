@@ -4,8 +4,9 @@ import type { ProvidedVariant } from '@/lib/types';
 import { PayoutGlyph, formatMultiplier } from './PayoutBadge';
 import { payoutKind, shownBreakeven, type PayoutKind } from '@/lib/payoutVariant';
 
+// min-h/min-w-6 (24px) keeps these tiny chips at the WCAG 2.5.8 minimum target size.
 const CHIP =
-  'inline-flex cursor-pointer items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold leading-none transition-colors';
+  'inline-flex min-h-6 min-w-6 cursor-pointer items-center justify-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold leading-none transition-colors';
 
 function rungsOfKind(variants: ProvidedVariant[], kind: PayoutKind): ProvidedVariant[] {
   return variants.filter((v) => payoutKind(v.oddsType) === kind).sort((a, b) => a.line - b.line);
@@ -79,6 +80,8 @@ export function VariantChips({
         type="button"
         onClick={() => pickKind(kind)}
         aria-pressed={active}
+        // The chip is icon-only; title text is too verbose (and unreliable) as a name.
+        aria-label={kind === 'demon' ? 'Demon line — pays more' : 'Goblin line — pays less'}
         title={`${
           kind === 'demon'
             ? 'Demon — harder line, pays more (over only).'
@@ -112,6 +115,9 @@ export function VariantChips({
         type="button"
         onClick={() => pickKind('alternate')}
         aria-pressed={active}
+        aria-label={`Alternate line${
+          shown?.multiplier != null ? ` — ${formatMultiplier(shown.multiplier)} payout` : ''
+        }`}
         title={`Alternate line${shown?.multiplier != null ? ` — ${formatMultiplier(shown.multiplier)} payout` : ''} (over only).${altBk} ${
           rungs.length > 1
             ? 'Click to cycle the alternate ladder, then back to the standard line.'

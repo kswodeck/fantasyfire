@@ -24,7 +24,10 @@ export function BoardTable({
   showSport?: boolean;
 }) {
   return (
-    <ol className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+    <ol
+      aria-label="Ranked player prop reads"
+      className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface"
+    >
       {rows.map((r) => {
         const initialLine = initialLines?.get(`${r.player.slug}:${r.stat}`);
         return (

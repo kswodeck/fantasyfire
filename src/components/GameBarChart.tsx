@@ -47,6 +47,17 @@ export function GameBarChart({
   const y = (v: number) => baselineY - (v / yMax) * plotH;
   const lineY = y(line);
 
+  // Text alternative: per-bar values only live in hover <title> tooltips, which
+  // keyboard/AT users can't reach, so the chart's accessible name carries the
+  // tally and the value sequence.
+  const overs = chronological.filter((p) => p.result === 'over').length;
+  const unders = chronological.filter((p) => p.result === 'under').length;
+  const pushes = n - overs - unders;
+  const chartLabel =
+    `Last ${n} games ${statShort} versus a line of ${line}: ` +
+    `${overs} over, ${unders} under${pushes > 0 ? `, ${pushes} push` : ''}. ` +
+    `Values oldest to newest: ${chronological.map((p) => p.value).join(', ')}.`;
+
   return (
     <figure className="rounded-xl border border-line bg-surface p-4">
       {/* Scroll horizontally on narrow screens instead of scaling the whole chart down to
@@ -58,7 +69,7 @@ export function GameBarChart({
           height={height}
           className="block max-w-none"
           role="img"
-          aria-label={`Last ${n} games ${statShort} versus a line of ${line}`}
+          aria-label={chartLabel}
         >
         {/* Line marker */}
         <line

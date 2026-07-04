@@ -22,7 +22,7 @@ export function TeammateSplitsPanel({
       aria-label="With a teammate out"
       className="mb-6 rounded-xl border border-line bg-surface p-4"
     >
-      <h3 className="text-sm font-semibold">With a teammate out</h3>
+      <h2 className="text-sm font-semibold">With a teammate out</h2>
       <p className="mt-1 text-xs text-muted">
         How this {statShort} line has shifted when an injured teammate sits — usage often rises.
         Descriptive splits from past games, not a forecast.

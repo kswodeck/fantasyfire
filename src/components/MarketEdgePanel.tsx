@@ -32,12 +32,12 @@ export function MarketEdgePanel({
   return (
     <div className="rounded-xl border border-line bg-surface p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 className="flex items-center gap-2 text-sm font-semibold">
+        <h2 className="flex items-center gap-2 text-sm font-semibold">
           Market edge
           <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted">
             auto
           </span>
-        </h3>
+        </h2>
         <span className="text-xs text-muted">
           {consensus.bookCount} book{consensus.bookCount === 1 ? '' : 's'} @ {consensus.line}{' '}
           {statShort}

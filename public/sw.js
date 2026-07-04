@@ -3,12 +3,13 @@
  * Uses the Cache API only (no localStorage for app state). The API + URL stay
  * the source of truth (PLAN §3b #8); caches are disposable.
  */
-const VERSION = 'ff-v1';
+const VERSION = 'ff-v2';
 const STATIC_CACHE = `${VERSION}-static`;
 const PAGE_CACHE = `${VERSION}-pages`;
+const OFFLINE_URL = '/offline';
 const PRECACHE = [
   '/',
-  '/players',
+  OFFLINE_URL,
   '/manifest.webmanifest',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
@@ -16,10 +17,13 @@ const PRECACHE = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches
-      .open(STATIC_CACHE)
-      .then((cache) => cache.addAll(PRECACHE))
-      .then(() => self.skipWaiting()),
+    (async () => {
+      const cache = await caches.open(STATIC_CACHE);
+      // Precache each URL independently — cache.addAll() rejects wholesale if a
+      // single request fails, which would leave the SW permanently uninstalled.
+      await Promise.allSettled(PRECACHE.map((url) => cache.add(url)));
+      await self.skipWaiting();
+    })(),
   );
 });
 
@@ -110,7 +114,7 @@ async function cacheFirst(request, cacheName) {
   return cached || (await network) || fetch(request);
 }
 
-// Network-first, falling back to cache (or the cached home shell) when offline.
+// Network-first, falling back to cache, then the offline shell, when offline.
 async function networkFirst(request, cacheName) {
   const cache = await caches.open(cacheName);
   try {
@@ -118,6 +122,11 @@ async function networkFirst(request, cacheName) {
     return putIfOk(cache, request, res);
   } catch {
     const cached = await cache.match(request);
-    return cached || (await caches.match('/')) || Response.error();
+    return (
+      cached ||
+      (await caches.match(OFFLINE_URL)) ||
+      (await caches.match('/')) ||
+      Response.error()
+    );
   }
 }

@@ -69,7 +69,10 @@ export function TrendBoardTable({
   showSport?: boolean;
 }) {
   return (
-    <ol className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+    <ol
+      aria-label="Ranked player trend reads"
+      className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface"
+    >
       {rows.map((r) => {
         const initialLine = initialLines?.get(`${r.player.slug}:${r.stat}`) ?? r.line;
         return (
@@ -174,7 +177,7 @@ function TrendRowCard({
           {Math.round(d.recentRate * d.recentGames)} of {d.recentGames}
         </div>
         <div className="text-[11px] tabular-nums text-muted">
-          {pct(d.recentRate)} <span className="text-muted/80">L10</span>
+          {pct(d.recentRate)} <span className="text-muted">L10</span>
           <span className="hidden sm:inline"> · vs {pct(d.seasonRate)} season</span>
         </div>
         {streakSample && (
