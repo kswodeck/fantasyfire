@@ -23,6 +23,8 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
   subsets: ['latin'],
+  // Only used inside the Embed modal — never above the fold, so skip the preload.
+  preload: false,
 });
 
 export const metadata: Metadata = {
@@ -102,6 +104,14 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        {/* Warm up the player-art CDNs so the LCP headshot doesn't pay DNS+TLS
+            setup on top of the download (hosts are already CSP img-src allowed). */}
+        <link rel="preconnect" href="https://cdn.nba.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://a.espncdn.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://midfield.mlbstatic.com" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://icons.duckduckgo.com" />
+      </head>
       <body className="flex min-h-full flex-col">
         {/* Apply the saved theme before paint (no flash). With no saved choice the
             CSS color-scheme: light dark follows the OS automatically. */}

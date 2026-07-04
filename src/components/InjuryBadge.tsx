@@ -24,10 +24,11 @@ export function InjuryBadge({
   return (
     <span
       title={injuryTooltip(injury)}
-      aria-label={`Injury status: ${injuryTooltip(injury)}`}
       className={`inline-flex shrink-0 items-center rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold leading-none ${TONE_CLASS[tone]} ${className}`}
     >
       <span aria-hidden>{abbr}</span>
+      {/* sr-only text (not aria-label — unreliable on plain spans) so AT hears
+          the status once, spelled out. */}
       <span className="sr-only">{label}</span>
     </span>
   );

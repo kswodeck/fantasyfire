@@ -15,12 +15,16 @@ export function PlayerAvatar({
   name,
   size = 44,
   ring,
+  priority = false,
 }: {
   sport: Sport;
   externalId: number;
   name: string;
   size?: number;
   ring?: string;
+  /** Set on the page-header avatar (the likely LCP element) so it loads eagerly
+   *  at high priority; list/row avatars keep lazy loading. */
+  priority?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
   const dim = { width: size, height: size, minWidth: size };
@@ -51,7 +55,9 @@ export function PlayerAvatar({
       alt={name}
       width={size}
       height={size}
-      loading="lazy"
+      loading={priority ? 'eager' : 'lazy'}
+      fetchPriority={priority ? 'high' : undefined}
+      decoding="async"
       onError={() => setFailed(true)}
       className="shrink-0 rounded-full bg-surface-2 object-cover"
       style={{ ...dim, ...ringStyle, objectPosition: 'center 18%' }}

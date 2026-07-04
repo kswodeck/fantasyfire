@@ -7,7 +7,10 @@ import { TeamLogo } from './TeamLogo';
 /** A full team ranking of how much of a stat each team allows (rank 1 = most). */
 export function DvpTable({ sport, rows, unit }: { sport: Sport; rows: DvpTableRow[]; unit: string }) {
   return (
-    <ol className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+    <ol
+      aria-label={`Team ranking by ${unit} allowed — rank 1 allows the most`}
+      className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface"
+    >
       {rows.map((r) => (
         <li key={r.teamAbbreviation} className="flex items-center gap-2 px-3 py-2.5 sm:gap-3">
           <span className="w-5 shrink-0 text-right text-xs tabular-nums text-muted">{r.rank}</span>
@@ -24,6 +27,8 @@ export function DvpTable({ sport, rows, unit }: { sport: Sport; rows: DvpTableRo
           </div>
           <span
             title="Matchup grade — A is the softest, F the toughest"
+            // title alone isn't reliably exposed to AT on a non-interactive span
+            aria-label={`matchup grade ${r.grade}`}
             className={`w-7 shrink-0 text-right text-sm font-bold ${gradeTextClass(r.grade)}`}
           >
             {r.grade}

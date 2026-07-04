@@ -81,7 +81,7 @@ export function DvpBlock({
   const content = (
     <>
       <div className="flex items-start justify-between gap-2">
-        <h3 className="flex min-w-0 items-center gap-1.5 text-sm font-medium text-muted">
+        <h2 className="flex min-w-0 items-center gap-1.5 text-sm font-medium text-muted">
           <TeamLogo
             sport={sport}
             externalId={opponentExternalId}
@@ -94,10 +94,10 @@ export function DvpBlock({
               →
             </span>
           )}
-        </h3>
+        </h2>
         <div className="flex shrink-0 flex-col items-end gap-0.5 text-xs leading-tight text-muted">
           {matchupDate && <span>{formatIsoDate(matchupDate)}</span>}
-          <MatchupTime iso={matchupStartTime} className="tabular-nums text-muted/85" />
+          <MatchupTime iso={matchupStartTime} className="tabular-nums text-muted" />
         </div>
       </div>
 

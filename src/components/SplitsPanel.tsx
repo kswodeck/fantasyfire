@@ -45,7 +45,7 @@ export function SplitsPanel({
       aria-label="Situational splits"
       className="mb-6 rounded-xl border border-line bg-surface-2 p-4"
     >
-      <h3 className="text-sm font-semibold">Situational splits</h3>
+      <h2 className="text-sm font-semibold">Situational splits</h2>
       <p className="mt-1 text-xs text-muted">
         Over {line} {statShort}{' '}by situation, each with its own confidence — thin splits read Low,
         so a small-sample &ldquo;crushes at home&rdquo; doesn&rsquo;t masquerade as an edge.

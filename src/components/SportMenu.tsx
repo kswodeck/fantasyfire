@@ -49,9 +49,9 @@ export function SportMenu({ sport }: { sport: Sport }) {
     >
       <Link
         href={`/${sport}`}
-        aria-haspopup="menu"
+        aria-haspopup="true"
         aria-expanded={open}
-        aria-controls={menuId}
+        aria-controls={open ? menuId : undefined}
         className={`flex items-center gap-1 transition-colors hover:text-foreground ${
           active ? 'text-foreground' : ''
         }`}
@@ -69,10 +69,12 @@ export function SportMenu({ sport }: { sport: Sport }) {
         </svg>
       </Link>
 
+      {/* Disclosure of plain links, NOT role="menu" — declaring menu semantics
+          without arrow-key/roving-focus support breaks the ARIA contract, and
+          Tab-through links is exactly what this is. */}
       {open && (
         <div
           id={menuId}
-          role="menu"
           aria-label={`${name} sections`}
           className="absolute right-0 top-full z-30 pt-2"
         >
@@ -81,7 +83,6 @@ export function SportMenu({ sport }: { sport: Sport }) {
               <Link
                 key={s.seg}
                 href={sectionHref(sport, s.seg)}
-                role="menuitem"
                 onClick={() => setOpen(false)}
                 className="block px-3 py-2 transition-colors hover:bg-surface-2"
               >

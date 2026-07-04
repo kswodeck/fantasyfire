@@ -35,13 +35,18 @@ export function corsHeaders(origin: string | null): Record<string, string> {
 /** JSON response with CORS headers derived from the request's Origin. */
 export function jsonResponse(
   data: unknown,
-  opts: { status?: number; request: Request },
+  opts: { status?: number; request: Request; cacheSeconds?: number },
 ): Response {
   const origin = opts.request.headers.get('origin');
-  return Response.json(data, {
-    status: opts.status ?? 200,
-    headers: corsHeaders(origin),
-  });
+  const headers: Record<string, string> = corsHeaders(origin);
+  // Short shared-cache window for read-only live routes: the CDN coalesces
+  // identical requests (including the post-hydration refetch) while the route
+  // itself stays force-dynamic.
+  if (opts.cacheSeconds && (opts.status ?? 200) === 200) {
+    headers['Cache-Control'] =
+      `public, s-maxage=${opts.cacheSeconds}, stale-while-revalidate=${opts.cacheSeconds * 5}`;
+  }
+  return Response.json(data, { status: opts.status ?? 200, headers });
 }
 
 /** Standard 204 preflight response. */

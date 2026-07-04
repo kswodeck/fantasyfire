@@ -45,8 +45,16 @@ export function LineValueTable({
         a discount — the best one lifts the FireFactor read.
         {selectable.size > 0 && <> Click a book to switch the whole read to it.</>}
       </p>
-      <ol className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
-        <li className="flex items-center gap-3 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+      <ol
+        aria-label={`Line shopping across books for ${statShort}`}
+        className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface"
+      >
+        {/* Visual column headers only — each row carries its own sr-only labels,
+            so AT users hear "line 25.5, over rate 62%" instead of bare numbers. */}
+        <li
+          aria-hidden="true"
+          className="flex items-center gap-3 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted"
+        >
           <span className="flex-1">Book</span>
           <span className="w-10 text-right">Line</span>
           <span className="w-14 text-right">{sideWord} rate</span>
@@ -75,11 +83,16 @@ export function LineValueTable({
                   </span>
                 )}
               </span>
-              <span className="w-10 shrink-0 text-right tabular-nums">{b.line}</span>
+              <span className="w-10 shrink-0 text-right tabular-nums">
+                <span className="sr-only">line </span>
+                {b.line}
+              </span>
               <span className="w-14 shrink-0 text-right tabular-nums text-muted">
+                <span className="sr-only">{sideWord} rate </span>
                 {pct(b.sideHitRate)}
               </span>
               <span className={`w-16 shrink-0 text-right font-semibold tabular-nums ${edgeCls}`}>
+                <span className="sr-only">edge </span>
                 {b.edge > 0 ? '+' : ''}
                 {Math.round(b.edge * 100)}
               </span>

@@ -31,10 +31,10 @@ export function AltLineExplorer({
     <section aria-labelledby="alt-lines-heading" className="mb-6">
       <div className="rounded-xl border border-line bg-surface-2 p-4">
         <div className="mb-3">
-          <h3 id="alt-lines-heading" className="text-sm font-semibold">
+          <h2 id="alt-lines-heading" className="text-sm font-semibold">
             Alternate lines
             {statLabel && <span className="font-normal text-muted"> — {statLabel} ({statShort})</span>}
-          </h3>
+          </h2>
           <p className="mt-1 text-xs text-muted">
             {statShort} over rate across nearby lines ({windowLabel}) — find where the
             edge holds or flips. The bar shows the 95% Wilson interval; the dot is the

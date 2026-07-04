@@ -95,6 +95,14 @@ const nextConfig: NextConfig = {
           { key: 'Content-Type', value: 'application/javascript; charset=utf-8' },
         ],
       },
+      // Icons are stable, unfingerprinted assets — let browsers/CDN hold them a
+      // day and serve stale for a week while revalidating.
+      {
+        source: '/icons/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=86400, stale-while-revalidate=604800' },
+        ],
+      },
     ];
   },
   async redirects() {

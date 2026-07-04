@@ -25,6 +25,7 @@ export function MobileNav() {
   const pathname = usePathname();
   const panelId = useId();
   const panelRef = useRef<HTMLElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   // Route changed (a link was tapped, or browser back/forward) → close.
   useEffect(() => {
@@ -37,11 +38,34 @@ export function MobileNav() {
   // desktop nav takes over and this control is hidden).
   useEffect(() => {
     if (!open) return;
+    const trigger = triggerRef.current;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     panelRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') {
+        setOpen(false);
+        return;
+      }
+      // Keep Tab cycling inside the panel — it overlays the page like a modal,
+      // so walking out into the dimmed background strands keyboard users.
+      if (e.key === 'Tab' && panelRef.current) {
+        const focusables = panelRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled])',
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        const active = document.activeElement;
+        const inside = panelRef.current.contains(active);
+        if (e.shiftKey && (active === first || !inside)) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && (active === last || !inside)) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     };
     const mq = window.matchMedia('(min-width: 640px)');
     const onBreakpoint = () => {
@@ -53,6 +77,8 @@ export function MobileNav() {
       document.body.style.overflow = prevOverflow;
       document.removeEventListener('keydown', onKey);
       mq.removeEventListener('change', onBreakpoint);
+      // Return focus to the hamburger so closing doesn't drop focus to <body>.
+      trigger?.focus();
     };
   }, [open]);
 
@@ -63,10 +89,10 @@ export function MobileNav() {
   return (
     <>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        aria-haspopup="menu"
         aria-controls={open ? panelId : undefined}
         aria-label={open ? 'Close menu' : 'Open menu'}
         className="-mr-1 inline-flex h-9 w-9 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
@@ -147,6 +173,7 @@ export function MobileNav() {
                           type="button"
                           onClick={() => setExpanded(isOpen ? null : s)}
                           aria-expanded={isOpen}
+                          aria-controls={isOpen ? `${panelId}-${s}` : undefined}
                           aria-label={`${name} sections`}
                           className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
                         >
@@ -169,7 +196,7 @@ export function MobileNav() {
                         </button>
                       </div>
                       {isOpen && (
-                        <ul className="pb-1 pl-3">
+                        <ul id={`${panelId}-${s}`} className="pb-1 pl-3">
                           {sportSections(s).map((sec) => {
                             const href = sectionHref(s, sec.seg);
                             const secActive = pathname === href;

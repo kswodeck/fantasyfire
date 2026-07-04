@@ -32,7 +32,9 @@ export function SourceSelector({
       <span className="font-semibold uppercase tracking-wide" style={{ display: 'none' }}>
         {label}
       </span>
-      <span className="relative inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-lg border border-line bg-surface py-2 pl-2.5 pr-8 transition-colors hover:border-brand/60 focus-within:border-brand active:bg-surface-2">
+      {/* The focusable <select> is opacity-0, so the global :focus-visible ring is
+          invisible on it — draw the 2px ring on the wrapper via focus-within instead. */}
+      <span className="relative inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-lg border border-line bg-surface py-2 pl-2.5 pr-8 transition-colors hover:border-brand/60 focus-within:border-brand focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand active:bg-surface-2">
         <BookLogo source={value} size={22} />
         <span className="text-base font-medium text-foreground">{sourceLabel(value)}</span>
         <svg

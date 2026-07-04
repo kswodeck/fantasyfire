@@ -22,18 +22,47 @@ export function EmbedButton({
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const snippet = `<iframe src="${origin}/embed/${sport}/${slug}" width="380" height="250" style="border:0;border-radius:14px;max-width:100%" loading="lazy" title="FantasyFire hit-rate card"></iframe>`;
 
   useEffect(() => {
     if (!open) return;
+    const trigger = triggerRef.current;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') {
+        setOpen(false);
+        return;
+      }
+      // aria-modal only hints to AT — the browser still Tabs out of the dialog
+      // into the page behind it unless we cycle focus ourselves.
+      if (e.key === 'Tab' && dialogRef.current) {
+        const focusables = dialogRef.current.querySelectorAll<HTMLElement>(
+          'button, textarea, [href]',
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        const active = document.activeElement;
+        const inside = dialogRef.current.contains(active);
+        if (e.shiftKey && (active === first || !inside)) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && (active === last || !inside)) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     };
     window.addEventListener('keydown', onKey);
     taRef.current?.select();
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      // Hand focus back to the trigger so closing doesn't strand keyboard users.
+      trigger?.focus();
+    };
   }, [open]);
 
   async function copy() {
@@ -49,6 +78,7 @@ export function EmbedButton({
   return (
     <>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => {
           setOpen(true);
@@ -73,6 +103,7 @@ export function EmbedButton({
           onClick={() => setOpen(false)}
         >
           <div
+            ref={dialogRef}
             className="w-full max-w-md rounded-2xl border border-line bg-surface p-5 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
@@ -104,7 +135,7 @@ export function EmbedButton({
                 onClick={copy}
                 className="rounded-full bg-brand px-4 py-2 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90"
               >
-                {copied ? '✓ Copied' : 'Copy snippet'}
+                <span role="status">{copied ? '✓ Copied' : 'Copy snippet'}</span>
               </button>
             </div>
           </div>

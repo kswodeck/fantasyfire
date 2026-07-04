@@ -107,6 +107,7 @@ export function ListFilters({
       {hasProps ? (
         <MultiSelectMenu
           label=""
+          ariaLabel="Filter by prop type"
           caption={propsCaption(statOptions, stats)}
           options={statOptions.map((k) => ({
             value: k,
@@ -162,12 +163,13 @@ export function ListFilters({
               onLeanChange?.('');
               onClearStats?.();
             }}
-            className="cursor-pointer rounded-lg text-sm font-medium text-brand transition-colors hover:text-brand-strong"
+            className="min-h-6 cursor-pointer rounded-lg px-1 text-sm font-medium text-brand transition-colors hover:text-brand-strong"
           >
             Clear
           </button>
         )}
-        <span className="text-xs tabular-nums text-muted">
+        {/* role="status" announces the new count to screen readers on filter change */}
+        <span role="status" className="text-xs tabular-nums text-muted">
           {resultCount === totalCount
             ? `${totalCount} ${noun}`
             : `${resultCount} of ${totalCount} ${noun}`}

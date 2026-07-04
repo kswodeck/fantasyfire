@@ -6,7 +6,7 @@
 export function WhyReadout({ text }: { text: string }) {
   return (
     <div className="rounded-xl border border-line bg-surface-2 p-4">
-      <h3 className="mb-2 text-sm font-semibold">The read</h3>
+      <h2 className="mb-2 text-sm font-semibold">The read</h2>
       <p className="text-sm leading-relaxed text-muted">{text}</p>
     </div>
   );

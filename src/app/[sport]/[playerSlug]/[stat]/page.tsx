@@ -159,6 +159,7 @@ export default async function PlayerStatPage({ params }: PageProps) {
             name={player.fullName}
             size={72}
             ring={team.primary}
+            priority
           />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 text-sm text-muted">

@@ -51,8 +51,14 @@ export function PushOptIn() {
 
   if (state === 'subscribed') {
     return (
-      <div className="mt-6 flex items-center justify-between gap-3 rounded-xl border border-line bg-over-soft p-4 text-sm">
-        <span>🔔 You&rsquo;ll get a heads-up when a saved player turns Blazing or Frozen.</span>
+      <div
+        role="status"
+        className="mt-6 flex items-center justify-between gap-3 rounded-xl border border-line bg-over-soft p-4 text-sm"
+      >
+        <span>
+          <span aria-hidden="true">🔔 </span>
+          You&rsquo;ll get a heads-up when a saved player turns Blazing or Frozen.
+        </span>
         <button
           type="button"
           onClick={disable}
@@ -88,7 +94,13 @@ export function PushOptIn() {
         disabled={busy}
         className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-brand px-4 py-2 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
       >
-        {busy ? 'Enabling…' : '🔔 Enable heat alerts'}
+        {busy ? (
+          'Enabling…'
+        ) : (
+          <>
+            <span aria-hidden="true">🔔</span> Enable heat alerts
+          </>
+        )}
       </button>
     </div>
   );

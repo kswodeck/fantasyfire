@@ -18,7 +18,10 @@ export function SiteHeader() {
         </Link>
 
         {/* Desktop / tablet (sm+): inline nav with hover menus. */}
-        <nav className="hidden items-center gap-4 text-sm text-muted sm:flex sm:gap-5">
+        <nav
+          aria-label="Primary"
+          className="hidden items-center gap-4 text-sm text-muted sm:flex sm:gap-5"
+        >
           <Link href="/" className="transition-colors hover:text-foreground">
             Home
           </Link>
@@ -29,7 +32,6 @@ export function SiteHeader() {
             href="/playbook"
             className="transition-colors hover:text-foreground"
             title="My Playbook"
-            aria-label="My Playbook"
           >
             <span aria-hidden="true">★</span>
             <span className="sr-only">My Playbook</span>

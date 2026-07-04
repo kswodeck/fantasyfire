@@ -80,24 +80,32 @@ export async function getAllSportsBoard(): Promise<AllSportsBoard> {
 
   // Per sport: its real-book boards when any book is ingested, else its median board
   // (mirrors the single-sport Heat Check page's source/median split).
+  // One concurrent phase per sport: board/source loads and the slate (for the
+  // "Today only" switch) run together instead of the slate waiting in a second wave.
   const perSport = await Promise.all(
     active.map(async (sport) => {
-      const sources = await getAvailableSources(sport).catch((): string[] => []);
-      if (sources.length > 0) {
-        const bySource = await getSourcedBoards(sport, sources, {
-          limit: 150,
-          perStatCap: 30,
-        }).catch((): Record<string, BoardRow[]> => ({}));
-        return { sources, bySource, median: [] as BoardRow[] };
-      }
-      const median = await getBoard(sport, { limit: 150, perStatCap: 30 }).catch(
-        (): BoardRow[] => [],
-      );
-      return {
-        sources: [] as string[],
-        bySource: {} as Record<string, BoardRow[]>,
-        median,
-      };
+      const [boards, slate] = await Promise.all([
+        (async () => {
+          const sources = await getAvailableSources(sport).catch((): string[] => []);
+          if (sources.length > 0) {
+            const bySource = await getSourcedBoards(sport, sources, {
+              limit: 150,
+              perStatCap: 30,
+            }).catch((): Record<string, BoardRow[]> => ({}));
+            return { sources, bySource, median: [] as BoardRow[] };
+          }
+          const median = await getBoard(sport, { limit: 150, perStatCap: 30 }).catch(
+            (): BoardRow[] => [],
+          );
+          return {
+            sources: [] as string[],
+            bySource: {} as Record<string, BoardRow[]>,
+            median,
+          };
+        })(),
+        getTonightSlate(sport).catch(() => ({ games: [] as { home: { abbr: string | null }; away: { abbr: string | null } }[] })),
+      ]);
+      return { sport, ...boards, slate };
     }),
   );
 
@@ -110,19 +118,14 @@ export async function getAllSportsBoard(): Promise<AllSportsBoard> {
 
   // Each sport's slate teams (today; this week for NFL) for the "Today only" switch.
   const todayTeamsBySport: Record<string, string[]> = {};
-  await Promise.all(
-    active.map(async (sport) => {
-      const slate = await getTonightSlate(sport).catch(() => ({ games: [] }));
-      const teams = [
-        ...new Set(
-          slate.games
-            .flatMap((g) => [g.home.abbr, g.away.abbr])
-            .filter((a): a is string => !!a),
-        ),
-      ];
-      if (teams.length > 0) todayTeamsBySport[sport] = teams;
-    }),
-  );
+  for (const { sport, slate } of perSport) {
+    const teams = [
+      ...new Set(
+        slate.games.flatMap((g) => [g.home.abbr, g.away.abbr]).filter((a): a is string => !!a),
+      ),
+    ];
+    if (teams.length > 0) todayTeamsBySport[sport] = teams;
+  }
 
   return { boardsBySource, sources, medianRows, todayTeamsBySport, anyUpcoming: true };
 }

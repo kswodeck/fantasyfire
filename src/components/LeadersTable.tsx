@@ -17,7 +17,10 @@ export function LeadersTable({
   unit: string;
 }) {
   return (
-    <ol className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+    <ol
+      aria-label={`Season per-game leaders — ${unit}`}
+      className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface"
+    >
       {rows.map((r) => {
         const team = getTeam(sport, r.player.teamAbbreviation);
         return (

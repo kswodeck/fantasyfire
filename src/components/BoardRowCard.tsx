@@ -128,7 +128,7 @@ export function BoardRowCard({
       </div>
       <div className={`shrink-0 text-right transition-opacity ${loading ? 'opacity-40' : ''}`}>
         <div className={`flex items-center justify-end gap-1 text-sm font-semibold ${tierTextClass(fireScore.tier, fireScore.side)}`}>
-          <LeanArrow tier={fireScore.tier} side={fireScore.side} size={15} />
+          <LeanArrow tier={fireScore.tier} side={fireScore.side} size={15} decorative />
           {heatLabel(fireScore.tier, fireScore.side)}
         </div>
         {/* Abbreviate on narrow screens (< md) so the row's left text truncates less. */}

@@ -44,7 +44,8 @@ export function ShareButton({ title, className = '' }: { title?: string; classNa
       }
     >
       <span aria-hidden="true">{copied ? '✓' : '↗'}</span>
-      <span>{copied ? 'Copied' : 'Share'}</span>
+      {/* role="status" so the copy confirmation is announced, not just shown */}
+      <span role="status">{copied ? 'Copied' : 'Share'}</span>
     </button>
   );
 }
