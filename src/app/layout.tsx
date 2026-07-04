@@ -52,6 +52,13 @@ export const metadata: Metadata = {
   ...(googleVerification ? { verification: { google: googleVerification } } : {}),
   robots: { index: true, follow: true },
   manifest: '/manifest.webmanifest',
+  // iOS home-screen install: proper standalone treatment and app title (iOS
+  // ignores most of the web manifest and reads these meta tags instead).
+  appleWebApp: {
+    capable: true,
+    title: SITE.name,
+    statusBarStyle: 'default',
+  },
   icons: {
     icon: [
       { url: '/icons/favicon-32.png', sizes: '32x32', type: 'image/png' },

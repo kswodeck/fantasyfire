@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { PlaybookClient } from '@/components/PlaybookClient';
 import { PushOptIn } from '@/components/PushOptIn';
+import { InstallPrompt } from '@/components/InstallPrompt';
 
 export const metadata: Metadata = {
   title: 'My Playbook',
@@ -26,6 +27,7 @@ export default function PlaybookPage() {
       </p>
       <PlaybookClient />
       <PushOptIn />
+      <InstallPrompt />
     </div>
   );
 }

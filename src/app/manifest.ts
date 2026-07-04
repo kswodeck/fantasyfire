@@ -50,5 +50,38 @@ export default function manifest(): MetadataRoute.Manifest {
         purpose: 'maskable',
       },
     ],
+    // Screenshots unlock the richer app-store-style install dialog in Chrome —
+    // one wide set for desktop, one narrow set for mobile. Labels double as
+    // alt text for the install UI.
+    screenshots: [
+      {
+        src: '/screenshots/home-wide.png',
+        sizes: '2560x1600',
+        type: 'image/png',
+        form_factor: 'wide',
+        label: 'FantasyFire home — sport hubs and today’s top reads',
+      },
+      {
+        src: '/screenshots/board-wide.png',
+        sizes: '2560x1600',
+        type: 'image/png',
+        form_factor: 'wide',
+        label: 'Heat Check — the strongest leans across every in-season league',
+      },
+      {
+        src: '/screenshots/home-narrow.png',
+        sizes: '780x1688',
+        type: 'image/png',
+        form_factor: 'narrow',
+        label: 'FantasyFire home — sport hubs and today’s top reads',
+      },
+      {
+        src: '/screenshots/board-narrow.png',
+        sizes: '780x1688',
+        type: 'image/png',
+        form_factor: 'narrow',
+        label: 'Heat Check — the strongest leans across every in-season league',
+      },
+    ],
   };
 }
