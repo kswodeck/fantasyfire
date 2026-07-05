@@ -20,7 +20,7 @@ import { sportMeshLinks } from '@/lib/relatedLinks';
 import { JsonLd } from '@/components/JsonLd';
 import { breadcrumbList, datasetNode, graph } from '@/lib/jsonLd';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
-import type { TrendRow } from '@/lib/types';
+import type { TonightGame, TrendRow } from '@/lib/types';
 
 export const revalidate = 21600; // 6h — board scans are egress-heavy; matches the lines refresh cadence
 export const dynamicParams = false;
@@ -63,26 +63,18 @@ export default async function TrendsPage({ params }: PageProps) {
   let rows: TrendRow[] = [];
   let bySource: Record<string, TrendRow[]> = {};
   let freshness: string | null = null;
-  let todayTeams: string[] = [];
+  let slate: { date: string | null; games: TonightGame[] } = { date: null, games: [] };
   try {
     if (!upcoming) {
       freshness = await getDataFreshness(sport);
     } else if (hasSources) {
       // One pool load → a trends board per book (vs that book's real lines).
-      let slate: { games: { home: { abbr: string | null }; away: { abbr: string | null } }[] };
       [bySource, freshness, slate] = await Promise.all([
         getSourcedTrends(sport, sources),
         getDataFreshness(sport),
-        getTonightSlate(sport).catch(() => ({ games: [] })),
+        getTonightSlate(sport).catch(() => ({ date: null, games: [] })),
       ]);
       rows = bySource[initialSource] ?? [];
-      todayTeams = [
-        ...new Set(
-          slate.games
-            .flatMap((g) => [g.home.abbr, g.away.abbr])
-            .filter((a): a is string => !!a),
-        ),
-      ];
     } else {
       [rows, freshness] = await Promise.all([
         getTrendBoard(sport),
@@ -142,7 +134,8 @@ export default async function TrendsPage({ params }: PageProps) {
             bySource={bySource}
             sources={sources}
             defaultSource={initialSource}
-            todayTeams={todayTeams}
+            games={slate.games}
+            slateDate={slate.date}
             slateWord={sport === 'nfl' ? 'This week' : 'Today'}
           />
         </div>
