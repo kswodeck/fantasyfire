@@ -78,13 +78,12 @@ async function ingestSport(
 async function main() {
   const selectTeams = (sport: Sport) =>
     db.team.findMany({ where: { sport }, select: { id: true, externalId: true, abbreviation: true } });
-  const [mlbTeams, nbaTeams, nflTeams, nhlTeams, wnbaTeams, eplTeams, mlsTeams] = await Promise.all([
+  const [mlbTeams, nbaTeams, nflTeams, nhlTeams, wnbaTeams, mlsTeams] = await Promise.all([
     selectTeams('mlb'),
     selectTeams('nba'),
     selectTeams('nfl'),
     selectTeams('nhl'),
     selectTeams('wnba'),
-    selectTeams('epl'),
     selectTeams('mls'),
   ]);
   type TeamRow = { id: number; externalId: number; abbreviation: string };
@@ -104,7 +103,6 @@ async function main() {
   };
   const nhlResolve = espnResolver(nhlTeams);
   const wnbaResolve = espnResolver(wnbaTeams);
-  const eplResolve = espnResolver(eplTeams);
   const mlsResolve = espnResolver(mlsTeams);
 
   const daily = slateDates(2);
@@ -116,7 +114,6 @@ async function main() {
   await ingestSport('nfl', fetchNflSchedule, (k) => nflByAbbr.get(k), weekly);
   await ingestSport('nhl', (d) => fetchEspnSchedule(ESPN_SPORT_PATH.nhl!, d), nhlResolve, daily);
   await ingestSport('wnba', (d) => fetchEspnSchedule(ESPN_SPORT_PATH.wnba!, d), wnbaResolve, daily);
-  await ingestSport('epl', (d) => fetchEspnSchedule(ESPN_SPORT_PATH.epl!, d), eplResolve, weekly);
   await ingestSport('mls', (d) => fetchEspnSchedule(ESPN_SPORT_PATH.mls!, d), mlsResolve, weekly);
 
   // Vegas odds (idea #4) from the ESPN scoreboard — for every sport, matched back to
@@ -126,7 +123,6 @@ async function main() {
   await ingestGameOdds('nfl', (k) => nflByAbbr.get(k), weekly);
   await ingestGameOdds('nhl', nhlResolve, daily);
   await ingestGameOdds('wnba', wnbaResolve, daily);
-  await ingestGameOdds('epl', eplResolve, weekly);
   await ingestGameOdds('mls', mlsResolve, weekly);
 
   // Prune games older than 3 days so the table stays small.

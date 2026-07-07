@@ -1,9 +1,9 @@
 // Multi-sport configuration. Sport keys are lowercase and used in URLs, the DB
 // `sport` column, and API paths. Framework-agnostic (no React/Next imports).
 
-export type Sport = 'nba' | 'mlb' | 'nfl' | 'nhl' | 'wnba' | 'epl' | 'mls';
+export type Sport = 'nba' | 'mlb' | 'nfl' | 'nhl' | 'wnba' | 'mls';
 
-export const SPORT_LIST: Sport[] = ['nba', 'mlb', 'nfl', 'nhl', 'wnba', 'epl', 'mls'];
+export const SPORT_LIST: Sport[] = ['nba', 'mlb', 'nfl', 'nhl', 'wnba', 'mls'];
 
 export interface SportConfig {
   key: Sport;
@@ -60,14 +60,6 @@ export const SPORTS: Record<Sport, SportConfig> = {
     tagline: 'Basketball player props — points, rebounds, assists, threes and more.',
     accent: '#be185d', // pink-700 — white CTA text clears AA
     accentDark: '#f472b6', // pink-400 — AA as text on the dark surfaces
-  },
-  epl: {
-    key: 'epl',
-    name: 'Premier League',
-    noun: 'players',
-    tagline: 'Soccer player props — shots, shots on target, goals and keeper saves.',
-    accent: '#6d28d9', // violet-700 — white CTA text clears AA
-    accentDark: '#a78bfa', // violet-400 — AA as text on the dark surfaces
   },
   mls: {
     key: 'mls',

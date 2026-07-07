@@ -70,7 +70,7 @@ export function posBucketLabel(sport: Sport, bucket: string | null | undefined):
   if (sport === 'nhl') {
     return bucket === 'G' ? 'goalies' : bucket === 'D' ? 'defensemen' : 'forwards';
   }
-  if (sport === 'epl' || sport === 'mls') {
+  if (sport === 'mls') {
     return bucket === 'G'
       ? 'goalkeepers'
       : bucket === 'D'
@@ -86,7 +86,7 @@ export function posBucketLabel(sport: Sport, bucket: string | null | undefined):
 export function positionFilterOptions(sport: Sport): FilterOption[] {
   if (sport === 'nba' || sport === 'wnba') return NBA_POSITIONS;
   if (sport === 'nhl') return NHL_POSITIONS;
-  if (sport === 'epl' || sport === 'mls') return SOCCER_POSITIONS;
+  if (sport === 'mls') return SOCCER_POSITIONS;
   const groups = sport === 'nfl' ? NFL_POSITION_GROUPS : MLB_POSITION_GROUPS;
   return groups.map(({ value, label }) => ({ value, label }));
 }
@@ -107,7 +107,7 @@ export function playerMatchesPosition(
     const p = (position ?? posBucket ?? '').toUpperCase();
     return p.includes(category); // category ∈ G | F | C
   }
-  if (sport === 'nhl' || sport === 'epl' || sport === 'mls') {
+  if (sport === 'nhl' || sport === 'mls') {
     // posBucket is authoritative (collapsed at ingest: F/D/G, F/M/D/G).
     return posBucket === category;
   }

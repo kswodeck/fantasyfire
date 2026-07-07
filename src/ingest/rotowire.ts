@@ -129,8 +129,7 @@ const RW_MARKET_MAP: Record<Sport, Record<string, StatKey>> = {
     Saves: 'saves',
     'Goals Against': 'ga',
   },
-  // RotoWire's soccer feed mixes competitions — not ingested for EPL/MLS.
-  epl: {},
+  // RotoWire's soccer feed mixes competitions — not ingested for MLS.
   mls: {},
 };
 

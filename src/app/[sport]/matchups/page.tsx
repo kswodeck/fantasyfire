@@ -46,7 +46,7 @@ const BASKETBALL_MATCHUPS = (league: 'NBA' | 'WNBA'): MatchupsConfig => ({
   description: `${league} defense vs position: which teams allow the most points, rebounds, assists and threes to guards, forwards and centers — ranked softest to toughest, from public box scores.`,
 });
 
-const SOCCER_MATCHUPS = (league: 'Premier League' | 'MLS'): MatchupsConfig => ({
+const SOCCER_MATCHUPS = (league: 'MLS'): MatchupsConfig => ({
   stats: ['shots', 'sot', 'goals', 'saves', 'ga'],
   positions: [
     { value: 'F', label: 'Forwards' },
@@ -113,7 +113,6 @@ const MATCHUPS: Record<Sport, MatchupsConfig> = {
     description:
       'NHL defense vs position: which teams give up the most shots on goal, points and goals to forwards and defensemen (and force the most goalie saves) — ranked softest to toughest, from public box scores.',
   },
-  epl: SOCCER_MATCHUPS('Premier League'),
   mls: SOCCER_MATCHUPS('MLS'),
 };
 

@@ -163,7 +163,7 @@ model PlayerGameStat {
   goalsAgainst Int?
   shotsAgainst Int? // NHL shots against / soccer shots faced
 
-  // Soccer (EPL/MLS, nullable) — goals/assists/saves shared above; fouls committed
+  // Soccer (MLS, nullable) — goals/assists/saves shared above; fouls committed
   // reuses the shared `fouls` column
   shots         Int?
   shotsOnTarget Int?

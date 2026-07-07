@@ -12,7 +12,6 @@ const MARQUEE: Record<Sport, StatKey> = {
   nfl: 'passYds',
   nhl: 'pts',
   wnba: 'pts',
-  epl: 'goals',
   mls: 'goals',
 };
 

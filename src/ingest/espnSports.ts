@@ -1,5 +1,5 @@
-// Generic ESPN hidden-API client for the ESPN-native sports (NHL / WNBA / EPL /
-// MLS) — the multi-sport sibling of src/ingest/nfl/client.ts. Everything comes
+// Generic ESPN hidden-API client for the ESPN-native sports (NHL / WNBA / MLS)
+// — the multi-sport sibling of src/ingest/nfl/client.ts. Everything comes
 // from site.api.espn.com: /teams (ids + names), /teams/{id}/roster (positions +
 // bios), and scoreboard -> summary (completed box scores). The three summary
 // shapes differ by sport family:
@@ -57,7 +57,6 @@ export function parseToiMinutes(s: string | undefined): number | null {
 export const ESPN_SPORT_PATH: Partial<Record<Sport, string>> = {
   nhl: 'hockey/nhl',
   wnba: 'basketball/wnba',
-  epl: 'soccer/eng.1',
   mls: 'soccer/usa.1',
 };
 
@@ -185,8 +184,8 @@ export async function fetchEspnCompletedEvents(path: string, date: string): Prom
 
 /** Box-score fetch result: player lines + the two teams as the summary names
  *  them. Teams ride along because ESPN's /teams endpoint lists only the CURRENT
- *  league members — historical games can involve clubs that have since been
- *  relegated (EPL) or relocated, and their rows must still resolve to a team. */
+ *  league members — historical games can involve teams that have since left
+ *  the league or relocated, and their rows must still resolve to a team. */
 export interface EspnBoxScoreResult {
   rows: EspnGenBoxRow[];
   teams: EspnLeagueTeam[];
@@ -452,7 +451,7 @@ export async function fetchWnbaEventBoxScores(path: string, eventId: string, dat
   return attachTeamIds(rows, competitorTeams(competitors));
 }
 
-// -- soccer (EPL / MLS) --
+// -- soccer (MLS) --
 
 interface SoccerRosterEntry {
   athlete?: { id?: string; displayName?: string; lastName?: string };

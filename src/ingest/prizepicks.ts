@@ -19,7 +19,7 @@ import { scrapeFetch } from './scrapeFetch';
 const BASE = 'https://partner-api.prizepicks.com/projections';
 // One filtered request per league shrinks the payload from ~15 MB (all leagues) to
 // just the ones we use — cheaper proxy bandwidth + faster runs. IDs from /leagues.
-// Partial: PP folds ALL soccer competitions into one SOCCER league, so EPL/MLS are
+// Partial: PP folds ALL soccer competitions into one SOCCER league, so MLS is
 // deliberately absent — cross-league name matching would mis-attribute players.
 const PP_LEAGUE_IDS: Partial<Record<Sport, number>> = { nba: 7, mlb: 2, nfl: 9, wnba: 3, nhl: 8 };
 const HEADERS = {
@@ -124,7 +124,6 @@ const PP_STAT_MAP: Record<Sport, Record<string, StatKey>> = {
     'Goals Against': 'ga',
   },
   // PP folds all soccer into one SOCCER league (see PP_LEAGUE_IDS) — not ingested.
-  epl: {},
   mls: {},
 };
 

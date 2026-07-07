@@ -29,7 +29,6 @@ const ESPN_PATH: Record<Sport, string> = {
   nfl: 'football/nfl',
   nhl: 'hockey/nhl',
   wnba: 'basketball/wnba',
-  epl: 'soccer/eng.1',
   mls: 'soccer/usa.1',
 };
 

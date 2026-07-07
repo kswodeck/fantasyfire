@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 import { SPORT_LIST, type Sport } from '@/lib/sports';
 
 /** Jobs we expect to run nightly, in pipeline order. */
-export const KNOWN_JOBS = ['nba', 'mlb', 'nfl', 'nhl', 'wnba', 'epl', 'mls', 'schedule', 'indexnow'] as const;
+export const KNOWN_JOBS = ['nba', 'mlb', 'nfl', 'nhl', 'wnba', 'mls', 'schedule', 'indexnow'] as const;
 export type JobName = (typeof KNOWN_JOBS)[number];
 
 /** A daily job is "stale" if its last successful run is older than this. */
@@ -108,7 +108,7 @@ export async function getIngestStatus(now: Date = new Date()): Promise<IngestSta
 
   // "Healthy" tracks the data-pull jobs — schedule/indexnow are best-effort and
   // shouldn't flip the top-line indicator red.
-  const pulls: JobName[] = ['nba', 'mlb', 'nfl', 'nhl', 'wnba', 'epl', 'mls'];
+  const pulls: JobName[] = ['nba', 'mlb', 'nfl', 'nhl', 'wnba', 'mls'];
   const healthy = jobs.filter((j) => pulls.includes(j.job)).every((j) => !j.stale);
 
   return { generatedAt: now.toISOString(), jobs, sports, healthy };

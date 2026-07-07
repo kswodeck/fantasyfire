@@ -53,7 +53,6 @@ const GAME_OVER_HOURS: Record<Sport, number> = {
   nfl: 4.5,
   nhl: 4, // OT/shootout
   wnba: 3.5,
-  epl: 3, // 90' + stoppage
   mls: 3,
 };
 const HOUR_MS = 3_600_000;

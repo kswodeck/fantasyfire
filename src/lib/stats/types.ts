@@ -71,7 +71,7 @@ export interface GameStatLine {
   saves?: number | null;
   goalsAgainst?: number | null;
   shotsAgainst?: number | null;
-  // Soccer (EPL/MLS) — fouls committed reuses the shared `fouls` column
+  // Soccer (MLS) — fouls committed reuses the shared `fouls` column
   shots?: number | null;
   shotsOnTarget?: number | null;
   // Optional context for display / charts.
@@ -82,7 +82,7 @@ export interface GameStatLine {
 }
 
 /** Position buckets. NBA/WNBA: G/F/C (DvP). MLB: H/P. NFL: QB/RB/WR/TE.
- *  NHL: F/D/G (G = goalie). Soccer (EPL/MLS): F/M/D/G (G = goalkeeper).
+ *  NHL: F/D/G (G = goalie). Soccer (MLS): F/M/D/G (G = goalkeeper).
  *  Letters are shared across sports — the meaning is always sport-scoped. */
 export type PosBucket = 'G' | 'F' | 'C' | 'H' | 'P' | 'QB' | 'RB' | 'WR' | 'TE' | 'D' | 'M';
 
@@ -152,7 +152,7 @@ export type StatKey =
   | 'saves'
   | 'ga'
   | 'sa'
-  // Soccer (EPL/MLS) — 'goals' and 'ast' shared
+  // Soccer (MLS) — 'goals' and 'ast' shared
   | 'shots'
   | 'sot'
   | 'foulsCommitted';
@@ -297,10 +297,10 @@ export const STAT_DEFS: Record<StatKey, StatDef> = {
   ga: { key: 'ga', sport: 'nhl', label: 'Goals Against', short: 'GA', value: (g) => n(g.goalsAgainst) },
   sa: { key: 'sa', sport: 'nhl', label: 'Shots Against', short: 'SA', value: (g) => n(g.shotsAgainst) },
 
-  // ---- Soccer (EPL/MLS; 'goals'/'ast' shared) ----
-  shots: { key: 'shots', sport: 'epl', label: 'Shots', short: 'SH', value: (g) => n(g.shots) },
-  sot: { key: 'sot', sport: 'epl', label: 'Shots on Target', short: 'SOT', value: (g) => n(g.shotsOnTarget) },
-  foulsCommitted: { key: 'foulsCommitted', sport: 'epl', label: 'Fouls Committed', short: 'FC', value: (g) => n(g.fouls) },
+  // ---- Soccer (MLS; 'goals'/'ast' shared) ----
+  shots: { key: 'shots', sport: 'mls', label: 'Shots', short: 'SH', value: (g) => n(g.shots) },
+  sot: { key: 'sot', sport: 'mls', label: 'Shots on Target', short: 'SOT', value: (g) => n(g.shotsOnTarget) },
+  foulsCommitted: { key: 'foulsCommitted', sport: 'mls', label: 'Fouls Committed', short: 'FC', value: (g) => n(g.fouls) },
 };
 
 export const STAT_KEYS = Object.keys(STAT_DEFS) as StatKey[];
@@ -326,7 +326,7 @@ export const NFL_TE_KEYS: StatKey[] = ['rec', 'targets', 'recYds', 'recTds', 'fa
 export const NHL_SKATER_KEYS: StatKey[] = ['sog', 'pts', 'goals', 'ast', 'nhlHits', 'blocked', 'fow'];
 export const NHL_GOALIE_KEYS: StatKey[] = ['saves', 'ga', 'sa'];
 
-// Soccer (EPL/MLS): outfield players (F/M/D) vs goalkeepers.
+// Soccer (MLS): outfield players (F/M/D) vs goalkeepers.
 export const SOCCER_OUTFIELD_KEYS: StatKey[] = ['shots', 'sot', 'goals', 'ast', 'foulsCommitted'];
 export const SOCCER_GK_KEYS: StatKey[] = ['saves', 'ga', 'sa'];
 
@@ -353,7 +353,7 @@ export function statKeysForSport(sport: Sport, posBucket?: string | null): StatK
   if (sport === 'nhl') {
     return posBucket === 'G' ? NHL_GOALIE_KEYS : NHL_SKATER_KEYS;
   }
-  if (sport === 'epl' || sport === 'mls') {
+  if (sport === 'mls') {
     return posBucket === 'G' ? SOCCER_GK_KEYS : SOCCER_OUTFIELD_KEYS;
   }
   return NBA_STAT_KEYS; // NBA + WNBA
@@ -376,7 +376,7 @@ export function defaultStatForSport(sport: Sport, posBucket?: string | null): St
     }
   }
   if (sport === 'nhl') return posBucket === 'G' ? 'saves' : 'sog';
-  if (sport === 'epl' || sport === 'mls') return posBucket === 'G' ? 'saves' : 'shots';
+  if (sport === 'mls') return posBucket === 'G' ? 'saves' : 'shots';
   return 'pts'; // NBA + WNBA
 }
 

@@ -45,7 +45,7 @@ export function SiteFooter() {
               </span>
             </Link>
             <p className="mt-3 text-xs leading-relaxed text-muted">
-              Honest player-prop research, built on public game logs across seven leagues.
+              Honest player-prop research, built on public game logs across six leagues.
             </p>
             <a
               href={`mailto:${SITE.email}`}
@@ -95,7 +95,7 @@ export function SiteFooter() {
         <div className="mt-8 space-y-2 border-t border-line pt-6 text-xs leading-relaxed text-muted">
           <p>
             <strong className="text-foreground">{SITE.name}</strong> is a research tool
-            built on public NBA, WNBA, MLB, NFL, NHL, Premier League, and MLS game logs. Hit rates and matchup numbers are
+            built on public NBA, WNBA, MLB, NFL, NHL, and MLS game logs. Hit rates and matchup numbers are
             descriptive statistics about past performance — they are{' '}
             <strong className="text-foreground">
               not predictions, advice, or a guarantee
@@ -104,7 +104,7 @@ export function SiteFooter() {
             1-800-GAMBLER.
           </p>
           <p>
-            Not affiliated with or endorsed by the NBA, WNBA, MLB, NFL, NHL, Premier League, MLS, or any team. © {year}{' '}
+            Not affiliated with or endorsed by the NBA, WNBA, MLB, NFL, NHL, MLS, or any team. © {year}{' '}
             {SITE.name}.
           </p>
         </div>

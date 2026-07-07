@@ -118,8 +118,7 @@ const SLEEPER_STAT_MAP: Record<Sport, Record<string, StatKey>> = {
     saves: 'saves',
     goals_against: 'ga',
   },
-  // Sleeper's soccer feed mixes competitions — not ingested for EPL/MLS.
-  epl: {},
+  // Sleeper's soccer feed mixes competitions — not ingested for MLS.
   mls: {},
 };
 

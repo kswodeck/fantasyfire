@@ -106,8 +106,7 @@ const UD_STAT_MAP: Record<Sport, Record<string, StatKey>> = {
     saves: 'saves',
     goals_against: 'ga',
   },
-  // Underdog mixes soccer competitions in one feed — not ingested for EPL/MLS.
-  epl: {},
+  // Underdog mixes soccer competitions in one feed — not ingested for MLS.
   mls: {},
 };
 

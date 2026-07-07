@@ -1,7 +1,7 @@
 # FantasyFire 🔥
 
-Multi-sport player-props research tool — **NBA, WNBA, MLB, NFL, NHL, Premier
-League, and MLS**. Hit rates,
+Multi-sport player-props research tool — **NBA, WNBA, MLB, NFL, NHL, and
+MLS**. Hit rates,
 matchup context (defense-vs-position / opposing pitching), sample-size confidence
 (Wilson intervals), fair-price math, and a transparent "is this a good prop?"
 FireFactor — all computed from **free, public game logs**. Public, read-only,
@@ -81,7 +81,6 @@ pnpm ingest:mlb             # MLB  (statsapi.mlb.com)
 pnpm ingest:nfl             # NFL  (ESPN football/nfl)
 pnpm ingest:nhl             # NHL  (ESPN hockey/nhl)
 pnpm ingest:wnba            # WNBA (ESPN basketball/wnba)
-pnpm ingest:epl             # EPL  (ESPN soccer/eng.1)
 pnpm ingest:mls             # MLS  (ESPN soccer/usa.1)
 pnpm schedule               # upcoming slate (for the "Today" hub)
 
@@ -104,7 +103,7 @@ The hard part of this product is the data, not the math.
   - **NBA → `stats.nba.com`** (`playerindex` + `leaguegamelog`). Free but
     **frequently blocks datacenter/cloud IPs** (AWS / Vercel / sometimes CI).
   - **MLB → `statsapi.mlb.com`** — generally **not** IP-blocked.
-  - **NFL / NHL / WNBA / EPL / MLS → ESPN's hidden site API** — generally **not**
+  - **NFL / NHL / WNBA / MLS → ESPN's hidden site API** — generally **not**
     IP-blocked (ESPN is also the documented NBA fallback host). The four
     ESPN-native additions share one config-driven runner
     ([`src/ingest/run-ingest-espn.ts`](src/ingest/run-ingest-espn.ts)) that walks
@@ -138,7 +137,6 @@ The hard part of this product is the data, not the math.
 | `pnpm ingest:nfl`   | Pull NFL data (ESPN football/nfl → Postgres)          |
 | `pnpm ingest:nhl`   | Pull NHL data (ESPN hockey/nhl → Postgres)            |
 | `pnpm ingest:wnba`  | Pull WNBA data (ESPN basketball/wnba → Postgres)      |
-| `pnpm ingest:epl`   | Pull Premier League data (ESPN soccer/eng.1 → Postgres) |
 | `pnpm ingest:mls`   | Pull MLS data (ESPN soccer/usa.1 → Postgres)          |
 | `pnpm schedule`     | Pull the upcoming slate (schedule feeds) → Postgres   |
 | `pnpm ingest:providedlines` | Pull real prop lines (PrizePicks/Underdog/RotoWire) → Postgres (opt-in) |
@@ -152,7 +150,7 @@ Each data job has a `:prod` variant (e.g. `pnpm ingest:prod`) that loads
 ## Architecture
 
 ```
-GitHub Actions (cron) ── NBA/MLB/NFL/NHL/WNBA/EPL/MLS ─▶ PostgreSQL ◀── reads ── Next.js (Vercel)
+GitHub Actions (cron) ── NBA/MLB/NFL/NHL/WNBA/MLS ──▶ PostgreSQL ◀── reads ── Next.js (Vercel)
    ingest + schedule                             upsert via Prisma          ISR pages
    workers (TS)                                                             /api/v1 route handlers
 ```
@@ -175,7 +173,7 @@ GitHub Actions (cron) ── NBA/MLB/NFL/NHL/WNBA/EPL/MLS ─▶ PostgreSQL ◀�
 src/
 ├─ app/                       Next.js routes
 │  ├─ page.tsx                home (per-sport dashboards)
-│  ├─ [sport]/                /nba, /mlb, /nfl, /nhl, /wnba, /epl, /mls hubs + boards:
+│  ├─ [sport]/                /nba, /mlb, /nfl, /nhl, /wnba, /mls hubs + boards:
 │  │  ├─ page.tsx                sport home
 │  │  ├─ [playerSlug]/           player page (+ /[stat] SEO page, OG image)
 │  │  ├─ board, today, streaks, trends, leaders, matchups, players
@@ -185,7 +183,7 @@ src/
 │  └─ sitemap.ts · robots.ts · manifest.ts · opengraph-image.tsx
 ├─ lib/
 │  ├─ db.ts                   Prisma client singleton (pg adapter)
-│  ├─ sports.ts               sport registry (nba | mlb | nfl | nhl | wnba | epl | mls)
+│  ├─ sports.ts               sport registry (nba | mlb | nfl | nhl | wnba | mls)
 │  ├─ stats/                  hit rate, DvP, Wilson, projection, splits,
 │  │                          consistency, streak, matchupGrade, fireScore (pure)
 │  ├─ odds/                   implied prob, de-vig, fair price, EV (pure)
@@ -197,7 +195,7 @@ src/
 └─ ingest/
    ├─ nba/                    stats.nba.com client
    ├─ nfl/                    ESPN football/nfl client
-   ├─ espnSports.ts           ESPN client for nhl/wnba/epl/mls (one runner: run-ingest-espn.ts)
+   ├─ espnSports.ts           ESPN client for nhl/wnba/mls (one runner: run-ingest-espn.ts)
    ├─ mlb.ts · espn.ts · espn-fallback.ts · schedule.ts
    ├─ prizepicks.ts · underdog.ts · rotowire.ts · scrapeFetch.ts  (provided lines)
    └─ run-*.ts                ingest / schedule / providedlines / push
@@ -229,7 +227,7 @@ Full step-by-step (Supabase pooler ports, env, domain) is in
    and the **direct/session** URL (`DIRECT_URL`).
 2. **Migrate** — from your machine: `pnpm db:deploy:prod`.
 3. **Seed data** — run the ingest from a non-cloud host (your machine / VPS):
-   `pnpm ingest:prod && pnpm ingest:mlb:prod && pnpm ingest:nfl:prod && pnpm ingest:nhl:prod && pnpm ingest:wnba:prod && pnpm ingest:epl:prod && pnpm ingest:mls:prod && pnpm schedule:prod`.
+   `pnpm ingest:prod && pnpm ingest:mlb:prod && pnpm ingest:nfl:prod && pnpm ingest:nhl:prod && pnpm ingest:wnba:prod && pnpm ingest:mls:prod && pnpm schedule:prod`.
    (Don't run the NBA pull on Vercel — stats.nba.com blocks cloud IPs.)
 4. **Web app on Vercel** — import the repo (Next.js auto-detected; `vercel.json`
    pins the build). Set env: `DATABASE_URL`, `DIRECT_URL`, `NEXT_PUBLIC_SITE_URL`
@@ -237,11 +235,10 @@ Full step-by-step (Supabase pooler ports, env, domain) is in
    Postgres, so the DB must be reachable from the Vercel build.
 5. **Nightly ingest on GitHub Actions** — add the `DATABASE_URL` secret (on the
    `Production` environment). The [`ingest.yml`](.github/workflows/ingest.yml) workflow
-   runs daily and on manual dispatch: NBA → MLB → NFL → NHL → WNBA → EPL → MLS →
+   runs daily and on manual dispatch: NBA → MLB → NFL → NHL → WNBA → MLS →
    schedule, writing to the **same** Postgres the web app reads. Seasons are computed
    from the date in code; set the `*_SEASON` repo variables (`NBA_SEASON`,
-   `MLB_SEASON`, `NFL_SEASON`, `NHL_SEASON`, `WNBA_SEASON`, `EPL_SEASON`,
-   `MLS_SEASON`) only to force a specific season (e.g. a backfill).
+   `MLB_SEASON`, `NFL_SEASON`, `NHL_SEASON`, `WNBA_SEASON`, `MLS_SEASON`) only to force a specific season (e.g. a backfill).
 6. **Domain** — add `fantasyfire.app` in Vercel and point DNS. `.app` is on the
    **HSTS preload** list, so it's **HTTPS-only** (Vercel serves HTTPS by default).
    Update `NEXT_PUBLIC_SITE_URL` to the apex.
@@ -254,7 +251,7 @@ pull off Vercel's blocked IPs.
 
 Research tool only. Hit rates, matchup numbers, and FireFactor describe **past
 performance** — they are not predictions or betting advice. Not affiliated with the
-NBA, WNBA, MLB, NFL, NHL, Premier League, or MLS. See [`docs/PLAN.md`](docs/PLAN.md) §11 for the legal/compliance
+NBA, WNBA, MLB, NFL, NHL, or MLS. See [`docs/PLAN.md`](docs/PLAN.md) §11 for the legal/compliance
 notes (gambling-adjacent; get review before monetizing). 21+ — if you or someone you
 know has a gambling problem, call 1-800-GAMBLER.
 </content>

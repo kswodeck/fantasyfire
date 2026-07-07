@@ -124,7 +124,7 @@ export async function fetchNflSchedule(date: string): Promise<ScheduleGameRow[]>
 }
 
 /**
- * Generic ESPN scoreboard schedule for the ESPN-native sports (NHL/WNBA/EPL/MLS).
+ * Generic ESPN scoreboard schedule for the ESPN-native sports (NHL/WNBA/MLS).
  * Their team tables are ingested from the SAME ESPN feed, so games are keyed by
  * the ESPN team ID (=== our Team.externalId) — reliable where abbreviations are
  * not (e.g. NHL Utah is UTAH in /teams but UTA on the scoreboard). Pass

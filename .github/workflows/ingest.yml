@@ -1,4 +1,4 @@
-name: Ingest NBA + MLB + NFL + NHL + WNBA + soccer data
+name: Ingest NBA + MLB + NFL + NHL + WNBA + MLS data
 
 # Pulls stats.nba.com (playerindex + leaguegamelog), statsapi.mlb.com, and ESPN's
 # hidden football/nfl API, and upserts into Postgres.
@@ -48,7 +48,6 @@ jobs:
       NFL_SEASON: ${{ vars.NFL_SEASON || '' }}
       NHL_SEASON: ${{ vars.NHL_SEASON || '' }}
       WNBA_SEASON: ${{ vars.WNBA_SEASON || '' }}
-      EPL_SEASON: ${{ vars.EPL_SEASON || '' }}
       MLS_SEASON: ${{ vars.MLS_SEASON || '' }}
     steps:
       - uses: actions/checkout@v4
@@ -92,7 +91,7 @@ jobs:
         if: ${{ success() || failure() }}
         run: pnpm ingest:nfl
 
-      # The ESPN-native sports (hockey/nhl, basketball/wnba, soccer/eng.1 + usa.1)
+      # The ESPN-native sports (hockey/nhl, basketball/wnba, soccer/usa.1)
       # share one config-driven runner. Each walks the scoreboard incrementally
       # (first run backfills the season); off-season pulls are harmless no-ops.
       - name: Run NHL ingest
@@ -102,10 +101,6 @@ jobs:
       - name: Run WNBA ingest
         if: ${{ success() || failure() }}
         run: pnpm ingest:wnba
-
-      - name: Run EPL ingest
-        if: ${{ success() || failure() }}
-        run: pnpm ingest:epl
 
       - name: Run MLS ingest
         if: ${{ success() || failure() }}

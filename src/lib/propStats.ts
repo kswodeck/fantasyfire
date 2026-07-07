@@ -16,7 +16,6 @@ export const PROP_STATS: Record<Sport, StatKey[]> = {
   // NHL: skater markets + goalie saves (intersected with the player's role keys,
   // so a goalie never gets a shots-on-goal page and vice versa).
   nhl: ['sog', 'pts', 'goals', 'ast', 'nhlHits', 'blocked', 'saves'],
-  epl: ['shots', 'sot', 'goals', 'ast', 'saves'],
   mls: ['shots', 'sot', 'goals', 'ast', 'saves'],
 };
 

@@ -7,7 +7,6 @@ export const DEFAULT_LEADERS_STAT: Record<Sport, string> = {
   mlb: 'hits',
   nfl: 'passYds',
   nhl: 'pts',
-  epl: 'goals',
   mls: 'goals',
 };
 

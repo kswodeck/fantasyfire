@@ -129,7 +129,7 @@ const NFL_TEAMS: Record<string, Entry> = {
   WSH: { name: 'Commanders', city: 'Washington', primary: '#5A1414', secondary: '#FFB612' },
 };
 
-// NHL/WNBA/EPL/MLS colors seeded from ESPN's team feed (the same source their
+// NHL/WNBA/MLS colors seeded from ESPN's team feed (the same source their
 // ingest uses), then tuned like the NFL table: brands whose feed color is
 // white/near-black get their recognizable accent as `primary` so chips read on
 // both themes. Keyed by ESPN's standard abbreviations.
@@ -188,29 +188,6 @@ const WNBA_TEAMS: Record<string, Entry> = {
 
 // Soccer clubs have no city/nickname split — `name` is the club's short display
 // name and `city` stays empty, so fullName renders as just the club name.
-const EPL_TEAMS: Record<string, Entry> = {
-  ARS: { name: 'Arsenal', city: '', primary: '#E20520', secondary: '#003399' },
-  AVL: { name: 'Aston Villa', city: '', primary: '#93BEE5', secondary: '#660E36' },
-  BHA: { name: 'Brighton', city: '', primary: '#0606FA', secondary: '#FFDD00' },
-  BOU: { name: 'Bournemouth', city: '', primary: '#F42727', secondary: '#000000' },
-  BRE: { name: 'Brentford', city: '', primary: '#F42727', secondary: '#F8CED9' },
-  CHE: { name: 'Chelsea', city: '', primary: '#3A7BD3', secondary: '#144992' },
-  COV: { name: 'Coventry', city: '', primary: '#87CCED', secondary: '#000000' },
-  CRY: { name: 'Crystal Palace', city: '', primary: '#0202FB', secondary: '#C8102E' },
-  EVE: { name: 'Everton', city: '', primary: '#4068DE', secondary: '#132257' },
-  FUL: { name: 'Fulham', city: '', primary: '#D7D7D7', secondary: '#000000' },
-  HUL: { name: 'Hull', city: '', primary: '#F28800', secondary: '#000000' },
-  IPS: { name: 'Ipswich', city: '', primary: '#3A6BD8', secondary: '#CD1937' },
-  LEE: { name: 'Leeds', city: '', primary: '#FFCD00', secondary: '#1D5CB4' },
-  LIV: { name: 'Liverpool', city: '', primary: '#D11317', secondary: '#00B2A9' },
-  MAN: { name: 'Man United', city: '', primary: '#DA020E', secondary: '#FBE122' },
-  MNC: { name: 'Man City', city: '', primary: '#99C5EA', secondary: '#00285E' },
-  NEW: { name: 'Newcastle', city: '', primary: '#D7D7D7', secondary: '#000000' },
-  NFO: { name: 'Nottm Forest', city: '', primary: '#C8102E', secondary: '#132257' },
-  SUN: { name: 'Sunderland', city: '', primary: '#EB172B', secondary: '#87CCED' },
-  TOT: { name: 'Spurs', city: '', primary: '#D7D7D7', secondary: '#132257' },
-};
-
 const MLS_TEAMS: Record<string, Entry> = {
   ATL: { name: 'Atlanta United', city: '', primary: '#9D2235', secondary: '#AA9767' },
   ATX: { name: 'Austin', city: '', primary: '#00B140', secondary: '#000000' },
@@ -250,7 +227,6 @@ const TABLES: Record<Sport, Record<string, Entry>> = {
   nfl: NFL_TEAMS,
   nhl: NHL_TEAMS,
   wnba: WNBA_TEAMS,
-  epl: EPL_TEAMS,
   mls: MLS_TEAMS,
 };
 
@@ -278,7 +254,6 @@ const ESPN_LEAGUE: Partial<Record<Sport, string>> = {
   nfl: 'nfl',
   nhl: 'nhl',
   wnba: 'wnba',
-  epl: 'soccer',
   mls: 'soccer',
 };
 
@@ -303,7 +278,7 @@ export function teamLogoUrl(sport: Sport, externalId: number, abbr?: string | nu
   if (sport === 'mlb') {
     return `https://www.mlbstatic.com/team-logos/${externalId}.svg`;
   }
-  if (sport === 'epl' || sport === 'mls') {
+  if (sport === 'mls') {
     return `https://a.espncdn.com/i/teamlogos/soccer/500/${externalId}.png`;
   }
   const league = ESPN_LEAGUE[sport];

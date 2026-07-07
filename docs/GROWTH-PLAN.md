@@ -3,18 +3,19 @@
 _Last updated: 2026-06-24. This is a strategy/sequencing doc, not a spec. Each item lists the
 concrete files it touches so it can be picked up directly._
 
-> **Update 2026-07-07 — Four more sports: NHL, WNBA, EPL, MLS.** The shared
-> schema + `[sport]` routes absorbed four new leagues, all ingested from ESPN's
+> **Update 2026-07-07 — Three more sports: NHL, WNBA, MLS.** The shared
+> schema + `[sport]` routes absorbed three new leagues, all ingested from ESPN's
 > hidden site API via one config-driven runner (`src/ingest/run-ingest-espn.ts`)
 > that walks the scoreboard incrementally (first run backfills the season).
 > WNBA reuses the NBA stat keys/columns wholesale (incl. pace + DvP); NHL adds
 > skater/goalie columns (TOI drives the same minutes-gated qualification as NBA);
-> soccer (EPL + MLS as separate sport keys) adds shots/SOT/goals/keeper columns
-> — no per-player minutes in the feed, so soccer is not opportunity-filtered.
-> Schedule/injuries/game-odds/provided-lines all extended; team identity for the
-> ESPN sports resolves by ESPN team id (abbreviations differ between ESPN
-> endpoints, and relegated EPL clubs aren't in /teams). "Three sports" below is
-> now **seven**.
+> MLS adds shots/SOT/goals/keeper columns — no per-player minutes in the feed,
+> so soccer is not opportunity-filtered. Schedule/injuries/game-odds/provided-
+> lines all extended; team identity for the ESPN sports resolves by ESPN team id
+> (abbreviations differ between ESPN endpoints). The Premier League was built and
+> then removed by request — the soccer plumbing is league-generic, so re-adding
+> it (or La Liga etc.) is one registry entry + one ingest config. "Three sports"
+> below is now **six**.
 
 > **Update 2026-06-25 — NFL added + FireFactor.** A third sport, **NFL** (ESPN
 > `football/nfl` ingest), now rides the same shared schema and section routes

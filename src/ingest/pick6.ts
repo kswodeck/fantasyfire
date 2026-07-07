@@ -124,8 +124,7 @@ const P6_STAT_MAP: Record<Sport, Record<string, StatKey>> = {
     'Goalie Saves': 'saves',
     'Goals Against': 'ga',
   },
-  // Pick6's soccer offering mixes competitions — not ingested for EPL/MLS.
-  epl: {},
+  // Pick6's soccer offering mixes competitions — not ingested for MLS.
   mls: {},
 };
 

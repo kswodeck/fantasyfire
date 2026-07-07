@@ -3,7 +3,6 @@
 // Config-driven ingest for the ESPN-native sports: ESPN hidden API -> Postgres.
 //   pnpm ingest:nhl   (tsx src/ingest/run-ingest-espn.ts nhl)
 //   pnpm ingest:wnba  (tsx src/ingest/run-ingest-espn.ts wnba)
-//   pnpm ingest:epl   (tsx src/ingest/run-ingest-espn.ts epl)
 //   pnpm ingest:mls   (tsx src/ingest/run-ingest-espn.ts mls)
 //
 // Like the NFL runner, ESPN is game-centric: walk the scoreboard by DATE, pull
@@ -84,15 +83,6 @@ const CONFIGS: Partial<Record<Sport, EspnIngestConfig>> = {
     seasonTypes: new Set([2, 3]),
     // "2026" -> May 1 2026 (tip-off is mid-May).
     seasonStartIso: (season) => `${season}-05-01`,
-  },
-  epl: {
-    sport: 'epl',
-    path: ESPN_SPORT_PATH.epl!,
-    fetchBoxScores: fetchSoccerEventBoxScores,
-    toPosBucket: toSoccerPosBucket,
-    inferPosBucket: soccerInfer,
-    // "2025-26" -> Aug 1 2025 (matchweek 1 is mid-August).
-    seasonStartIso: (season) => `${season.slice(0, 4)}-08-01`,
   },
   mls: {
     sport: 'mls',
@@ -250,7 +240,7 @@ async function main() {
 
   // Upsert teams that appear in the box scores but not in /teams — that endpoint
   // lists only CURRENT league members, and historical games can involve clubs
-  // that have since been relegated (EPL) or otherwise left the league.
+  // that have since left the league or relocated.
   const knownExternal = new Set(teamRows.map((t) => t.externalId));
   const missingTeams = new Map<number, { externalId: number; abbreviation: string; name: string }>();
   for (const g of perGame) {

@@ -100,18 +100,6 @@ export function currentWnbaSeason(now: Date = new Date()): string {
   return String(now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1);
 }
 
-// ---- Premier League (two-year "YYYY-YY"; season runs ~August–May) ----
-
-/**
- * Current EPL season ("2025-26"). EPL_SEASON can override it. Cutoff: August 1 —
- * June/July belong to the season that just ended in May.
- */
-export function currentEplSeason(now: Date = new Date()): string {
-  const override = process.env.EPL_SEASON?.trim();
-  if (override && /^\d{4}-\d{2}$/.test(override)) return override;
-  return formatSeason(now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1);
-}
-
 // ---- MLS (single calendar year; season runs ~late February–December) ----
 
 /** Current MLS season as a year string ("2026"). MLS_SEASON can override it. */
@@ -136,8 +124,6 @@ export function currentSeason(sport: Sport, now: Date = new Date()): string {
       return currentNhlSeason(now);
     case 'wnba':
       return currentWnbaSeason(now);
-    case 'epl':
-      return currentEplSeason(now);
     case 'mls':
       return currentMlsSeason(now);
     default:
@@ -146,7 +132,7 @@ export function currentSeason(sport: Sport, now: Date = new Date()): string {
 }
 
 export function previousSeason(sport: Sport, season: string): string {
-  // Two-year sports (NBA/NHL/EPL) use "YYYY-YY"; the rest are plain years.
+  // Two-year sports (NBA/NHL) use "YYYY-YY"; the rest are plain years.
   if (/^\d{4}-\d{2}$/.test(season)) return previousNbaSeason(season);
   return String(Number.parseInt(season, 10) - 1);
 }

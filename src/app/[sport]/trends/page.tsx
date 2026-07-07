@@ -136,7 +136,7 @@ export default async function TrendsPage({ params }: PageProps) {
             defaultSource={initialSource}
             games={slate.games}
             slateDate={slate.date}
-            slateWord={sport === 'nfl' || sport === 'epl' || sport === 'mls' ? 'This week' : 'Today'}
+            slateWord={sport === 'nfl' || sport === 'mls' ? 'This week' : 'Today'}
           />
         </div>
       ) : rows.length === 0 ? (

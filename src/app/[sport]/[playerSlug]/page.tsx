@@ -52,7 +52,6 @@ const STATS_BIT: Record<Sport, string> = {
   mlb: 'hits, home runs, RBIs, total bases and strikeout',
   nfl: 'passing yards, rushing yards, receptions, receiving yards and touchdown',
   nhl: 'shots on goal, points, goals, assists and saves',
-  epl: 'shots, shots on target, goals, assists and saves',
   mls: 'shots, shots on target, goals, assists and saves',
 };
 
@@ -62,7 +61,6 @@ const JOB_TITLE: Record<Sport, string> = {
   mlb: 'Baseball Player',
   nfl: 'Football Player',
   nhl: 'Hockey Player',
-  epl: 'Soccer Player',
   mls: 'Soccer Player',
 };
 

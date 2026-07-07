@@ -130,7 +130,7 @@ function opportunityFor(
   g: PlayerGame,
 ): number | null {
   if (sport === 'nba' || sport === 'wnba' || sport === 'nhl') return g.minutes ?? null;
-  if (sport === 'epl' || sport === 'mls') return null;
+  if (sport === 'mls') return null;
   if (sport === 'nfl') {
     if (posBucket === 'QB') return g.passAttempts ?? 0;
     if (posBucket === 'RB') return (g.rushAttempts ?? 0) + (g.receptions ?? 0);
@@ -241,7 +241,7 @@ const NHL_STAT_SQL: Partial<Record<StatKey, string>> = {
   sa: 's."shotsAgainst"',
 };
 
-// SQL expression per soccer stat (EPL/MLS DvP by F/M/D/G bucket). Whitelisted.
+// SQL expression per soccer stat (MLS DvP by F/M/D/G bucket). Whitelisted.
 // Fouls committed reuse the shared `fouls` column.
 const SOCCER_STAT_SQL: Partial<Record<StatKey, string>> = {
   goals: 's.goals',
@@ -844,7 +844,7 @@ async function getMinutesDvp(
  *  has no per-player minutes, so there's no involvement gate — sub cameos dilute
  *  every team's average equally, keeping the RANKING comparable. */
 async function getSoccerDvpTable(
-  sport: 'epl' | 'mls',
+  sport: 'mls',
   posBucket: PosBucket,
   stat: StatKey,
   season: string,
@@ -876,7 +876,7 @@ async function getSoccerDvpTable(
 }
 
 async function getSoccerDvp(
-  sport: 'epl' | 'mls',
+  sport: 'mls',
   posBucket: PosBucket,
   stat: StatKey,
   opponentTeamId: number,
@@ -1366,7 +1366,7 @@ export async function getPlayerResearch(
     } else if (sport === 'nfl' && player.posBucket) {
       dvp = await getNflDvp(player.posBucket, stat, matchupOpponent.teamId, season);
       unitLabel = posLabel(sport, player.posBucket);
-    } else if ((sport === 'epl' || sport === 'mls') && player.posBucket) {
+    } else if (sport === 'mls' && player.posBucket) {
       dvp = await getSoccerDvp(sport, player.posBucket, stat, matchupOpponent.teamId, season);
       unitLabel = posLabel(sport, player.posBucket);
     }
@@ -1642,7 +1642,7 @@ const BOARD_NHL_STATS: Record<string, StatKey[]> = {
   D: ['sog', 'pts', 'blocked'],
   G: ['saves', 'ga'],
 };
-// Soccer (EPL/MLS) by role — shots markets carry the board; keepers get saves.
+// Soccer (MLS) by role — shots markets carry the board; keepers get saves.
 const BOARD_SOCCER_STATS: Record<string, StatKey[]> = {
   F: ['shots', 'sot', 'goals'],
   M: ['shots', 'sot'],
@@ -1655,7 +1655,7 @@ function boardStatsFor(sport: Sport, posBucket: string | null): StatKey[] {
   if (sport === 'mlb') return posBucket === 'P' ? [] : BOARD_MLB_HITTER_STATS;
   if (sport === 'nfl') return BOARD_NFL_STATS[posBucket ?? ''] ?? [];
   if (sport === 'nhl') return BOARD_NHL_STATS[posBucket ?? ''] ?? [];
-  if (sport === 'epl' || sport === 'mls') return BOARD_SOCCER_STATS[posBucket ?? ''] ?? [];
+  if (sport === 'mls') return BOARD_SOCCER_STATS[posBucket ?? ''] ?? [];
   return BOARD_NBA_STATS; // NBA + WNBA
 }
 
@@ -1961,7 +1961,7 @@ async function boardMatchupContext(
     else if (sport === 'mlb' && bucket === 'H')
       cells = await getMlbHitterMatchupTable(stat, season);
     else if (sport === 'nfl') cells = await getNflDvpTable(bucket, stat, season);
-    else if (sport === 'epl' || sport === 'mls')
+    else if (sport === 'mls')
       cells = await getSoccerDvpTable(sport, bucket, stat, season);
     const m = new Map<number, DvpCell>();
     for (const c of cells) m.set(c.opponentTeamId, c);
@@ -2356,16 +2356,6 @@ const BOARD_STAT_COLS: Record<Sport, Record<string, true>> = {
     goalsAgainst: true,
     shotsAgainst: true,
   },
-  epl: {
-    goals: true,
-    assists: true,
-    shots: true,
-    shotsOnTarget: true,
-    fouls: true,
-    saves: true,
-    goalsAgainst: true,
-    shotsAgainst: true,
-  },
   mls: {
     goals: true,
     assists: true,
@@ -2749,7 +2739,7 @@ export async function getDvpTable(
       ? await getMinutesDvpTable(sport, posBucket, stat, season)
       : sport === 'nfl'
         ? await getNflDvpTable(posBucket, stat, season)
-        : sport === 'epl' || sport === 'mls'
+        : sport === 'mls'
           ? await getSoccerDvpTable(sport, posBucket, stat, season)
           : await getMlbHitterMatchupTable(stat, season);
   if (cells.length === 0) return [];
@@ -2787,7 +2777,6 @@ const LEADER_STAT_SQL: Record<Sport, Partial<Record<StatKey, string>>> = {
   mlb: MLB_HIT_SQL,
   nfl: NFL_STAT_SQL,
   nhl: NHL_STAT_SQL,
-  epl: SOCCER_STAT_SQL,
   mls: SOCCER_STAT_SQL,
 };
 
@@ -2799,7 +2788,6 @@ const LEADER_MIN_GAMES: Record<Sport, number> = {
   mlb: 20,
   nfl: 6,
   nhl: 12,
-  epl: 6,
   mls: 6,
 };
 
@@ -2829,7 +2817,7 @@ export async function getLeaders(
     sport === 'nfl' &&
     (['passYds', 'passTds', 'passCmp', 'passAtt', 'ints'] as StatKey[]).includes(stat)
       ? `AND p."posBucket" = 'QB'`
-      : (sport === 'nhl' || sport === 'epl' || sport === 'mls') &&
+      : (sport === 'nhl' || sport === 'mls') &&
           (['saves', 'ga', 'sa'] as StatKey[]).includes(stat)
         ? `AND p."posBucket" = 'G'`
         : '';
@@ -2934,7 +2922,7 @@ export async function analyzeSlate(sport: Sport, text: string): Promise<SlateRes
     // Same idea for shared words: bare "hits" parses to the MLB key and bare
     // "fouls" to the NBA key — remap to this sport's equivalent market.
     if (sport === 'nhl' && e.stat === 'hits') e.stat = 'nhlHits';
-    if ((sport === 'epl' || sport === 'mls') && e.stat === 'fouls') e.stat = 'foulsCommitted';
+    if (sport === 'mls' && e.stat === 'fouls') e.stat = 'foulsCommitted';
     if (!statKeysForSport(sport, match.posBucket).includes(e.stat)) {
       results.push({
         raw: e.raw,
@@ -2987,7 +2975,7 @@ export async function analyzeSlate(sport: Sport, text: string): Promise<SlateRes
 /** How many days of upcoming games count as "the slate". Daily sports show one
  *  day; weekly-cadence sports (NFL Thu–Mon, soccer matchweeks) show the week. */
 function slateWindowDays(sport: Sport): number {
-  return sport === 'nfl' || sport === 'epl' || sport === 'mls' ? 7 : 1;
+  return sport === 'nfl' || sport === 'mls' ? 7 : 1;
 }
 
 /**
