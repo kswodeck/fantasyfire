@@ -82,7 +82,7 @@ export default async function Home() {
           Find the heat in every player prop
         </h1>
         <p className="max-w-xl text-lg text-muted">
-          {SITE.name} projects every NBA, MLB, and NFL player prop from public game logs —
+          {SITE.name} projects every NBA, WNBA, MLB, NFL, NHL, Premier League, and MLS player prop from public game logs —
           adjusted for matchup, pace, the Vegas game total, and usage — then prices it against the
           market to show where the number is soft. Built on the uncertainty most tools hide.
         </p>

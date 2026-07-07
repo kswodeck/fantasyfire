@@ -77,7 +77,7 @@ export function normalizeNbaAbbr(a: string): string {
 
 interface EspnCompetitor {
   homeAway: string;
-  team: { abbreviation?: string };
+  team: { id?: string; abbreviation?: string };
 }
 interface EspnEvent {
   id: string | number;
@@ -120,10 +120,30 @@ export function normalizeNflAbbr(a: string): string {
 }
 
 export async function fetchNflSchedule(date: string): Promise<ScheduleGameRow[]> {
+  return fetchEspnSchedule('football/nfl', date, normalizeNflAbbr);
+}
+
+/**
+ * Generic ESPN scoreboard schedule for the ESPN-native sports (NHL/WNBA/EPL/MLS).
+ * Their team tables are ingested from the SAME ESPN feed, so games are keyed by
+ * the ESPN team ID (=== our Team.externalId) — reliable where abbreviations are
+ * not (e.g. NHL Utah is UTAH in /teams but UTA on the scoreboard). Pass
+ * `normalize` to key by abbreviation instead (the NFL path).
+ */
+export async function fetchEspnSchedule(
+  path: string,
+  date: string,
+  normalize?: (a: string) => string,
+): Promise<ScheduleGameRow[]> {
   const data = (await getJson(
-    `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=${date.replace(/-/g, '')}`,
+    `https://site.api.espn.com/apis/site/v2/sports/${path}/scoreboard?dates=${date.replace(/-/g, '')}`,
   )) as EspnScoreboard;
   const events = data.events ?? [];
+  const key = (c: EspnCompetitor | undefined): string => {
+    if (!c?.team) return '';
+    if (normalize) return c.team.abbreviation ? normalize(c.team.abbreviation) : '';
+    return c.team.id ? String(c.team.id) : '';
+  };
   return events
     .map((e): ScheduleGameRow => {
       const comp = e.competitions?.[0];
@@ -135,8 +155,8 @@ export async function fetchNflSchedule(date: string): Promise<ScheduleGameRow[]>
         // ESPN `date` is the full UTC tip-off / kickoff timestamp.
         startTimeIso: e.date,
         status: comp?.status?.type?.description ?? 'Scheduled',
-        homeKey: home?.team?.abbreviation ? normalizeNflAbbr(home.team.abbreviation) : '',
-        awayKey: away?.team?.abbreviation ? normalizeNflAbbr(away.team.abbreviation) : '',
+        homeKey: key(home),
+        awayKey: key(away),
       };
     })
     .filter((r) => r.homeKey && r.awayKey);

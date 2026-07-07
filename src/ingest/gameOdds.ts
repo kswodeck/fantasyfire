@@ -11,6 +11,10 @@ export interface GameOddsRow {
   dateIso: string;
   homeAbbr: string;
   awayAbbr: string;
+  /** ESPN team ids (as strings) — the reliable key for the ESPN-native sports,
+   *  whose Team.externalId IS the ESPN id. Unused for NBA/MLB (different id space). */
+  homeId: string | null;
+  awayId: string | null;
   oddsProvider: string | null;
   /** Over/under (combined score). */
   gameTotal: number | null;
@@ -23,6 +27,10 @@ const ESPN_PATH: Record<Sport, string> = {
   nba: 'basketball/nba',
   mlb: 'baseball/mlb',
   nfl: 'football/nfl',
+  nhl: 'hockey/nhl',
+  wnba: 'basketball/wnba',
+  epl: 'soccer/eng.1',
+  mls: 'soccer/usa.1',
 };
 
 async function getJson(url: string): Promise<unknown> {
@@ -47,7 +55,7 @@ interface EspnOdds {
 }
 interface EspnCompetitor {
   homeAway?: string;
-  team?: { abbreviation?: string };
+  team?: { id?: string; abbreviation?: string };
 }
 interface EspnEvent {
   date?: string;
@@ -94,6 +102,8 @@ export async function fetchEspnGameOdds(sport: Sport, date: string): Promise<Gam
       dateIso: date,
       homeAbbr: normAbbr(sport, home.team.abbreviation),
       awayAbbr: normAbbr(sport, away.team.abbreviation),
+      homeId: home.team.id ? String(home.team.id) : null,
+      awayId: away.team.id ? String(away.team.id) : null,
       oddsProvider: o.provider?.name ?? null,
       gameTotal: Number.isFinite(o.overUnder) ? Number(o.overUnder) : null,
       homeSpread,

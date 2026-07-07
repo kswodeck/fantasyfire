@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 const FAQS: { q: string; a: string }[] = [
   {
     q: 'What is FantasyFire?',
-    a: 'FantasyFire is a projection and +EV research tool for NBA, MLB, and NFL player props. For any player it projects each prop, turns that into the probability the line clears, and prices it against the market — all built on public game logs, with the uncertainty shown.',
+    a: 'FantasyFire is a projection and +EV research tool for NBA, WNBA, MLB, NFL, NHL, Premier League, and MLS player props. For any player it projects each prop, turns that into the probability the line clears, and prices it against the market — all built on public game logs, with the uncertainty shown.',
   },
   {
     q: 'How do you project a player?',
@@ -65,7 +65,7 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: 'Which sports do you cover?',
-    a: 'The NBA, MLB, and NFL — each with its own home page, player pages, and stat markets. More sports may follow.',
+    a: 'The NBA, WNBA, MLB, NFL, NHL, Premier League, and MLS — each with its own home page, player pages, and stat markets. More sports may follow.',
   },
 ];
 

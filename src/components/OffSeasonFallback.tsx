@@ -6,7 +6,15 @@ import { SPORTS, type Sport } from '@/lib/sports';
 import type { LeaderRow } from '@/lib/types';
 
 // The marquee stat to lead the off-season leaderboard with, per sport.
-const MARQUEE: Record<Sport, StatKey> = { nba: 'pts', mlb: 'hits', nfl: 'passYds' };
+const MARQUEE: Record<Sport, StatKey> = {
+  nba: 'pts',
+  mlb: 'hits',
+  nfl: 'passYds',
+  nhl: 'pts',
+  wnba: 'pts',
+  epl: 'goals',
+  mls: 'goals',
+};
 
 /**
  * Off-season fallback for the prop/matchup pages (Heat Check, Trends).

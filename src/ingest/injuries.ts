@@ -28,6 +28,10 @@ const ESPN_PATH: Record<Sport, string> = {
   nba: 'basketball/nba',
   mlb: 'baseball/mlb',
   nfl: 'football/nfl',
+  nhl: 'hockey/nhl',
+  wnba: 'basketball/wnba',
+  epl: 'soccer/eng.1',
+  mls: 'soccer/usa.1',
 };
 
 /** Map ESPN's many status strings to our four buckets. */

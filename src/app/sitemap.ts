@@ -13,6 +13,10 @@ const LEADER_STATS: Record<Sport, string[]> = {
   nba: ['pts', 'reb', 'ast', 'fg3m', 'stl', 'blk', 'pra'],
   mlb: ['hits', 'tb', 'hr', 'rbi', 'runs', 'sb', 'bb', 'so'],
   nfl: ['passYds', 'passTds', 'rushYds', 'rushTds', 'rec', 'recYds', 'recTds'],
+  nhl: ['pts', 'goals', 'ast', 'sog', 'nhlHits', 'blocked', 'saves'],
+  wnba: ['pts', 'reb', 'ast', 'fg3m', 'stl', 'blk', 'pra'],
+  epl: ['goals', 'ast', 'shots', 'sot', 'saves'],
+  mls: ['goals', 'ast', 'shots', 'sot', 'saves'],
 };
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

@@ -1,9 +1,9 @@
 // Multi-sport configuration. Sport keys are lowercase and used in URLs, the DB
 // `sport` column, and API paths. Framework-agnostic (no React/Next imports).
 
-export type Sport = 'nba' | 'mlb' | 'nfl';
+export type Sport = 'nba' | 'mlb' | 'nfl' | 'nhl' | 'wnba' | 'epl' | 'mls';
 
-export const SPORT_LIST: Sport[] = ['nba', 'mlb', 'nfl'];
+export const SPORT_LIST: Sport[] = ['nba', 'mlb', 'nfl', 'nhl', 'wnba', 'epl', 'mls'];
 
 export interface SportConfig {
   key: Sport;
@@ -45,10 +45,42 @@ export const SPORTS: Record<Sport, SportConfig> = {
     accent: '#047857', // emerald-700 — distinct from NBA/MLB, white CTA text clears AA
     accentDark: '#34d399', // emerald-400 — AA as text on the dark surfaces
   },
+  nhl: {
+    key: 'nhl',
+    name: 'NHL',
+    noun: 'players',
+    tagline: 'Hockey player props — shots on goal, points, goals, assists and saves.',
+    accent: '#0e7490', // cyan-700 — white CTA text clears AA
+    accentDark: '#22d3ee', // cyan-400 — AA as text on the dark surfaces
+  },
+  wnba: {
+    key: 'wnba',
+    name: 'WNBA',
+    noun: 'players',
+    tagline: 'Basketball player props — points, rebounds, assists, threes and more.',
+    accent: '#be185d', // pink-700 — white CTA text clears AA
+    accentDark: '#f472b6', // pink-400 — AA as text on the dark surfaces
+  },
+  epl: {
+    key: 'epl',
+    name: 'Premier League',
+    noun: 'players',
+    tagline: 'Soccer player props — shots, shots on target, goals and keeper saves.',
+    accent: '#6d28d9', // violet-700 — white CTA text clears AA
+    accentDark: '#a78bfa', // violet-400 — AA as text on the dark surfaces
+  },
+  mls: {
+    key: 'mls',
+    name: 'MLS',
+    noun: 'players',
+    tagline: 'Soccer player props — shots, shots on target, goals and keeper saves.',
+    accent: '#b91c1c', // red-700 — white CTA text clears AA
+    accentDark: '#f87171', // red-400 — AA as text on the dark surfaces
+  },
 };
 
 export function isSport(value: string | undefined | null): value is Sport {
-  return value === 'nba' || value === 'mlb' || value === 'nfl';
+  return typeof value === 'string' && (SPORT_LIST as string[]).includes(value);
 }
 
 export function getSport(key: Sport): SportConfig {

@@ -43,6 +43,7 @@ import {
 } from '@/lib/stats';
 import { fairPriceReadout, marketConsensus, type MarketConsensus } from '@/lib/odds';
 import { parseSlate, normalizeName } from '@/lib/slate';
+import { posBucketLabel } from '@/lib/filters';
 import { currentSeason, previousSeason } from '@/lib/season';
 import { getTeam } from '@/lib/teams';
 import type { Sport } from '@/lib/sports';
@@ -119,12 +120,17 @@ const getActiveSeason = cache(async (sport: Sport): Promise<string> => {
 //   NFL            -> role involvement: QB pass attempts, RB carries+receptions
 //                     (touches), WR/TE targets — drops cameo/benched games from
 //                     an already-short (~17 game) season.
+//   NHL / WNBA     -> minutes (time on ice / minutes played), like the NBA.
+//   Soccer         -> null (NOT filtered): the feed has no per-player minutes, and
+//                     every involvement proxy we do have (shots, fouls) correlates
+//                     with performance, so filtering on it would bias hit rates.
 function opportunityFor(
   sport: Sport,
   posBucket: string | null | undefined,
   g: PlayerGame,
 ): number | null {
-  if (sport === 'nba') return g.minutes ?? null;
+  if (sport === 'nba' || sport === 'wnba' || sport === 'nhl') return g.minutes ?? null;
+  if (sport === 'epl' || sport === 'mls') return null;
   if (sport === 'nfl') {
     if (posBucket === 'QB') return g.passAttempts ?? 0;
     if (posBucket === 'RB') return (g.rushAttempts ?? 0) + (g.receptions ?? 0);
@@ -134,15 +140,20 @@ function opportunityFor(
   return (g.atBats ?? 0) + (g.walks ?? 0) + (g.hbp ?? 0);
 }
 
-const POS_LABEL: Record<string, string> = {
-  G: 'guards',
-  F: 'forwards',
-  C: 'centers',
-  QB: 'quarterbacks',
-  RB: 'running backs',
-  WR: 'wide receivers',
-  TE: 'tight ends',
-};
+// Cutoff multiplier on the blended role threshold. Minutes-based sports use the
+// full blended average; count-based opportunities (MLB PAs, NFL touches) use 60%
+// so the modal full game isn't clipped (see the comment in getPlayerResearch).
+// NHL goalies also get 60%: a starter's TOI clusters at ~60 minutes, so a bar at
+// the blended average would clip roughly half of their FULL starts — 60% keeps
+// every start while still dropping mid-game relief appearances.
+function qualifyFactorFor(sport: Sport, posBucket: string | null | undefined): number {
+  if (sport === 'nhl') return posBucket === 'G' ? 0.6 : 1;
+  return sport === 'nba' || sport === 'wnba' ? 1 : 0.6;
+}
+
+// Position-bucket display labels are sport-scoped (NBA G = guards, NHL/soccer
+// G = goalies) — single-sourced in lib/filters.ts next to the filter options.
+const posLabel = posBucketLabel;
 
 // SQL expression per NBA stat for DvP aggregation. Whitelisted (NOT user input).
 const NBA_STAT_SQL: Partial<Record<StatKey, string>> = {
@@ -213,6 +224,34 @@ const NFL_INVOLVEMENT: Record<string, { expr: string; floor: number }> = {
   RB: { expr: '(COALESCE(s."rushAttempts",0) + COALESCE(s.receptions,0))', floor: 4 },
   WR: { expr: 's.targets', floor: 2 },
   TE: { expr: 's.targets', floor: 1 },
+};
+
+// SQL expression per NHL stat (DvP by F/D/G bucket). Whitelisted, not input.
+// NHL rows store points = goals + assists in the shared points column.
+const NHL_STAT_SQL: Partial<Record<StatKey, string>> = {
+  pts: 's.points',
+  goals: 's.goals',
+  ast: 's.assists',
+  sog: 's."shotsOnGoal"',
+  nhlHits: 's."hitsDelivered"',
+  blocked: 's."blockedShots"',
+  fow: 's."faceoffsWon"',
+  saves: 's.saves',
+  ga: 's."goalsAgainst"',
+  sa: 's."shotsAgainst"',
+};
+
+// SQL expression per soccer stat (EPL/MLS DvP by F/M/D/G bucket). Whitelisted.
+// Fouls committed reuse the shared `fouls` column.
+const SOCCER_STAT_SQL: Partial<Record<StatKey, string>> = {
+  goals: 's.goals',
+  ast: 's.assists',
+  shots: 's.shots',
+  sot: 's."shotsOnTarget"',
+  foulsCommitted: 's.fouls',
+  saves: 's.saves',
+  ga: 's."goalsAgainst"',
+  sa: 's."shotsAgainst"',
 };
 
 type PlayerRecord = {
@@ -367,6 +406,16 @@ type StatGameRow = {
   recYards?: number | null;
   recTds?: number | null;
   fumblesLost?: number | null;
+  goals?: number | null;
+  shotsOnGoal?: number | null;
+  hitsDelivered?: number | null;
+  blockedShots?: number | null;
+  faceoffsWon?: number | null;
+  saves?: number | null;
+  goalsAgainst?: number | null;
+  shotsAgainst?: number | null;
+  shots?: number | null;
+  shotsOnTarget?: number | null;
   gameDate: Date;
   opponentTeamId: number;
   opponentTeam: { abbreviation: string; externalId: number };
@@ -429,6 +478,17 @@ function toPlayerGame(r: StatGameRow): PlayerGame {
     recYards: r.recYards,
     recTds: r.recTds,
     fumblesLost: r.fumblesLost,
+    // NHL + soccer (shared columns)
+    goals: r.goals,
+    shotsOnGoal: r.shotsOnGoal,
+    hitsDelivered: r.hitsDelivered,
+    blockedShots: r.blockedShots,
+    faceoffsWon: r.faceoffsWon,
+    saves: r.saves,
+    goalsAgainst: r.goalsAgainst,
+    shotsAgainst: r.shotsAgainst,
+    shots: r.shots,
+    shotsOnTarget: r.shotsOnTarget,
     // context
     gameDate: r.gameDate.toISOString().slice(0, 10),
     opponentTeamId: r.opponentTeamId,
@@ -710,18 +770,26 @@ export async function getPropStatParams(
   return out;
 }
 
-/** NBA DvP cell: stat allowed to a position bucket, ranked across teams. */
-async function getNbaDvpTable(
+/** The sports whose DvP uses the minutes-gated query (they store per-game minutes:
+ *  NBA/WNBA minutes played, NHL time on ice). */
+type MinutesDvpSport = 'nba' | 'wnba' | 'nhl';
+
+/** Minutes-gated DvP cell table: stat allowed to a position bucket, ranked across
+ *  teams. NBA/WNBA share the NBA stat SQL; the NHL has its own. */
+async function getMinutesDvpTable(
+  sport: MinutesDvpSport,
   posBucket: PosBucket,
   stat: StatKey,
   season: string,
 ): Promise<DvpCell[]> {
-  const expr = NBA_STAT_SQL[stat];
+  const expr = (sport === 'nhl' ? NHL_STAT_SQL : NBA_STAT_SQL)[stat];
   if (!expr) return [];
   // Apply the SAME per-player minute threshold as the player page: for each
   // player, blend their season and last-N appearance minutes, then keep only
-  // games at/above that bar. Done in SQL (window function) so the league-wide
-  // DvP averages stay consistent with each player's own role.
+  // games at/above that bar (scaled by the same qualify factor the page uses —
+  // see qualifyFactorFor for the NHL-goalie 0.6). Done in SQL (window function)
+  // so the league-wide DvP averages stay consistent with each player's own role.
+  const factor = qualifyFactorFor(sport, posBucket);
   const rows = await db.$queryRawUnsafe<
     { opponentTeamId: number; avg: number; n: number }[]
   >(
@@ -731,7 +799,7 @@ async function getNbaDvpTable(
               s."playerId" AS pid
        FROM "PlayerGameStat" s
        JOIN "Player" p ON p.id = s."playerId"
-       WHERE p.sport = 'nba' AND p."posBucket" = $1 AND s.season = $2
+       WHERE p.sport = $4 AND p."posBucket" = $1 AND s.season = $2
          AND s.minutes IS NOT NULL AND s.minutes > 0
      ),
      thresh AS (
@@ -741,11 +809,13 @@ async function getNbaDvpTable(
      SELECT g.opp AS "opponentTeamId", AVG(g.val)::float8 AS avg, COUNT(*)::int AS n
      FROM games g
      JOIN thresh t ON t.pid = g.pid
-     WHERE g.minutes >= t.thr
+     WHERE g.minutes >= t.thr * $5
      GROUP BY g.opp`,
     posBucket,
     season,
     RECENT_GAMES_WINDOW,
+    sport,
+    factor,
   );
   if (rows.length === 0) return [];
   return rankDvp(
@@ -759,13 +829,60 @@ async function getNbaDvpTable(
   );
 }
 
-async function getNbaDvp(
+async function getMinutesDvp(
+  sport: MinutesDvpSport,
   posBucket: PosBucket,
   stat: StatKey,
   opponentTeamId: number,
   season: string,
 ): Promise<DvpCell | null> {
-  const cells = await getNbaDvpTable(posBucket, stat, season);
+  const cells = await getMinutesDvpTable(sport, posBucket, stat, season);
+  return cells.find((c) => c.opponentTeamId === opponentTeamId) ?? null;
+}
+
+/** Soccer DvP: a stat allowed to a position bucket per appearance, ranked. The feed
+ *  has no per-player minutes, so there's no involvement gate — sub cameos dilute
+ *  every team's average equally, keeping the RANKING comparable. */
+async function getSoccerDvpTable(
+  sport: 'epl' | 'mls',
+  posBucket: PosBucket,
+  stat: StatKey,
+  season: string,
+): Promise<DvpCell[]> {
+  const expr = SOCCER_STAT_SQL[stat];
+  if (!expr) return [];
+  const rows = await db.$queryRawUnsafe<
+    { opponentTeamId: number; avg: number; n: number }[]
+  >(
+    `SELECT s."opponentTeamId" AS "opponentTeamId", AVG(COALESCE(${expr},0))::float8 AS avg, COUNT(*)::int AS n
+     FROM "PlayerGameStat" s
+     JOIN "Player" p ON p.id = s."playerId"
+     WHERE p.sport = $1 AND p."posBucket" = $2 AND s.season = $3
+     GROUP BY s."opponentTeamId"`,
+    sport,
+    posBucket,
+    season,
+  );
+  if (rows.length === 0) return [];
+  return rankDvp(
+    rows.map((r) => ({
+      opponentTeamId: Number(r.opponentTeamId),
+      avgAllowed: Number(r.avg),
+      sampleSize: Number(r.n),
+    })),
+    posBucket,
+    stat,
+  );
+}
+
+async function getSoccerDvp(
+  sport: 'epl' | 'mls',
+  posBucket: PosBucket,
+  stat: StatKey,
+  opponentTeamId: number,
+  season: string,
+): Promise<DvpCell | null> {
+  const cells = await getSoccerDvpTable(sport, posBucket, stat, season);
   return cells.find((c) => c.opponentTeamId === opponentTeamId) ?? null;
 }
 
@@ -858,13 +975,16 @@ async function getNflDvp(
 }
 
 /**
- * NBA game pace (idea #3) — each team's season pace + the league average. Possessions
- * per team-game ≈ FGA + 0.44·FTA − OREB + TOV (the box-score estimate single-sourced
- * in lib/stats/pace.ts), aggregated to a per-game average per team. Memoized per
- * request; null off-NBA / on error so the projection just stays pace-neutral.
+ * Basketball game pace (idea #3) — each team's season pace + the league average.
+ * Possessions per team-game ≈ FGA + 0.44·FTA − OREB + TOV (the box-score estimate
+ * single-sourced in lib/stats/pace.ts), aggregated to a per-game average per team.
+ * NBA and WNBA both store the full basketball box, so both get a pace read.
+ * Memoized per request; null off-basketball / on error so the projection just
+ * stays pace-neutral.
  */
-const getNbaPaceTable = cache(
+const getBasketballPaceTable = cache(
   async (
+    sport: 'nba' | 'wnba',
     season: string,
   ): Promise<{ byTeam: Map<number, number>; leagueAvg: number } | null> => {
     try {
@@ -875,11 +995,12 @@ const getNbaPaceTable = cache(
                     - SUM(COALESCE(s.oreb,0)) + SUM(COALESCE(s.turnovers,0)) AS poss
            FROM "PlayerGameStat" s
            JOIN "Player" p ON p.id = s."playerId"
-           WHERE p.sport = 'nba' AND s.season = $1
+           WHERE p.sport = $2 AND s.season = $1
            GROUP BY s."teamId", s."gameId"
          ) t
          GROUP BY "teamId"`,
         season,
+        sport,
       );
       if (rows.length === 0) return null;
       const byTeam = new Map<number, number>();
@@ -891,7 +1012,7 @@ const getNbaPaceTable = cache(
       }
       return { byTeam, leagueAvg: sum / rows.length };
     } catch (e) {
-      console.warn('[pace] getNbaPaceTable failed:', e instanceof Error ? e.message : e);
+      console.warn('[pace] getBasketballPaceTable failed:', e instanceof Error ? e.message : e);
       return null;
     }
   },
@@ -1175,8 +1296,8 @@ export async function getPlayerResearch(
   // MLB plate appearances are small integers clustered at ~4 for regulars, so a
   // bar equal to the average would clip the modal full game (a 4-PA game vs a 4.3
   // average); there we use 60% of normal, dropping cameos (0–2 PA) while keeping
-  // full games. Pitchers aren't opportunity-filtered (opp == null).
-  const qualifyFactor = sport === 'nba' ? 1 : 0.6;
+  // full games. Pitchers and soccer players aren't opportunity-filtered (opp == null).
+  const qualifyFactor = qualifyFactorFor(sport, record.posBucket);
   const cutoff =
     qualifyFactor *
     blendedRoleThreshold(allGames.map((g) => opportunityFor(sport, record.posBucket, g)));
@@ -1236,15 +1357,18 @@ export async function getPlayerResearch(
   let dvp: DvpCell | null = null;
   let unitLabel: string | undefined;
   if (matchupOpponent) {
-    if (sport === 'nba' && player.posBucket) {
-      dvp = await getNbaDvp(player.posBucket, stat, matchupOpponent.teamId, season);
-      unitLabel = POS_LABEL[player.posBucket] ?? 'this position';
+    if ((sport === 'nba' || sport === 'wnba' || sport === 'nhl') && player.posBucket) {
+      dvp = await getMinutesDvp(sport, player.posBucket, stat, matchupOpponent.teamId, season);
+      unitLabel = posLabel(sport, player.posBucket);
     } else if (sport === 'mlb' && player.posBucket === 'H') {
       dvp = await getMlbHitterMatchup(stat, matchupOpponent.teamId, season);
       unitLabel = 'hitters';
     } else if (sport === 'nfl' && player.posBucket) {
       dvp = await getNflDvp(player.posBucket, stat, matchupOpponent.teamId, season);
-      unitLabel = POS_LABEL[player.posBucket] ?? 'this position';
+      unitLabel = posLabel(sport, player.posBucket);
+    } else if ((sport === 'epl' || sport === 'mls') && player.posBucket) {
+      dvp = await getSoccerDvp(sport, player.posBucket, stat, matchupOpponent.teamId, season);
+      unitLabel = posLabel(sport, player.posBucket);
     }
   }
 
@@ -1291,8 +1415,8 @@ export async function getPlayerResearch(
   let environmentMult = 1;
   if (applyMatchup && team) {
     opponentMult = dvp ? opponentMultiplierFromCell(dvp) : 1;
-    if (sport === 'nba') {
-      const paceTable = await getNbaPaceTable(season);
+    if (sport === 'nba' || sport === 'wnba') {
+      const paceTable = await getBasketballPaceTable(sport, season);
       if (paceTable) {
         paceMult = paceMultiplier(
           paceTable.byTeam.get(team.id) ?? null,
@@ -1512,12 +1636,27 @@ const BOARD_NFL_STATS: Record<string, StatKey[]> = {
   WR: ['recYds', 'rec', 'fantasyScore'],
   TE: ['recYds', 'rec', 'fantasyScore'],
 };
+// NHL board stats by role: skaters (F/D) get the volume markets; goalies get saves.
+const BOARD_NHL_STATS: Record<string, StatKey[]> = {
+  F: ['sog', 'pts', 'goals'],
+  D: ['sog', 'pts', 'blocked'],
+  G: ['saves', 'ga'],
+};
+// Soccer (EPL/MLS) by role — shots markets carry the board; keepers get saves.
+const BOARD_SOCCER_STATS: Record<string, StatKey[]> = {
+  F: ['shots', 'sot', 'goals'],
+  M: ['shots', 'sot'],
+  D: ['shots', 'sot'],
+  G: ['saves'],
+};
 
 function boardStatsFor(sport: Sport, posBucket: string | null): StatKey[] {
   // MLB pitchers are excluded for now (no matchup, and starts aren't filtered).
   if (sport === 'mlb') return posBucket === 'P' ? [] : BOARD_MLB_HITTER_STATS;
   if (sport === 'nfl') return BOARD_NFL_STATS[posBucket ?? ''] ?? [];
-  return BOARD_NBA_STATS;
+  if (sport === 'nhl') return BOARD_NHL_STATS[posBucket ?? ''] ?? [];
+  if (sport === 'epl' || sport === 'mls') return BOARD_SOCCER_STATS[posBucket ?? ''] ?? [];
+  return BOARD_NBA_STATS; // NBA + WNBA
 }
 
 /**
@@ -1817,19 +1956,23 @@ async function boardMatchupContext(
     const cached = tableCache.get(key);
     if (cached) return cached;
     let cells: DvpCell[] = [];
-    if (sport === 'nba') cells = await getNbaDvpTable(bucket, stat, season);
+    if (sport === 'nba' || sport === 'wnba' || sport === 'nhl')
+      cells = await getMinutesDvpTable(sport, bucket, stat, season);
     else if (sport === 'mlb' && bucket === 'H')
       cells = await getMlbHitterMatchupTable(stat, season);
     else if (sport === 'nfl') cells = await getNflDvpTable(bucket, stat, season);
+    else if (sport === 'epl' || sport === 'mls')
+      cells = await getSoccerDvpTable(sport, bucket, stat, season);
     const m = new Map<number, DvpCell>();
     for (const c of cells) m.set(c.opponentTeamId, c);
     tableCache.set(key, m);
     return m;
   };
 
-  // NBA game pace (one league-wide table) — the same projected-game pace applies to all
-  // of a player's stats, so it's keyed by player.
-  const paceTable = sport === 'nba' ? await getNbaPaceTable(season) : null;
+  // Basketball game pace (one league-wide table) — the same projected-game pace
+  // applies to all of a player's stats, so it's keyed by player.
+  const paceTable =
+    sport === 'nba' || sport === 'wnba' ? await getBasketballPaceTable(sport, season) : null;
 
   // MLB probable-starter quality (idea #6), memoized per (pitcher, hits-vs-K rate) so it's
   // computed once and EXACTLY matches getMlbPitcherMatchupMultiplier(stat, …) on the page.
@@ -2182,6 +2325,57 @@ const BOARD_STAT_COLS: Record<Sport, Record<string, true>> = {
     recTds: true,
     fumblesLost: true,
   },
+  // WNBA rows populate the shared basketball columns.
+  wnba: {
+    points: true,
+    rebounds: true,
+    oreb: true,
+    dreb: true,
+    assists: true,
+    steals: true,
+    blocks: true,
+    turnovers: true,
+    fouls: true,
+    fgm: true,
+    fga: true,
+    fg3m: true,
+    fg3a: true,
+    ftm: true,
+    fta: true,
+  },
+  // NHL: skater columns + the shared points/assists, plus the goalie columns.
+  nhl: {
+    points: true,
+    assists: true,
+    goals: true,
+    shotsOnGoal: true,
+    hitsDelivered: true,
+    blockedShots: true,
+    faceoffsWon: true,
+    saves: true,
+    goalsAgainst: true,
+    shotsAgainst: true,
+  },
+  epl: {
+    goals: true,
+    assists: true,
+    shots: true,
+    shotsOnTarget: true,
+    fouls: true,
+    saves: true,
+    goalsAgainst: true,
+    shotsAgainst: true,
+  },
+  mls: {
+    goals: true,
+    assists: true,
+    shots: true,
+    shotsOnTarget: true,
+    fouls: true,
+    saves: true,
+    goalsAgainst: true,
+    shotsAgainst: true,
+  },
 };
 function boardStatSelect(sport: Sport) {
   return { ...BOARD_META_SELECT, ...BOARD_STAT_COLS[sport] };
@@ -2222,7 +2416,7 @@ function qualifyGames(
   posBucket: string | null,
   allGames: PlayerGame[],
 ): PlayerGame[] {
-  const qualifyFactor = sport === 'nba' ? 1 : 0.6;
+  const qualifyFactor = qualifyFactorFor(sport, posBucket);
   const cutoff =
     qualifyFactor *
     blendedRoleThreshold(allGames.map((g) => opportunityFor(sport, posBucket, g)));
@@ -2551,11 +2745,13 @@ export async function getDvpTable(
 ): Promise<DvpTableRow[]> {
   const season = await getActiveSeason(sport);
   const cells =
-    sport === 'nba'
-      ? await getNbaDvpTable(posBucket, stat, season)
+    sport === 'nba' || sport === 'wnba' || sport === 'nhl'
+      ? await getMinutesDvpTable(sport, posBucket, stat, season)
       : sport === 'nfl'
         ? await getNflDvpTable(posBucket, stat, season)
-        : await getMlbHitterMatchupTable(stat, season);
+        : sport === 'epl' || sport === 'mls'
+          ? await getSoccerDvpTable(sport, posBucket, stat, season)
+          : await getMlbHitterMatchupTable(stat, season);
   if (cells.length === 0) return [];
   const teams = await db.team.findMany({
     where: { sport },
@@ -2584,36 +2780,59 @@ export async function getDvpTable(
 }
 
 /** Season per-game leaders for a stat, qualified by a minimum games-played. */
+// Whitelisted per-sport stat SQL for the leaderboard / DvP raw queries.
+const LEADER_STAT_SQL: Record<Sport, Partial<Record<StatKey, string>>> = {
+  nba: NBA_STAT_SQL,
+  wnba: NBA_STAT_SQL,
+  mlb: MLB_HIT_SQL,
+  nfl: NFL_STAT_SQL,
+  nhl: NHL_STAT_SQL,
+  epl: SOCCER_STAT_SQL,
+  mls: SOCCER_STAT_SQL,
+};
+
+// Minimum games played to qualify for a per-game leaderboard — scaled to each
+// season's length (82 NBA/NHL, ~40 WNBA, 162 MLB, 17 NFL, 34-38 soccer).
+const LEADER_MIN_GAMES: Record<Sport, number> = {
+  nba: 12,
+  wnba: 8,
+  mlb: 20,
+  nfl: 6,
+  nhl: 12,
+  epl: 6,
+  mls: 6,
+};
+
 export async function getLeaders(
   sport: Sport,
   stat: StatKey,
   limit = 50,
 ): Promise<LeaderRow[]> {
-  const expr =
-    sport === 'nba'
-      ? NBA_STAT_SQL[stat]
-      : sport === 'nfl'
-        ? NFL_STAT_SQL[stat]
-        : MLB_HIT_SQL[stat];
+  const expr = LEADER_STAT_SQL[sport][stat];
   if (!expr) return [];
   const season = await getActiveSeason(sport);
-  const minGames = sport === 'nba' ? 12 : sport === 'nfl' ? 6 : 20;
+  const minGames = LEADER_MIN_GAMES[sport];
   // `expr` is from the internal whitelist (never user input); params are bound.
-  // NFL rows exist only for games a player featured in, so no appearance filter.
+  // NFL rows exist only for games a player featured in, so no appearance filter;
+  // soccer has no per-player minutes to filter on.
   const appearanceFilter =
-    sport === 'nba'
+    sport === 'nba' || sport === 'wnba' || sport === 'nhl'
       ? `AND s.minutes IS NOT NULL AND s.minutes > 0`
-      : sport === 'nfl'
-        ? ``
-        : `AND p."posBucket" = 'H'`;
+      : sport === 'mlb'
+        ? `AND p."posBucket" = 'H'`
+        : ``;
   // NFL passing stats belong to QBs — a WR's trick-play pass shouldn't crowd the
   // leaderboard. Rushing/receiving stay open (a mobile QB belongs on the rushing
-  // board) — handled by avg>0 + the on-page position filter.
+  // board) — handled by avg>0 + the on-page position filter. Same idea for the
+  // NHL/soccer goalie markets: saves/goals-against boards are goalies-only.
   const positionFilter =
     sport === 'nfl' &&
     (['passYds', 'passTds', 'passCmp', 'passAtt', 'ints'] as StatKey[]).includes(stat)
       ? `AND p."posBucket" = 'QB'`
-      : '';
+      : (sport === 'nhl' || sport === 'epl' || sport === 'mls') &&
+          (['saves', 'ga', 'sa'] as StatKey[]).includes(stat)
+        ? `AND p."posBucket" = 'G'`
+        : '';
   const rows = await db.$queryRawUnsafe<{ playerId: number; avg: number; n: number }[]>(
     `SELECT s."playerId" AS "playerId", AVG(${expr})::float8 AS avg, COUNT(*)::int AS n
      FROM "PlayerGameStat" s
@@ -2707,8 +2926,15 @@ export async function analyzeSlate(sport: Sport, text: string): Promise<SlateRes
     }
     // "Fantasy score" in pasted text doesn't identify the sport — the parser lands
     // it on one FS key; swap in THIS sport's FS key (a pitcher then correctly fails
-    // the offered-stats check below, since only hitters have an FS market).
-    if (FANTASY_SCORE_KEYS.has(e.stat)) e.stat = FANTASY_SCORE_KEY_BY_SPORT[sport];
+    // the offered-stats check below, since only hitters have an FS market). Sports
+    // with no FS market (NHL, soccer) have no mapping and fail the same check.
+    if (FANTASY_SCORE_KEYS.has(e.stat)) {
+      e.stat = FANTASY_SCORE_KEY_BY_SPORT[sport] ?? e.stat;
+    }
+    // Same idea for shared words: bare "hits" parses to the MLB key and bare
+    // "fouls" to the NBA key — remap to this sport's equivalent market.
+    if (sport === 'nhl' && e.stat === 'hits') e.stat = 'nhlHits';
+    if ((sport === 'epl' || sport === 'mls') && e.stat === 'fouls') e.stat = 'foulsCommitted';
     if (!statKeysForSport(sport, match.posBucket).includes(e.stat)) {
       results.push({
         raw: e.raw,
@@ -2758,6 +2984,12 @@ export async function analyzeSlate(sport: Sport, text: string): Promise<SlateRes
   return results;
 }
 
+/** How many days of upcoming games count as "the slate". Daily sports show one
+ *  day; weekly-cadence sports (NFL Thu–Mon, soccer matchweeks) show the week. */
+function slateWindowDays(sport: Sport): number {
+  return sport === 'nfl' || sport === 'epl' || sport === 'mls' ? 7 : 1;
+}
+
 /**
  * Whether a sport currently has games scheduled today or later — i.e. it's in
  * season with an actionable slate. Drives the home page, which hides off-season
@@ -2782,7 +3014,7 @@ export const hasUpcomingGames = cache(async (sport: Sport): Promise<boolean> => 
     select: { date: true },
   });
   if (!next) return false;
-  const windowDays = sport === 'nfl' ? 7 : 1;
+  const windowDays = slateWindowDays(sport);
   const dayEnd = new Date(next.date.getTime() + windowDays * 86_400_000);
   const unstarted = await db.scheduledGame.count({
     where: {
@@ -2816,8 +3048,7 @@ export const getTonightSlate = cache(async (
   if (!next) return { date: null, games: [] };
 
   const dayStart = next.date;
-  // NFL clusters games Thu–Mon, so surface the whole upcoming week, not one day.
-  const windowDays = sport === 'nfl' ? 7 : 1;
+  const windowDays = slateWindowDays(sport);
   const dayEnd = new Date(dayStart.getTime() + windowDays * 86_400_000);
   const rows = await db.scheduledGame.findMany({
     where: { sport, date: { gte: dayStart, lt: dayEnd } },

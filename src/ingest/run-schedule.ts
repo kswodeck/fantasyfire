@@ -9,7 +9,8 @@
 import 'dotenv/config';
 import { db } from '../lib/db';
 import { recordIngestRun } from './ingestRun';
-import { fetchMlbSchedule, fetchNbaSchedule, fetchNflSchedule, type ScheduleGameRow } from './schedule';
+import { fetchMlbSchedule, fetchNbaSchedule, fetchNflSchedule, fetchEspnSchedule, type ScheduleGameRow } from './schedule';
+import { ESPN_SPORT_PATH } from './espnSports';
 import { fetchEspnGameOdds, type GameOddsRow } from './gameOdds';
 import type { Sport } from '../lib/sports';
 
@@ -26,7 +27,7 @@ function slateDates(days = 2): string[] {
 }
 
 async function ingestSport(
-  sport: 'mlb' | 'nba' | 'nfl',
+  sport: Sport,
   fetcher: (date: string) => Promise<ScheduleGameRow[]>,
   resolveTeam: (key: string) => number | undefined,
   dates: string[],
@@ -75,27 +76,58 @@ async function ingestSport(
 }
 
 async function main() {
-  const [mlbTeams, nbaTeams, nflTeams] = await Promise.all([
-    db.team.findMany({ where: { sport: 'mlb' }, select: { id: true, externalId: true, abbreviation: true } }),
-    db.team.findMany({ where: { sport: 'nba' }, select: { id: true, abbreviation: true } }),
-    db.team.findMany({ where: { sport: 'nfl' }, select: { id: true, abbreviation: true } }),
+  const selectTeams = (sport: Sport) =>
+    db.team.findMany({ where: { sport }, select: { id: true, externalId: true, abbreviation: true } });
+  const [mlbTeams, nbaTeams, nflTeams, nhlTeams, wnbaTeams, eplTeams, mlsTeams] = await Promise.all([
+    selectTeams('mlb'),
+    selectTeams('nba'),
+    selectTeams('nfl'),
+    selectTeams('nhl'),
+    selectTeams('wnba'),
+    selectTeams('epl'),
+    selectTeams('mls'),
   ]);
-  const mlbByExternalId = new Map(mlbTeams.map((t) => [String(t.externalId), t.id]));
-  const mlbByAbbr = new Map(mlbTeams.map((t) => [t.abbreviation, t.id]));
-  const nbaByAbbr = new Map(nbaTeams.map((t) => [t.abbreviation, t.id]));
-  const nflByAbbr = new Map(nflTeams.map((t) => [t.abbreviation, t.id]));
+  type TeamRow = { id: number; externalId: number; abbreviation: string };
+  const byAbbr = (rows: TeamRow[]) => new Map(rows.map((t) => [t.abbreviation, t.id]));
+  const byExternalId = (rows: TeamRow[]) => new Map(rows.map((t) => [String(t.externalId), t.id]));
+  const mlbByExternalId = byExternalId(mlbTeams);
+  const mlbByAbbr = byAbbr(mlbTeams);
+  const nbaByAbbr = byAbbr(nbaTeams);
+  const nflByAbbr = byAbbr(nflTeams);
+  // The ESPN-native sports resolve by ESPN team id (=== our Team.externalId) with
+  // an abbreviation fallback — scoreboard abbreviations can differ from /teams'
+  // (e.g. NHL Utah: UTAH in /teams, UTA on the scoreboard).
+  const espnResolver = (rows: TeamRow[]) => {
+    const ids = byExternalId(rows);
+    const abbrs = byAbbr(rows);
+    return (k: string) => ids.get(k) ?? abbrs.get(k);
+  };
+  const nhlResolve = espnResolver(nhlTeams);
+  const wnbaResolve = espnResolver(wnbaTeams);
+  const eplResolve = espnResolver(eplTeams);
+  const mlsResolve = espnResolver(mlsTeams);
 
   const daily = slateDates(2);
+  // Weekly-cadence sports (NFL Thu–Mon, soccer matchweeks) pull the next 8 days
+  // so the whole week is present.
+  const weekly = slateDates(8);
   await ingestSport('mlb', fetchMlbSchedule, (k) => mlbByExternalId.get(k), daily);
   await ingestSport('nba', fetchNbaSchedule, (k) => nbaByAbbr.get(k), daily);
-  // NFL plays weekly (Thu–Mon) — pull the next 8 days so the full week is present.
-  await ingestSport('nfl', fetchNflSchedule, (k) => nflByAbbr.get(k), slateDates(8));
+  await ingestSport('nfl', fetchNflSchedule, (k) => nflByAbbr.get(k), weekly);
+  await ingestSport('nhl', (d) => fetchEspnSchedule(ESPN_SPORT_PATH.nhl!, d), nhlResolve, daily);
+  await ingestSport('wnba', (d) => fetchEspnSchedule(ESPN_SPORT_PATH.wnba!, d), wnbaResolve, daily);
+  await ingestSport('epl', (d) => fetchEspnSchedule(ESPN_SPORT_PATH.epl!, d), eplResolve, weekly);
+  await ingestSport('mls', (d) => fetchEspnSchedule(ESPN_SPORT_PATH.mls!, d), mlsResolve, weekly);
 
   // Vegas odds (idea #4) from the ESPN scoreboard — for every sport, matched back to
   // the schedule rows above by team + date. Best-effort: games without odds stay null.
-  await ingestGameOdds('mlb', mlbByAbbr, daily);
-  await ingestGameOdds('nba', nbaByAbbr, daily);
-  await ingestGameOdds('nfl', nflByAbbr, slateDates(8));
+  await ingestGameOdds('mlb', (k) => mlbByAbbr.get(k), daily);
+  await ingestGameOdds('nba', (k) => nbaByAbbr.get(k), daily);
+  await ingestGameOdds('nfl', (k) => nflByAbbr.get(k), weekly);
+  await ingestGameOdds('nhl', nhlResolve, daily);
+  await ingestGameOdds('wnba', wnbaResolve, daily);
+  await ingestGameOdds('epl', eplResolve, weekly);
+  await ingestGameOdds('mls', mlsResolve, weekly);
 
   // Prune games older than 3 days so the table stays small.
   const cutoff = new Date(Date.now() - 3 * 86_400_000);
@@ -104,10 +136,12 @@ async function main() {
 }
 
 /** Attach ESPN game odds to the matching ScheduledGame rows (by team + a ±1-day
- *  window, to absorb the UTC/ET date offset). One team plays at most once/day. */
+ *  window, to absorb the UTC/ET date offset). One team plays at most once/day.
+ *  `resolveTeam` gets the ESPN team id first (when the row carries one), then
+ *  the abbreviation — same id-first strategy as the schedule above. */
 async function ingestGameOdds(
   sport: Sport,
-  teamByAbbr: Map<string, number>,
+  resolveTeam: (key: string) => number | undefined,
   dates: string[],
 ): Promise<void> {
   let fetched = 0;
@@ -122,8 +156,8 @@ async function ingestGameOdds(
     }
     fetched += rows.length;
     for (const r of rows) {
-      const homeTeamId = teamByAbbr.get(r.homeAbbr);
-      const awayTeamId = teamByAbbr.get(r.awayAbbr);
+      const homeTeamId = (r.homeId ? resolveTeam(r.homeId) : undefined) ?? resolveTeam(r.homeAbbr);
+      const awayTeamId = (r.awayId ? resolveTeam(r.awayId) : undefined) ?? resolveTeam(r.awayAbbr);
       if (!homeTeamId || !awayTeamId) continue;
       // Exact slate-day match (same key the schedule stored), so series games on
       // consecutive days each get their OWN odds.

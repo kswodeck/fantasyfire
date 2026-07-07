@@ -75,8 +75,8 @@ describe('GET /api/v1/{sport}/hitrate', () => {
 
   it('returns 404 for an unknown sport', async () => {
     const res = await hitrateGET(
-      req('http://localhost:3000/api/v1/nhl/hitrate?playerSlug=luka-doncic&stat=pts'),
-      sportCtx('nhl'),
+      req('http://localhost:3000/api/v1/xfl/hitrate?playerSlug=luka-doncic&stat=pts'),
+      sportCtx('xfl'),
     );
     expect(res.status).toBe(404);
     expect(mockResearch).not.toHaveBeenCalled();
@@ -143,8 +143,8 @@ describe('GET /api/v1/{sport}/players', () => {
 
   it('returns 404 for an unknown sport', async () => {
     const res = await playersGET(
-      req('http://localhost:3000/api/v1/nhl/players'),
-      sportCtx('nhl'),
+      req('http://localhost:3000/api/v1/xfl/players'),
+      sportCtx('xfl'),
     );
     expect(res.status).toBe(404);
     expect(mockSearch).not.toHaveBeenCalled();
@@ -193,8 +193,8 @@ describe('GET /api/v1/{sport}/players/[slug]', () => {
 
   it('returns 404 for an unknown sport', async () => {
     const res = await playerSlugGET(
-      req('http://localhost:3000/api/v1/nhl/players/luka-doncic'),
-      ctx('nhl', 'luka-doncic'),
+      req('http://localhost:3000/api/v1/xfl/players/luka-doncic'),
+      ctx('xfl', 'luka-doncic'),
     );
     expect(res.status).toBe(404);
     expect(mockResearch).not.toHaveBeenCalled();

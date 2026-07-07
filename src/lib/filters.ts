@@ -35,9 +35,58 @@ const NFL_POSITION_GROUPS: { value: string; label: string; abbrs: string[] }[] =
   { value: 'TE', label: 'Tight Ends', abbrs: ['TE'] },
 ];
 
+// NHL and soccer bucket the posBucket directly (F/D/G and F/M/D/G) — the granular
+// `position` abbreviation (LW, RW, C / CM, LB, ST, …) already collapsed at ingest.
+const NHL_POSITIONS: FilterOption[] = [
+  { value: 'F', label: 'Forwards' },
+  { value: 'D', label: 'Defensemen' },
+  { value: 'G', label: 'Goalies' },
+];
+const SOCCER_POSITIONS: FilterOption[] = [
+  { value: 'F', label: 'Forwards' },
+  { value: 'M', label: 'Midfielders' },
+  { value: 'D', label: 'Defenders' },
+  { value: 'G', label: 'Goalkeepers' },
+];
+
+// Lowercase display label per position bucket. Bucket letters are shared across
+// sports with different meanings (NBA G = guards, NHL/soccer G = goalies), so the
+// lookup is sport-scoped. Used by the DvP matchup copy ("allows X to <label>").
+const POS_BUCKET_LABEL: Record<string, string> = {
+  G: 'guards',
+  F: 'forwards',
+  C: 'centers',
+  H: 'hitters',
+  P: 'pitchers',
+  QB: 'quarterbacks',
+  RB: 'running backs',
+  WR: 'wide receivers',
+  TE: 'tight ends',
+};
+
+/** Human label for a position bucket, sport-scoped. */
+export function posBucketLabel(sport: Sport, bucket: string | null | undefined): string {
+  if (!bucket) return 'this position';
+  if (sport === 'nhl') {
+    return bucket === 'G' ? 'goalies' : bucket === 'D' ? 'defensemen' : 'forwards';
+  }
+  if (sport === 'epl' || sport === 'mls') {
+    return bucket === 'G'
+      ? 'goalkeepers'
+      : bucket === 'D'
+        ? 'defenders'
+        : bucket === 'M'
+          ? 'midfielders'
+          : 'forwards';
+  }
+  return POS_BUCKET_LABEL[bucket] ?? 'this position';
+}
+
 /** Position filter options for a sport (the "All positions" default is added by the UI). */
 export function positionFilterOptions(sport: Sport): FilterOption[] {
-  if (sport === 'nba') return NBA_POSITIONS;
+  if (sport === 'nba' || sport === 'wnba') return NBA_POSITIONS;
+  if (sport === 'nhl') return NHL_POSITIONS;
+  if (sport === 'epl' || sport === 'mls') return SOCCER_POSITIONS;
   const groups = sport === 'nfl' ? NFL_POSITION_GROUPS : MLB_POSITION_GROUPS;
   return groups.map(({ value, label }) => ({ value, label }));
 }
@@ -54,9 +103,13 @@ export function playerMatchesPosition(
   posBucket: string | null,
 ): boolean {
   if (!category) return true;
-  if (sport === 'nba') {
+  if (sport === 'nba' || sport === 'wnba') {
     const p = (position ?? posBucket ?? '').toUpperCase();
     return p.includes(category); // category ∈ G | F | C
+  }
+  if (sport === 'nhl' || sport === 'epl' || sport === 'mls') {
+    // posBucket is authoritative (collapsed at ingest: F/D/G, F/M/D/G).
+    return posBucket === category;
   }
   if (sport === 'nfl') {
     // posBucket is authoritative (QB/RB/WR/TE); fall back to the position abbr.

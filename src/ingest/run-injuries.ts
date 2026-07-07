@@ -12,9 +12,9 @@ import { db } from '../lib/db';
 import { recordIngestRun } from './ingestRun';
 import { normalizeName } from '../lib/slate';
 import { fetchEspnInjuries, type InjuryRow } from './injuries';
-import type { Sport } from '../lib/sports';
+import { SPORT_LIST, type Sport } from '../lib/sports';
 
-const SPORTS: Sport[] = ['nba', 'mlb', 'nfl'];
+const SPORTS: Sport[] = SPORT_LIST;
 
 async function ingestSport(sport: Sport): Promise<number> {
   let rows: InjuryRow[] = [];

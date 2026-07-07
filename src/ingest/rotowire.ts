@@ -31,7 +31,7 @@ const HEADERS = {
 };
 
 /** RotoWire sport string → our Sport (others — WNBA/NHL/PGA/MMA/CS2 — are ignored). */
-const RW_SPORT: Record<string, Sport> = { NBA: 'nba', MLB: 'mlb', NFL: 'nfl' };
+const RW_SPORT: Record<string, Sport> = { NBA: 'nba', MLB: 'mlb', NFL: 'nfl', WNBA: 'wnba', NHL: 'nhl' };
 
 /** RotoWire `book` → our ProvidedLine `source` id. PrizePicks/Underdog/Sleeper/Pick6
  *  omitted on purpose — their own direct scrapers own those (and carry payout
@@ -100,6 +100,38 @@ const RW_MARKET_MAP: Record<Sport, Record<string, StatKey>> = {
     Receptions: 'rec',
     'Receiving Touchdowns': 'recTds',
   },
+  // The NBA map above was taken from RotoWire's WNBA vocabulary — same names here.
+  wnba: {
+    Points: 'pts',
+    Rebounds: 'reb',
+    Assists: 'ast',
+    '3PT Made': 'fg3m',
+    'PTS+REB+AST': 'pra',
+    'PTS+REB': 'pr',
+    'PTS+AST': 'pa',
+    'REB+AST': 'ra',
+    Steals: 'stl',
+    Blocks: 'blk',
+    'BLK+STL': 'stocks',
+    Turnovers: 'tov',
+    'Offensive Rebounds': 'oreb',
+    'Defensive Rebounds': 'dreb',
+  },
+  // Best-guess NHL market names (off-season) — verify in season.
+  nhl: {
+    'Shots on Goal': 'sog',
+    Points: 'pts',
+    Goals: 'goals',
+    Assists: 'ast',
+    Hits: 'nhlHits',
+    'Blocked Shots': 'blocked',
+    'Faceoffs Won': 'fow',
+    Saves: 'saves',
+    'Goals Against': 'ga',
+  },
+  // RotoWire's soccer feed mixes competitions — not ingested for EPL/MLS.
+  epl: {},
+  mls: {},
 };
 
 interface RwEntity {

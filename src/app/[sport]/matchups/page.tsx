@@ -22,55 +22,105 @@ export function generateStaticParams() {
 
 type PageProps = { params: Promise<{ sport: string }> };
 
-const NBA_STATS: StatKey[] = ['pts', 'reb', 'ast', 'fg3m', 'pra'];
-const MLB_STATS: StatKey[] = ['hits', 'tb', 'hr', 'rbi', 'runs'];
-const NBA_POS: { value: PosBucket; label: string }[] = [
-  { value: 'G', label: 'Guards' },
-  { value: 'F', label: 'Forwards' },
-  { value: 'C', label: 'Centers' },
-];
-const MLB_POS: { value: PosBucket; label: string }[] = [{ value: 'H', label: 'Hitters' }];
-const NFL_POS: { value: PosBucket; label: string }[] = [
-  { value: 'QB', label: 'Quarterbacks' },
-  { value: 'RB', label: 'Running Backs' },
-  { value: 'WR', label: 'Wide Receivers' },
-  { value: 'TE', label: 'Tight Ends' },
-];
-// NFL stats are position-specific, so each position offers only its real markets.
-const NFL_STATS_BY_POS: Record<string, StatKey[]> = {
-  QB: ['passYds', 'passTds', 'passCmp', 'rushYds'],
-  RB: ['rushYds', 'carries', 'rushTds', 'rec', 'recYds'],
-  WR: ['recYds', 'rec', 'recTds', 'targets'],
-  TE: ['recYds', 'rec', 'recTds', 'targets'],
+// Per-sport matchup-table config: which stats × positions have a meaningful
+// "allowed by team" read, plus the SEO copy. `statsByPosition` (when set) scopes
+// each position to its real markets instead of the full cartesian.
+interface MatchupsConfig {
+  stats: StatKey[];
+  positions: { value: PosBucket; label: string }[];
+  statsByPosition?: Record<string, StatKey[]>;
+  heading: string;
+  title: string;
+  description: string;
+}
+
+const BASKETBALL_MATCHUPS = (league: 'NBA' | 'WNBA'): MatchupsConfig => ({
+  stats: ['pts', 'reb', 'ast', 'fg3m', 'pra'],
+  positions: [
+    { value: 'G', label: 'Guards' },
+    { value: 'F', label: 'Forwards' },
+    { value: 'C', label: 'Centers' },
+  ],
+  heading: `${league} Defense vs Position`,
+  title: `${league} Defense vs Position — Stats Allowed by Team`,
+  description: `${league} defense vs position: which teams allow the most points, rebounds, assists and threes to guards, forwards and centers — ranked softest to toughest, from public box scores.`,
+});
+
+const SOCCER_MATCHUPS = (league: 'Premier League' | 'MLS'): MatchupsConfig => ({
+  stats: ['shots', 'sot', 'goals', 'saves', 'ga'],
+  positions: [
+    { value: 'F', label: 'Forwards' },
+    { value: 'M', label: 'Midfielders' },
+    { value: 'D', label: 'Defenders' },
+    { value: 'G', label: 'Goalkeepers' },
+  ],
+  statsByPosition: {
+    F: ['shots', 'sot', 'goals'],
+    M: ['shots', 'sot', 'goals'],
+    D: ['shots', 'sot', 'goals'],
+    G: ['saves', 'ga'],
+  },
+  heading: `${league} Defense vs Position`,
+  title: `${league} Defense vs Position — Stats Allowed by Team`,
+  description: `${league} defense vs position: which teams concede the most shots, shots on target and goals to forwards, midfielders and defenders — ranked softest to toughest, from public match stats.`,
+});
+
+const MATCHUPS: Record<Sport, MatchupsConfig> = {
+  nba: BASKETBALL_MATCHUPS('NBA'),
+  wnba: BASKETBALL_MATCHUPS('WNBA'),
+  mlb: {
+    stats: ['hits', 'tb', 'hr', 'rbi', 'runs'],
+    positions: [{ value: 'H', label: 'Hitters' }],
+    heading: 'MLB Pitching Allowed',
+    title: 'MLB Pitching Allowed — Stats Given Up by Team',
+    description:
+      "Which MLB teams' pitching gives up the most hits, total bases, home runs, RBIs and runs per game — ranked softest to toughest, from public box scores.",
+  },
+  nfl: {
+    stats: ['passYds', 'passTds', 'passCmp', 'rushYds', 'carries', 'rushTds', 'rec', 'recYds', 'recTds', 'targets'],
+    positions: [
+      { value: 'QB', label: 'Quarterbacks' },
+      { value: 'RB', label: 'Running Backs' },
+      { value: 'WR', label: 'Wide Receivers' },
+      { value: 'TE', label: 'Tight Ends' },
+    ],
+    // NFL stats are position-specific, so each position offers only its real markets.
+    statsByPosition: {
+      QB: ['passYds', 'passTds', 'passCmp', 'rushYds'],
+      RB: ['rushYds', 'carries', 'rushTds', 'rec', 'recYds'],
+      WR: ['recYds', 'rec', 'recTds', 'targets'],
+      TE: ['recYds', 'rec', 'recTds', 'targets'],
+    },
+    heading: 'NFL Defense vs Position',
+    title: 'NFL Defense vs Position — Stats Allowed by Team',
+    description:
+      'NFL defense vs position: which teams allow the most passing yards, rushing yards and receiving yards to QBs, RBs, WRs and TEs — ranked softest to toughest, from public game logs.',
+  },
+  nhl: {
+    stats: ['sog', 'pts', 'goals', 'nhlHits', 'blocked', 'saves', 'ga'],
+    positions: [
+      { value: 'F', label: 'Forwards' },
+      { value: 'D', label: 'Defensemen' },
+      { value: 'G', label: 'Goalies' },
+    ],
+    statsByPosition: {
+      F: ['sog', 'pts', 'goals', 'nhlHits'],
+      D: ['sog', 'pts', 'blocked', 'nhlHits'],
+      G: ['saves', 'ga'],
+    },
+    heading: 'NHL Defense vs Position',
+    title: 'NHL Defense vs Position — Stats Allowed by Team',
+    description:
+      'NHL defense vs position: which teams give up the most shots on goal, points and goals to forwards and defensemen (and force the most goalie saves) — ranked softest to toughest, from public box scores.',
+  },
+  epl: SOCCER_MATCHUPS('Premier League'),
+  mls: SOCCER_MATCHUPS('MLS'),
 };
-const NFL_STATS: StatKey[] = [
-  'passYds',
-  'passTds',
-  'passCmp',
-  'rushYds',
-  'carries',
-  'rushTds',
-  'rec',
-  'recYds',
-  'recTds',
-  'targets',
-];
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { sport } = await params;
   if (!isSport(sport)) return { title: 'Not found' };
-  const title =
-    sport === 'mlb'
-      ? 'MLB Pitching Allowed — Stats Given Up by Team'
-      : sport === 'nfl'
-        ? 'NFL Defense vs Position — Stats Allowed by Team'
-        : 'NBA Defense vs Position — Stats Allowed by Team';
-  const description =
-    sport === 'mlb'
-      ? "Which MLB teams' pitching gives up the most hits, total bases, home runs, RBIs and runs per game — ranked softest to toughest, from public box scores."
-      : sport === 'nfl'
-        ? 'NFL defense vs position: which teams allow the most passing yards, rushing yards and receiving yards to QBs, RBs, WRs and TEs — ranked softest to toughest, from public game logs.'
-        : 'NBA defense vs position: which teams allow the most points, rebounds, assists and threes to guards, forwards and centers — ranked softest to toughest, from public box scores.';
+  const { title, description } = MATCHUPS[sport];
   return {
     title,
     description,
@@ -84,15 +134,7 @@ export default async function MatchupsPage({ params }: PageProps) {
   if (!isSport(raw)) notFound();
   const sport: Sport = raw;
   const cfg = SPORTS[sport];
-  const stats = sport === 'nba' ? NBA_STATS : sport === 'nfl' ? NFL_STATS : MLB_STATS;
-  const positions = sport === 'nba' ? NBA_POS : sport === 'nfl' ? NFL_POS : MLB_POS;
-  const statsByPosition = sport === 'nfl' ? NFL_STATS_BY_POS : undefined;
-  const heading =
-    sport === 'mlb'
-      ? 'MLB Pitching Allowed'
-      : sport === 'nfl'
-        ? 'NFL Defense vs Position'
-        : 'NBA Defense vs Position';
+  const { stats, positions, statsByPosition, heading } = MATCHUPS[sport];
 
   const tables: Record<string, DvpTableRow[]> = {};
   let freshness: string | null = null;

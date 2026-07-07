@@ -27,7 +27,7 @@ const HEADERS = {
   Referer: 'https://underdogfantasy.com/',
 };
 
-const UD_SPORT: Record<string, Sport> = { NBA: 'nba', MLB: 'mlb', NFL: 'nfl' };
+const UD_SPORT: Record<string, Sport> = { NBA: 'nba', MLB: 'mlb', NFL: 'nfl', WNBA: 'wnba', NHL: 'nhl' };
 
 /** line_type values we ingest: the standard balanced line + numeric alternates. */
 const UD_LINE_TYPES = new Set(['balanced', 'alternate']);
@@ -78,6 +78,37 @@ const UD_STAT_MAP: Record<Sport, Record<string, StatKey>> = {
     receptions: 'rec',
     receiving_tds: 'recTds',
   },
+  // WNBA shares the NBA machine names (best-guess — verify in season).
+  wnba: {
+    points: 'pts',
+    rebounds: 'reb',
+    assists: 'ast',
+    three_pointers_made: 'fg3m',
+    pts_rebs_asts: 'pra',
+    pts_rebs: 'pr',
+    pts_asts: 'pa',
+    rebs_asts: 'ra',
+    steals: 'stl',
+    blocks: 'blk',
+    steals_blocks: 'stocks',
+    turnovers: 'tov',
+  },
+  // Best-guess NHL machine names (off-season) — verify in season.
+  nhl: {
+    shots: 'sog',
+    shots_on_goal: 'sog',
+    points: 'pts',
+    goals: 'goals',
+    assists: 'ast',
+    hits: 'nhlHits',
+    blocked_shots: 'blocked',
+    faceoffs_won: 'fow',
+    saves: 'saves',
+    goals_against: 'ga',
+  },
+  // Underdog mixes soccer competitions in one feed — not ingested for EPL/MLS.
+  epl: {},
+  mls: {},
 };
 
 interface UdOption {
