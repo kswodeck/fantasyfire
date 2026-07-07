@@ -42,7 +42,7 @@ const HEADERS = {
 };
 
 /** Sleeper `sport` string → our Sport (others — cs/golf/tennis/soccer — are ignored). */
-const SLEEPER_SPORT: Record<string, Sport> = { nba: 'nba', mlb: 'mlb', nfl: 'nfl', wnba: 'wnba', nhl: 'nhl' };
+const SLEEPER_SPORT: Record<string, Sport> = { nba: 'nba', mlb: 'mlb', nfl: 'nfl', wnba: 'wnba', nhl: 'nhl', ncaaf: 'cfb', ncaab: 'cbb' };
 
 /** Sleeper `wager_type` → our StatKey, scoped by sport. MLB is confirmed live; NBA/NFL
  *  names are best-guess (both off-season as of mid-2026) — verify in season. Unmapped
@@ -120,6 +120,30 @@ const SLEEPER_STAT_MAP: Record<Sport, Record<string, StatKey>> = {
   },
   // Sleeper's soccer feed mixes competitions — not ingested for MLS.
   mls: {},
+  // College mirrors the pro wager types (best-guess — verify in season).
+  cfb: {
+    pass_yards: 'passYds',
+    pass_tds: 'passTds',
+    pass_completions: 'passCmp',
+    pass_attempts: 'passAtt',
+    pass_interceptions: 'ints',
+    rush_yards: 'rushYds',
+    rush_attempts: 'carries',
+    rush_tds: 'rushTds',
+    receiving_yards: 'recYds',
+    receptions: 'rec',
+    receiving_tds: 'recTds',
+  },
+  cbb: {
+    points: 'pts',
+    rebounds: 'reb',
+    assists: 'ast',
+    three_pointers_made: 'fg3m',
+    pts_rebs_asts: 'pra',
+    steals: 'stl',
+    blocks: 'blk',
+    turnovers: 'tov',
+  },
 };
 
 interface SleeperOption {

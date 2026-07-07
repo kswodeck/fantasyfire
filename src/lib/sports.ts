@@ -1,9 +1,9 @@
 // Multi-sport configuration. Sport keys are lowercase and used in URLs, the DB
 // `sport` column, and API paths. Framework-agnostic (no React/Next imports).
 
-export type Sport = 'nba' | 'mlb' | 'nfl' | 'nhl' | 'wnba' | 'mls';
+export type Sport = 'nba' | 'mlb' | 'nfl' | 'nhl' | 'wnba' | 'mls' | 'cfb' | 'cbb';
 
-export const SPORT_LIST: Sport[] = ['nba', 'mlb', 'nfl', 'nhl', 'wnba', 'mls'];
+export const SPORT_LIST: Sport[] = ['nba', 'mlb', 'nfl', 'nhl', 'wnba', 'mls', 'cfb', 'cbb'];
 
 export interface SportConfig {
   key: Sport;
@@ -68,6 +68,22 @@ export const SPORTS: Record<Sport, SportConfig> = {
     tagline: 'Soccer player props — shots, shots on target, goals and keeper saves.',
     accent: '#b91c1c', // red-700 — white CTA text clears AA
     accentDark: '#f87171', // red-400 — AA as text on the dark surfaces
+  },
+  cfb: {
+    key: 'cfb',
+    name: 'CFB',
+    noun: 'players',
+    tagline: 'College football player props — passing, rushing and receiving yards and more.',
+    accent: '#b45309', // amber-700 — white CTA text clears AA
+    accentDark: '#fbbf24', // amber-400 — AA as text on the dark surfaces
+  },
+  cbb: {
+    key: 'cbb',
+    name: 'CBB',
+    noun: 'players',
+    tagline: "Men's college basketball player props — points, rebounds, assists and more.",
+    accent: '#4338ca', // indigo-700 — white CTA text clears AA
+    accentDark: '#818cf8', // indigo-400 — AA as text on the dark surfaces
   },
 };
 

@@ -1,5 +1,5 @@
-// Generic ESPN hidden-API client for the ESPN-native sports (NHL / WNBA / MLS)
-// — the multi-sport sibling of src/ingest/nfl/client.ts. Everything comes
+// Generic ESPN hidden-API client for the ESPN-native sports (NHL / WNBA / MLS /
+// CFB / CBB) — the multi-sport sibling of src/ingest/nfl/client.ts. Everything comes
 // from site.api.espn.com: /teams (ids + names), /teams/{id}/roster (positions +
 // bios), and scoreboard -> summary (completed box scores). The three summary
 // shapes differ by sport family:
@@ -8,6 +8,8 @@
 //   basketball -> boxscore.players[].statistics[0] with a `names` array (same as
 //                 the NBA fallback client in espn.ts)
 //   soccer     -> top-level `rosters` with named per-player stat objects
+//   football   -> boxscore.players[].statistics groups (passing/rushing/...) with
+//                 a `labels` array per group; one athlete can appear in several
 // No db here — run-ingest-espn.ts resolves teams/players and upserts.
 import type { Sport } from '../lib/sports';
 
@@ -58,6 +60,8 @@ export const ESPN_SPORT_PATH: Partial<Record<Sport, string>> = {
   nhl: 'hockey/nhl',
   wnba: 'basketball/wnba',
   mls: 'soccer/usa.1',
+  cfb: 'football/college-football',
+  cbb: 'basketball/mens-college-basketball',
 };
 
 // ---- Teams (same shape across all ESPN sports) ----
@@ -166,10 +170,12 @@ export interface EspnEventRef {
 
 /** Completed events on one date (YYYY-MM-DD). Throws on a failed fetch — the
  *  caller decides how to retry; swallowing it here would leave a silent,
- *  PERMANENT gap in the history (the incremental walk never revisits old dates). */
-export async function fetchEspnCompletedEvents(path: string, date: string): Promise<EspnEventRef[]> {
+ *  PERMANENT gap in the history (the incremental walk never revisits old dates).
+ *  `extraQuery` covers the college scoreboards, which default to a featured
+ *  subset (Top 25) unless a groups filter + high limit are passed. */
+export async function fetchEspnCompletedEvents(path: string, date: string, extraQuery = ''): Promise<EspnEventRef[]> {
   const j = await getJson<ScoreboardApi>(
-    `${SITE}/${path}/scoreboard?dates=${date.replace(/-/g, '')}`,
+    `${SITE}/${path}/scoreboard?dates=${date.replace(/-/g, '')}${extraQuery}`,
   );
   return (j.events ?? [])
     .filter((e) => e.competitions?.[0]?.status?.type?.state === 'post')
@@ -267,7 +273,10 @@ function competitorTeams(competitors: HeaderCompetitor[]): EspnLeagueTeam[] {
     .map((t) => ({
       externalId: Number(t.id),
       abbreviation: t.abbreviation!.toUpperCase(),
-      name: t.name ?? t.shortDisplayName ?? t.displayName ?? t.abbreviation!,
+      // Full display name ("Illinois Fighting Illini") — for leagues without a
+      // curated brand table (college) this IS what the UI shows, and a bare
+      // nickname ("Fighting Illini") doesn't identify the school.
+      name: t.displayName ?? t.name ?? t.shortDisplayName ?? t.abbreviation!,
     }));
 }
 
@@ -527,6 +536,112 @@ export async function fetchSoccerEventBoxScores(path: string, eventId: string, d
   return attachTeamIds(rows, teams);
 }
 
+// -- football (CFB; the same ESPN shape the NFL client parses) --
+
+interface FootballBoxAthlete {
+  athlete?: { id?: string; firstName?: string; lastName?: string; displayName?: string; jersey?: string };
+  stats?: string[];
+}
+interface FootballStatGroup {
+  name?: string;
+  labels?: string[];
+  athletes?: FootballBoxAthlete[];
+}
+interface FootballSummaryApi {
+  boxscore?: { players?: { team?: { abbreviation?: string }; statistics?: FootballStatGroup[] }[] };
+  header?: { competitions?: { competitors?: HeaderCompetitor[] }[] };
+}
+
+const intOr = (v: string | undefined): number => Math.trunc(numOr(v));
+/** Parse "made/attempted" (e.g. "20/30") to [made, attempted]. */
+const slashPair = (s: string | undefined): [number, number] => {
+  const [a, b] = (s ?? '').split('/');
+  return [intOr(a), intOr(b)];
+};
+
+/** Football box scores for one game, merged across ESPN stat groups into one row
+ *  per athlete (a QB passes and runs; an RB runs and receives) — the same merge
+ *  the NFL client does. The college feed carries no TGTS column; targets stay 0. */
+export async function fetchFootballEventBoxScores(path: string, eventId: string, dateIso: string): Promise<EspnBoxScoreResult> {
+  const sum = await getJson<FootballSummaryApi>(`${SITE}/${path}/summary?event=${eventId}`);
+  if (!sum?.boxscore?.players) return { rows: [], teams: [] };
+
+  const competitors = sum.header?.competitions?.[0]?.competitors ?? [];
+  const homeAwayByAbbr = new Map(
+    competitors.map((c) => [(c.team?.abbreviation ?? '').toUpperCase(), c.homeAway]),
+  );
+  const abbrs = [...homeAwayByAbbr.keys()];
+
+  const byAthlete = new Map<number, EspnGenBoxRow>();
+  for (const teamBlock of sum.boxscore.players) {
+    const teamAbbr = (teamBlock.team?.abbreviation ?? '').toUpperCase();
+    const opponentAbbr = abbrs.find((a) => a !== teamAbbr) ?? '';
+    const isHome = homeAwayByAbbr.get(teamAbbr) === 'home';
+
+    for (const group of teamBlock.statistics ?? []) {
+      const name = group.name ?? '';
+      if (!['passing', 'rushing', 'receiving', 'fumbles'].includes(name)) continue;
+      const labels = group.labels ?? [];
+      const at = (stats: string[] | undefined, label: string): string | undefined => {
+        const i = labels.indexOf(label);
+        return i >= 0 ? stats?.[i] : undefined;
+      };
+      for (const a of group.athletes ?? []) {
+        const id = a.athlete?.id ? Number(a.athlete.id) : null;
+        if (!id || !a.stats?.length) continue;
+        let row = byAthlete.get(id);
+        if (!row) {
+          const { firstName, lastName } = splitName(a.athlete?.displayName, a.athlete?.firstName, a.athlete?.lastName);
+          row = {
+            athleteId: id,
+            firstName,
+            lastName,
+            jersey: a.athlete?.jersey ?? null,
+            posAbbr: null, // football box scores carry no position — roster/inference decides
+            teamAbbr,
+            opponentAbbr,
+            teamExternalId: null,
+            opponentExternalId: null,
+            isHome,
+            eventId,
+            gameDate: dateIso,
+            minutes: null,
+            plusMinus: null,
+            started: null,
+            stats: {
+              passYards: 0, passTds: 0, passCompletions: 0, passAttempts: 0, passInts: 0,
+              rushYards: 0, rushAttempts: 0, rushTds: 0,
+              receptions: 0, targets: 0, recYards: 0, recTds: 0,
+              fumblesLost: 0,
+            },
+          };
+          byAthlete.set(id, row);
+        }
+        if (name === 'passing') {
+          const [cmp, att] = slashPair(at(a.stats, 'C/ATT'));
+          row.stats.passCompletions = cmp;
+          row.stats.passAttempts = att;
+          row.stats.passYards = intOr(at(a.stats, 'YDS'));
+          row.stats.passTds = intOr(at(a.stats, 'TD'));
+          row.stats.passInts = intOr(at(a.stats, 'INT'));
+        } else if (name === 'rushing') {
+          row.stats.rushAttempts = intOr(at(a.stats, 'CAR'));
+          row.stats.rushYards = intOr(at(a.stats, 'YDS'));
+          row.stats.rushTds = intOr(at(a.stats, 'TD'));
+        } else if (name === 'receiving') {
+          row.stats.receptions = intOr(at(a.stats, 'REC'));
+          row.stats.recYards = intOr(at(a.stats, 'YDS'));
+          row.stats.recTds = intOr(at(a.stats, 'TD'));
+          row.stats.targets = intOr(at(a.stats, 'TGTS')); // absent in college -> 0
+        } else if (name === 'fumbles') {
+          row.stats.fumblesLost = intOr(at(a.stats, 'LOST'));
+        }
+      }
+    }
+  }
+  return attachTeamIds([...byAthlete.values()], competitorTeams(competitors));
+}
+
 // ---- Position bucket mappers ----
 
 /** NHL: C/LW/RW/W -> F; D -> D; G -> G. */
@@ -563,4 +678,32 @@ export function toSoccerPosBucket(position: string | null | undefined): 'F' | 'M
   if (['M', 'CM', 'DM', 'AM', 'LM', 'RM', 'CDM', 'CAM'].includes(root)) return 'M';
   if (['F', 'CF', 'ST', 'S', 'LW', 'RW', 'W', 'SS'].includes(root)) return 'F';
   return null;
+}
+
+/** College basketball: G/F/C, with granular forms (PG/SG -> G, SF/PF -> F). */
+export function toCbbPosBucket(position: string | null | undefined): 'G' | 'F' | 'C' | null {
+  const p = (position ?? '').trim().toUpperCase();
+  if (!p) return null;
+  if (p === 'C') return 'C';
+  if (['G', 'PG', 'SG'].includes(p) || p.startsWith('G')) return 'G';
+  if (['F', 'SF', 'PF'].includes(p) || p.startsWith('F')) return 'F';
+  return null;
+}
+
+/** Football (CFB; same buckets as the NFL client's toNflPosBucket). */
+export function toFootballPosBucket(position: string | null | undefined): 'QB' | 'RB' | 'WR' | 'TE' | null {
+  switch ((position ?? '').toUpperCase()) {
+    case 'QB':
+      return 'QB';
+    case 'RB':
+    case 'HB':
+    case 'FB':
+      return 'RB';
+    case 'WR':
+      return 'WR';
+    case 'TE':
+      return 'TE';
+    default:
+      return null;
+  }
 }

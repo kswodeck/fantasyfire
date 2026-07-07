@@ -54,7 +54,7 @@ export default async function SportHome({ params }: PageProps) {
   const sport: Sport = raw;
   const cfg = SPORTS[sport];
   // NFL plays weekly, so "today's slate" is framed as the week.
-  const slateWord = sport === 'nfl' || sport === 'mls' ? 'This week' : 'Today';
+  const slateWord = sport === 'nfl' || sport === 'mls' || sport === 'cfb' ? 'This week' : 'Today';
 
   // Off-season (no scheduled games) → the auto board's "current" reads are stale,
   // so we show a season-leaders fallback instead. Default to in-season on error.

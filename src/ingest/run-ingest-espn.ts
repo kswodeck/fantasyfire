@@ -4,12 +4,15 @@
 //   pnpm ingest:nhl   (tsx src/ingest/run-ingest-espn.ts nhl)
 //   pnpm ingest:wnba  (tsx src/ingest/run-ingest-espn.ts wnba)
 //   pnpm ingest:mls   (tsx src/ingest/run-ingest-espn.ts mls)
+//   pnpm ingest:cfb   (tsx src/ingest/run-ingest-espn.ts cfb)
+//   pnpm ingest:cbb   (tsx src/ingest/run-ingest-espn.ts cbb)
 //
 // Like the NFL runner, ESPN is game-centric: walk the scoreboard by DATE, pull
 // each completed game's box score, and upsert players/games/stats. The walk is
 // INCREMENTAL: it starts a few days before the newest stat row already in the DB
 // (first run: the season start), so a nightly run fetches only the last slates
-// while the first run backfills the whole season.
+// while the first run backfills the whole season. Set INGEST_START_DATE
+// (YYYY-MM-DD) to force the walk's start — handy for tests and partial backfills.
 import 'dotenv/config';
 import { db } from '../lib/db';
 import { recordIngestRun } from './ingestRun';
@@ -25,9 +28,12 @@ import {
   fetchNhlEventBoxScores,
   fetchWnbaEventBoxScores,
   fetchSoccerEventBoxScores,
+  fetchFootballEventBoxScores,
   toNhlPosBucket,
   toWnbaPosBucket,
   toSoccerPosBucket,
+  toCbbPosBucket,
+  toFootballPosBucket,
   type EspnGenBoxRow,
   type EspnBoxScoreResult,
   type EspnBio,
@@ -52,6 +58,16 @@ interface EspnIngestConfig {
   /** First day of a season, for the initial backfill walk. `season` is this
    *  sport's season string ("2025-26" or "2026"). */
   seasonStartIso: (season: string) => string;
+  /** Extra scoreboard query — college scoreboards default to a featured subset
+   *  (Top 25) unless a groups filter + a high limit are passed. */
+  scoreboardQuery?: string;
+  /** Skip the /teams phase and build the team table from box scores only. The
+   *  college /teams endpoint returns EVERY school (755+ for football, far beyond
+   *  the FBS slate we walk) with non-unique abbreviations. */
+  skipLeagueTeams?: boolean;
+  /** Fetch rosters only for the teams that actually appear in the ingested box
+   *  scores (college: hundreds of schools, but only the walked slate matters). */
+  rosterFromBoxTeams?: boolean;
 }
 
 const nhlInfer = (agg: EspnGenBoxRow): string | null => {
@@ -61,6 +77,18 @@ const nhlInfer = (agg: EspnGenBoxRow): string | null => {
 const soccerInfer = (agg: EspnGenBoxRow): string | null => {
   if ((agg.stats.saves ?? 0) > 0 || (agg.stats.shotsAgainst ?? 0) > 0) return 'G';
   return 'M'; // outfield fallback: midfielder gets the generic outfield markets
+};
+// Same inference the NFL runner uses (see nfl/client.ts inferPosBucket): summed
+// stat shape separates QBs and RBs; pass-catchers default to WR.
+const footballInfer = (agg: EspnGenBoxRow): string | null => {
+  const s = agg.stats;
+  if ((s.passAttempts ?? 0) > 0) return 'QB';
+  if ((s.targets ?? 0) > 0 || (s.receptions ?? 0) > 0) {
+    if ((s.rushAttempts ?? 0) > (s.receptions ?? 0)) return 'RB';
+    return 'WR';
+  }
+  if ((s.rushAttempts ?? 0) > 0) return 'RB';
+  return null;
 };
 
 const CONFIGS: Partial<Record<Sport, EspnIngestConfig>> = {
@@ -93,6 +121,32 @@ const CONFIGS: Partial<Record<Sport, EspnIngestConfig>> = {
     // "2026" -> Feb 15 2026 (the regular season kicks off late February).
     seasonStartIso: (season) => `${season}-02-15`,
   },
+  cfb: {
+    sport: 'cfb',
+    path: ESPN_SPORT_PATH.cfb!,
+    fetchBoxScores: fetchFootballEventBoxScores,
+    toPosBucket: toFootballPosBucket,
+    inferPosBucket: footballInfer,
+    seasonTypes: new Set([2, 3]), // regular + bowls/playoff
+    // "2025" -> Aug 20 2025 (Week 0 kicks off late August).
+    seasonStartIso: (season) => `${season}-08-20`,
+    scoreboardQuery: '&groups=80&limit=300', // FBS, whole slate
+    skipLeagueTeams: true,
+    rosterFromBoxTeams: true,
+  },
+  cbb: {
+    sport: 'cbb',
+    path: ESPN_SPORT_PATH.cbb!,
+    fetchBoxScores: fetchWnbaEventBoxScores, // basketball summaries share one shape
+    toPosBucket: toCbbPosBucket,
+    inferPosBucket: () => 'F', // basketball stats don't separate G/F/C — F is neutral
+    seasonTypes: new Set([2, 3]),
+    // "2025-26" -> Nov 1 2025 (tip-off is the first week of November).
+    seasonStartIso: (season) => `${season.slice(0, 4)}-11-01`,
+    scoreboardQuery: '&groups=50&limit=400', // Division I, whole slate
+    skipLeagueTeams: true,
+    rosterFromBoxTeams: true,
+  },
 };
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -112,6 +166,31 @@ function dateRange(startIso: string, endIso: string): string[] {
   return out;
 }
 
+/** Team upsert that survives abbreviation collisions. College data has 750+
+ *  schools and abbreviations are NOT unique across them — when a second team
+ *  claims a taken (sport, abbreviation), store it with an id-suffixed
+ *  abbreviation instead. Id-first resolution still matches all its rows. */
+async function safeTeamUpsert(
+  sport: Sport,
+  t: { externalId: number; abbreviation: string; name: string },
+): Promise<void> {
+  const attempt = (abbreviation: string) =>
+    db.team.upsert({
+      where: { sport_externalId: { sport, externalId: t.externalId } },
+      create: { sport, externalId: t.externalId, abbreviation, name: t.name },
+      update: { abbreviation, name: t.name },
+    });
+  try {
+    await attempt(t.abbreviation);
+  } catch (e) {
+    const code = (e as { code?: string }).code;
+    if (code !== 'P2002') throw e; // not a unique-constraint conflict
+    const suffixed = `${t.abbreviation}-${t.externalId}`.slice(0, 20);
+    console.warn(`[${sport}] abbreviation "${t.abbreviation}" taken — storing ${t.name} as ${suffixed}`);
+    await attempt(suffixed);
+  }
+}
+
 async function main() {
   const arg = process.argv[2];
   if (!isSport(arg) || !CONFIGS[arg]) {
@@ -125,13 +204,11 @@ async function main() {
   console.log(`[${SPORT}] season ${season}`);
 
   // ---- 1) Teams ----
-  const teams = await getEspnTeams(cfg.path);
+  // College skips the league /teams call: it returns EVERY school (with
+  // non-unique abbreviations); the box scores define the real team set instead.
+  const teams = cfg.skipLeagueTeams ? [] : await getEspnTeams(cfg.path);
   for (const t of teams) {
-    await db.team.upsert({
-      where: { sport_externalId: { sport: SPORT, externalId: t.externalId } },
-      create: { sport: SPORT, externalId: t.externalId, abbreviation: t.abbreviation, name: t.name },
-      update: { abbreviation: t.abbreviation, name: t.name },
-    });
+    await safeTeamUpsert(SPORT, t);
   }
   const teamRows = await db.team.findMany({
     where: { sport: SPORT },
@@ -142,20 +219,27 @@ async function main() {
   console.log(`[${SPORT}] upserted ${teamRows.length} teams`);
 
   // ---- 2) Rosters -> bios + current team ----
+  // (For rosterFromBoxTeams sports this runs AFTER the box scores, scoped to the
+  // teams that actually played — see below.)
   const bioByAthlete = new Map<number, EspnBio>();
   const teamExternalByAthlete = new Map<number, number>();
-  await pMap(
-    teams,
-    async (t) => {
-      const bios = await getEspnRosterBios(cfg.path, t.externalId);
-      for (const [id, bio] of bios) {
-        bioByAthlete.set(id, bio);
-        teamExternalByAthlete.set(id, t.externalId);
-      }
-    },
-    6,
-  );
-  console.log(`[${SPORT}] ${bioByAthlete.size} rostered players with bios`);
+  const loadRosters = async (externalIds: number[]) => {
+    await pMap(
+      externalIds,
+      async (externalId) => {
+        const bios = await getEspnRosterBios(cfg.path, externalId);
+        for (const [id, bio] of bios) {
+          bioByAthlete.set(id, bio);
+          teamExternalByAthlete.set(id, externalId);
+        }
+      },
+      6,
+    );
+  };
+  if (!cfg.rosterFromBoxTeams) {
+    await loadRosters(teams.map((t) => t.externalId));
+    console.log(`[${SPORT}] ${bioByAthlete.size} rostered players with bios`);
+  }
 
   // ---- 3) Box scores: incremental date walk ----
   const newest = await db.playerGameStat.aggregate({
@@ -163,7 +247,10 @@ async function main() {
     _max: { gameDate: true },
   });
   let startIso: string;
-  if (newest._max.gameDate) {
+  const forcedStart = process.env.INGEST_START_DATE?.trim();
+  if (forcedStart && /^\d{4}-\d{2}-\d{2}$/.test(forcedStart)) {
+    startIso = forcedStart; // explicit override (tests / partial backfills)
+  } else if (newest._max.gameDate) {
     const from = new Date(newest._max.gameDate.getTime() - RECENT_DAYS * 86_400_000);
     startIso = from.toISOString().slice(0, 10);
   } else {
@@ -182,7 +269,7 @@ async function main() {
   const perDate = await pMap(
     dates,
     (d) =>
-      fetchEspnCompletedEvents(cfg.path, d).catch((e) => {
+      fetchEspnCompletedEvents(cfg.path, d, cfg.scoreboardQuery ?? '').catch((e) => {
         console.warn(`[${SPORT}] scoreboard ${d} failed: ${(e as Error).message}`);
         failedDates.push(d);
         return [] as EspnEventRef[];
@@ -201,7 +288,7 @@ async function main() {
   if (failedDates.length > 0) {
     console.warn(`[${SPORT}] retrying ${failedDates.length} failed dates (sequential)`);
     for (const d of failedDates) {
-      collect(await fetchEspnCompletedEvents(cfg.path, d)); // throws -> run fails -> next run retries
+      collect(await fetchEspnCompletedEvents(cfg.path, d, cfg.scoreboardQuery ?? '')); // throws -> run fails -> next run retries
       await new Promise((r) => setTimeout(r, 500));
     }
   }
@@ -240,23 +327,21 @@ async function main() {
 
   // Upsert teams that appear in the box scores but not in /teams — that endpoint
   // lists only CURRENT league members, and historical games can involve clubs
-  // that have since left the league or relocated.
+  // that have since left the league or relocated. For skipLeagueTeams sports
+  // (college) the box scores are the ONLY team source, so every seen team is
+  // upserted each run to keep names/abbreviations fresh.
   const knownExternal = new Set(teamRows.map((t) => t.externalId));
   const missingTeams = new Map<number, { externalId: number; abbreviation: string; name: string }>();
   for (const g of perGame) {
     for (const t of g.teams) {
-      if (!knownExternal.has(t.externalId) && !missingTeams.has(t.externalId)) {
+      if ((cfg.skipLeagueTeams || !knownExternal.has(t.externalId)) && !missingTeams.has(t.externalId)) {
         missingTeams.set(t.externalId, t);
       }
     }
   }
   if (missingTeams.size > 0) {
     for (const t of missingTeams.values()) {
-      await db.team.upsert({
-        where: { sport_externalId: { sport: SPORT, externalId: t.externalId } },
-        create: { sport: SPORT, externalId: t.externalId, abbreviation: t.abbreviation, name: t.name },
-        update: { abbreviation: t.abbreviation, name: t.name },
-      });
+      await safeTeamUpsert(SPORT, t);
     }
     const refreshed = await db.team.findMany({
       where: { sport: SPORT },
@@ -274,6 +359,14 @@ async function main() {
   // summaries), with the summary abbreviation as the fallback.
   const resolveTeamId = (externalId: number | null, abbr: string): number | undefined =>
     (externalId != null ? teamIdByExternal.get(externalId) : undefined) ?? teamIdByAbbr.get(abbr);
+
+  // College: rosters for exactly the teams that appeared in the walked slate.
+  if (cfg.rosterFromBoxTeams) {
+    const seenTeamIds = new Set<number>();
+    for (const g of perGame) for (const t of g.teams) seenTeamIds.add(t.externalId);
+    await loadRosters([...seenTeamIds]);
+    console.log(`[${SPORT}] ${bioByAthlete.size} rostered players with bios (${seenTeamIds.size} teams seen)`);
+  }
 
   // ---- 4) Resolve a position bucket per athlete ----
   // Priority: roster position -> a position seen in any summary -> stat inference.

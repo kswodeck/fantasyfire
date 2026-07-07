@@ -134,9 +134,10 @@ export async function fetchEspnSchedule(
   path: string,
   date: string,
   normalize?: (a: string) => string,
+  extraQuery = '', // college scoreboards need a groups filter + high limit
 ): Promise<ScheduleGameRow[]> {
   const data = (await getJson(
-    `https://site.api.espn.com/apis/site/v2/sports/${path}/scoreboard?dates=${date.replace(/-/g, '')}`,
+    `https://site.api.espn.com/apis/site/v2/sports/${path}/scoreboard?dates=${date.replace(/-/g, '')}${extraQuery}`,
   )) as EspnScoreboard;
   const events = data.events ?? [];
   const key = (c: EspnCompetitor | undefined): string => {

@@ -330,13 +330,14 @@ export const NHL_GOALIE_KEYS: StatKey[] = ['saves', 'ga', 'sa'];
 export const SOCCER_OUTFIELD_KEYS: StatKey[] = ['shots', 'sot', 'goals', 'ast', 'foulsCommitted'];
 export const SOCCER_GK_KEYS: StatKey[] = ['saves', 'ga', 'sa'];
 
-/** Ordered stat keys offered for a sport (and role: MLB hitter/pitcher, NFL position,
- *  NHL/soccer goalie vs everyone else). WNBA shares the NBA keys. */
+/** Ordered stat keys offered for a sport (and role: MLB hitter/pitcher, football
+ *  position, NHL/soccer goalie vs everyone else). WNBA and CBB share the NBA
+ *  keys; CFB shares the NFL keys. */
 export function statKeysForSport(sport: Sport, posBucket?: string | null): StatKey[] {
   if (sport === 'mlb') {
     return posBucket === 'P' ? MLB_PITCHING_KEYS : MLB_HITTING_KEYS;
   }
-  if (sport === 'nfl') {
+  if (sport === 'nfl' || sport === 'cfb') {
     switch (posBucket) {
       case 'QB':
         return NFL_QB_KEYS;
@@ -346,8 +347,8 @@ export function statKeysForSport(sport: Sport, posBucket?: string | null): StatK
         return NFL_WR_KEYS;
       case 'TE':
         return NFL_TE_KEYS;
-      default:
-        return NFL_QB_KEYS; // fallback (shouldn't happen — every NFL player has a bucket)
+        default:
+        return NFL_QB_KEYS; // fallback (shouldn't happen — every football player has a bucket)
     }
   }
   if (sport === 'nhl') {
@@ -356,13 +357,13 @@ export function statKeysForSport(sport: Sport, posBucket?: string | null): StatK
   if (sport === 'mls') {
     return posBucket === 'G' ? SOCCER_GK_KEYS : SOCCER_OUTFIELD_KEYS;
   }
-  return NBA_STAT_KEYS; // NBA + WNBA
+  return NBA_STAT_KEYS; // NBA + WNBA + CBB
 }
 
 /** The default stat to open a player page on. */
 export function defaultStatForSport(sport: Sport, posBucket?: string | null): StatKey {
   if (sport === 'mlb') return posBucket === 'P' ? 'k' : 'hits';
-  if (sport === 'nfl') {
+  if (sport === 'nfl' || sport === 'cfb') {
     switch (posBucket) {
       case 'QB':
         return 'passYds';
@@ -377,7 +378,7 @@ export function defaultStatForSport(sport: Sport, posBucket?: string | null): St
   }
   if (sport === 'nhl') return posBucket === 'G' ? 'saves' : 'sog';
   if (sport === 'mls') return posBucket === 'G' ? 'saves' : 'shots';
-  return 'pts'; // NBA + WNBA
+  return 'pts'; // NBA + WNBA + CBB
 }
 
 /** Get a stat's value from a game line. */
@@ -398,8 +399,10 @@ export const FANTASY_SCORE_KEYS: ReadonlySet<StatKey> = new Set<StatKey>([
 export const FANTASY_SCORE_KEY_BY_SPORT: Partial<Record<Sport, StatKey>> = {
   nba: 'fs',
   wnba: 'fs',
+  cbb: 'fs',
   mlb: 'hitterFs',
   nfl: 'fantasyScore',
+  cfb: 'fantasyScore',
 };
 
 /** Analysis windows. Numeric = last N games; 'season' = all games. */

@@ -30,13 +30,20 @@ export const revalidate = 86400;
 export const dynamicParams = true;
 
 export async function generateStaticParams() {
-  const lists = await Promise.all(
-    SPORT_LIST.map(async (sport) => {
-      const params = await getPropStatParams(sport, 60);
-      return params.map(({ slug, stat }) => ({ sport, playerSlug: slug, stat }));
-    }),
-  );
-  return lists.flat();
+  // DB-resilient: no reachable database (e.g. a Vercel preview) → prerender
+  // nothing and let dynamicParams=true render on demand, so the build succeeds.
+  try {
+    const lists = await Promise.all(
+      SPORT_LIST.map(async (sport) => {
+        const params = await getPropStatParams(sport, 60);
+        return params.map(({ slug, stat }) => ({ sport, playerSlug: slug, stat }));
+      }),
+    );
+    return lists.flat();
+  } catch (e) {
+    console.warn('[build] prop-page prerender list unavailable (DB unreachable?):', e instanceof Error ? e.message : e);
+    return [];
+  }
 }
 
 type PageProps = { params: Promise<{ sport: string; playerSlug: string; stat: string }> };

@@ -110,6 +110,26 @@ export function currentMlsSeason(now: Date = new Date()): string {
   return String(now.getMonth() >= 1 ? now.getFullYear() : now.getFullYear() - 1);
 }
 
+// ---- College football (single calendar year; season runs ~late August–January) ----
+
+/** Current CFB season as its START year ("2025"). CFB_SEASON can override it.
+ *  Like the NFL: Jan bowl games belong to the prior year (cutoff: August). */
+export function currentCfbSeason(now: Date = new Date()): string {
+  const override = process.env.CFB_SEASON?.trim();
+  if (override && /^\d{4}$/.test(override)) return override;
+  return String(now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1);
+}
+
+// ---- Men's college basketball (two-year "YYYY-YY"; runs ~November–April) ----
+
+/** Current CBB season ("2025-26"). CBB_SEASON can override it. Cutoff: October 1
+ *  (tip-off is early November; May–September belong to the finished season). */
+export function currentCbbSeason(now: Date = new Date()): string {
+  const override = process.env.CBB_SEASON?.trim();
+  if (override && /^\d{4}-\d{2}$/.test(override)) return override;
+  return formatSeason(now.getMonth() >= 9 ? now.getFullYear() : now.getFullYear() - 1);
+}
+
 // ---- Sport-generic helpers ----
 
 import type { Sport } from './sports';
@@ -126,13 +146,17 @@ export function currentSeason(sport: Sport, now: Date = new Date()): string {
       return currentWnbaSeason(now);
     case 'mls':
       return currentMlsSeason(now);
+    case 'cfb':
+      return currentCfbSeason(now);
+    case 'cbb':
+      return currentCbbSeason(now);
     default:
       return configuredSeason(now);
   }
 }
 
 export function previousSeason(sport: Sport, season: string): string {
-  // Two-year sports (NBA/NHL) use "YYYY-YY"; the rest are plain years.
+  // Two-year sports (NBA/NHL/CBB) use "YYYY-YY"; the rest are plain years.
   if (/^\d{4}-\d{2}$/.test(season)) return previousNbaSeason(season);
   return String(Number.parseInt(season, 10) - 1);
 }

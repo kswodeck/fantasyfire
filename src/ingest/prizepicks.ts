@@ -30,7 +30,7 @@ const HEADERS = {
   Referer: 'https://app.prizepicks.com/',
 };
 
-const PP_LEAGUE: Record<string, Sport> = { NBA: 'nba', MLB: 'mlb', NFL: 'nfl', WNBA: 'wnba', NHL: 'nhl' };
+const PP_LEAGUE: Record<string, Sport> = { NBA: 'nba', MLB: 'mlb', NFL: 'nfl', WNBA: 'wnba', NHL: 'nhl', CFB: 'cfb', CBB: 'cbb' };
 
 /** Payout variants we ingest. Anything else (promos, flash sales) is skipped. */
 const PP_ODDS_TYPES = new Set(['standard', 'goblin', 'demon']);
@@ -125,6 +125,36 @@ const PP_STAT_MAP: Record<Sport, Record<string, StatKey>> = {
   },
   // PP folds all soccer into one SOCCER league (see PP_LEAGUE_IDS) — not ingested.
   mls: {},
+  // College mirrors the pro market names. DORMANT until a league id is added to
+  // PP_LEAGUE_IDS (verify the id + names in the PP app once the season starts).
+  cfb: {
+    'Pass Yards': 'passYds',
+    'Pass TDs': 'passTds',
+    'Pass Completions': 'passCmp',
+    'Pass Attempts': 'passAtt',
+    INT: 'ints',
+    'Rush Yards': 'rushYds',
+    'Rush Attempts': 'carries',
+    'Rush TDs': 'rushTds',
+    'Receiving Yards': 'recYds',
+    Receptions: 'rec',
+    'Receiving TDs': 'recTds',
+    'Fantasy Score': 'fantasyScore',
+  },
+  cbb: {
+    Points: 'pts',
+    Rebounds: 'reb',
+    Assists: 'ast',
+    '3-PT Made': 'fg3m',
+    'Pts+Rebs+Asts': 'pra',
+    'Pts+Rebs': 'pr',
+    'Pts+Asts': 'pa',
+    'Rebs+Asts': 'ra',
+    Steals: 'stl',
+    'Blocked Shots': 'blk',
+    Turnovers: 'tov',
+    'Fantasy Score': 'fs',
+  },
 };
 
 interface PpResource {

@@ -34,7 +34,7 @@ interface MatchupsConfig {
   description: string;
 }
 
-const BASKETBALL_MATCHUPS = (league: 'NBA' | 'WNBA'): MatchupsConfig => ({
+const BASKETBALL_MATCHUPS = (league: 'NBA' | 'WNBA' | 'CBB'): MatchupsConfig => ({
   stats: ['pts', 'reb', 'ast', 'fg3m', 'pra'],
   positions: [
     { value: 'G', label: 'Guards' },
@@ -114,6 +114,27 @@ const MATCHUPS: Record<Sport, MatchupsConfig> = {
       'NHL defense vs position: which teams give up the most shots on goal, points and goals to forwards and defensemen (and force the most goalie saves) — ranked softest to toughest, from public box scores.',
   },
   mls: SOCCER_MATCHUPS('MLS'),
+  cbb: BASKETBALL_MATCHUPS('CBB'),
+  cfb: {
+    stats: ['passYds', 'passTds', 'passCmp', 'rushYds', 'carries', 'rushTds', 'rec', 'recYds', 'recTds'],
+    positions: [
+      { value: 'QB', label: 'Quarterbacks' },
+      { value: 'RB', label: 'Running Backs' },
+      { value: 'WR', label: 'Wide Receivers' },
+      { value: 'TE', label: 'Tight Ends' },
+    ],
+    // Same position-scoping as the NFL, minus targets (absent from the feed).
+    statsByPosition: {
+      QB: ['passYds', 'passTds', 'passCmp', 'rushYds'],
+      RB: ['rushYds', 'carries', 'rushTds', 'rec', 'recYds'],
+      WR: ['recYds', 'rec', 'recTds'],
+      TE: ['recYds', 'rec', 'recTds'],
+    },
+    heading: 'CFB Defense vs Position',
+    title: 'CFB Defense vs Position — Stats Allowed by Team',
+    description:
+      'College football defense vs position: which teams allow the most passing, rushing and receiving yards to QBs, RBs, WRs and TEs — ranked softest to toughest, from public game logs.',
+  },
 };
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {

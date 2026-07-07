@@ -30,6 +30,8 @@ const ESPN_PATH: Record<Sport, string> = {
   nhl: 'hockey/nhl',
   wnba: 'basketball/wnba',
   mls: 'soccer/usa.1',
+  cfb: 'football/college-football',
+  cbb: 'basketball/mens-college-basketball',
 };
 
 async function getJson(url: string): Promise<unknown> {
@@ -67,10 +69,17 @@ interface EspnScoreboard {
   events?: EspnEvent[];
 }
 
+// College scoreboards default to a featured subset (Top 25) — the groups filter
+// (FBS 80 / D1 50) + a high limit return the whole slate.
+const ESPN_SCOREBOARD_QUERY: Partial<Record<Sport, string>> = {
+  cfb: '&groups=80&limit=300',
+  cbb: '&groups=50&limit=400',
+};
+
 /** Game odds for one date (YYYY-MM-DD). Games without posted odds are skipped. */
 export async function fetchEspnGameOdds(sport: Sport, date: string): Promise<GameOddsRow[]> {
   const data = (await getJson(
-    `https://site.api.espn.com/apis/site/v2/sports/${ESPN_PATH[sport]}/scoreboard?dates=${date.replace(/-/g, '')}`,
+    `https://site.api.espn.com/apis/site/v2/sports/${ESPN_PATH[sport]}/scoreboard?dates=${date.replace(/-/g, '')}${ESPN_SCOREBOARD_QUERY[sport] ?? ''}`,
   )) as EspnScoreboard;
 
   const out: GameOddsRow[] = [];

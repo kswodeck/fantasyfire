@@ -31,7 +31,7 @@ const HEADERS = {
 };
 
 /** RotoWire sport string → our Sport (others — WNBA/NHL/PGA/MMA/CS2 — are ignored). */
-const RW_SPORT: Record<string, Sport> = { NBA: 'nba', MLB: 'mlb', NFL: 'nfl', WNBA: 'wnba', NHL: 'nhl' };
+const RW_SPORT: Record<string, Sport> = { NBA: 'nba', MLB: 'mlb', NFL: 'nfl', WNBA: 'wnba', NHL: 'nhl', CFB: 'cfb', CBB: 'cbb' };
 
 /** RotoWire `book` → our ProvidedLine `source` id. PrizePicks/Underdog/Sleeper/Pick6
  *  omitted on purpose — their own direct scrapers own those (and carry payout
@@ -131,6 +131,30 @@ const RW_MARKET_MAP: Record<Sport, Record<string, StatKey>> = {
   },
   // RotoWire's soccer feed mixes competitions — not ingested for MLS.
   mls: {},
+  // College mirrors the pro market names (best-guess — verify in season).
+  cfb: {
+    'Passing Yards': 'passYds',
+    'Passing Touchdowns': 'passTds',
+    Completions: 'passCmp',
+    'Pass Attempts': 'passAtt',
+    'Interceptions Thrown': 'ints',
+    'Rushing Yards': 'rushYds',
+    'Rush Attempts': 'carries',
+    'Rushing Touchdowns': 'rushTds',
+    'Receiving Yards': 'recYds',
+    Receptions: 'rec',
+    'Receiving Touchdowns': 'recTds',
+  },
+  cbb: {
+    Points: 'pts',
+    Rebounds: 'reb',
+    Assists: 'ast',
+    '3PT Made': 'fg3m',
+    'PTS+REB+AST': 'pra',
+    Steals: 'stl',
+    Blocks: 'blk',
+    Turnovers: 'tov',
+  },
 };
 
 interface RwEntity {

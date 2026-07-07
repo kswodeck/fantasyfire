@@ -14,8 +14,13 @@ concrete files it touches so it can be picked up directly._
 > lines all extended; team identity for the ESPN sports resolves by ESPN team id
 > (abbreviations differ between ESPN endpoints). The Premier League was built and
 > then removed by request — the soccer plumbing is league-generic, so re-adding
-> it (or La Liga etc.) is one registry entry + one ingest config. "Three sports"
-> below is now **six**.
+> it (or La Liga etc.) is one registry entry + one ingest config. A follow-up in
+> the same PR added **CFB + men's CBB** (ESPN college feeds; scoreboards need
+> groups filters, teams resolve from box scores since /teams lists all 755
+> schools with non-unique abbreviations, and there are no curated college brand
+> tables — the UI uses the DB display name + neutral colors). "Three sports"
+> below is now **eight**. NOTE: several states restrict college player props —
+> the site is research-only, but keep that in mind before monetizing college.
 
 > **Update 2026-06-25 — NFL added + FireFactor.** A third sport, **NFL** (ESPN
 > `football/nfl` ingest), now rides the same shared schema and section routes

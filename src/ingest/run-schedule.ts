@@ -78,13 +78,15 @@ async function ingestSport(
 async function main() {
   const selectTeams = (sport: Sport) =>
     db.team.findMany({ where: { sport }, select: { id: true, externalId: true, abbreviation: true } });
-  const [mlbTeams, nbaTeams, nflTeams, nhlTeams, wnbaTeams, mlsTeams] = await Promise.all([
+  const [mlbTeams, nbaTeams, nflTeams, nhlTeams, wnbaTeams, mlsTeams, cfbTeams, cbbTeams] = await Promise.all([
     selectTeams('mlb'),
     selectTeams('nba'),
     selectTeams('nfl'),
     selectTeams('nhl'),
     selectTeams('wnba'),
     selectTeams('mls'),
+    selectTeams('cfb'),
+    selectTeams('cbb'),
   ]);
   type TeamRow = { id: number; externalId: number; abbreviation: string };
   const byAbbr = (rows: TeamRow[]) => new Map(rows.map((t) => [t.abbreviation, t.id]));
@@ -104,6 +106,8 @@ async function main() {
   const nhlResolve = espnResolver(nhlTeams);
   const wnbaResolve = espnResolver(wnbaTeams);
   const mlsResolve = espnResolver(mlsTeams);
+  const cfbResolve = espnResolver(cfbTeams);
+  const cbbResolve = espnResolver(cbbTeams);
 
   const daily = slateDates(2);
   // Weekly-cadence sports (NFL Thu–Mon, soccer matchweeks) pull the next 8 days
@@ -115,6 +119,9 @@ async function main() {
   await ingestSport('nhl', (d) => fetchEspnSchedule(ESPN_SPORT_PATH.nhl!, d), nhlResolve, daily);
   await ingestSport('wnba', (d) => fetchEspnSchedule(ESPN_SPORT_PATH.wnba!, d), wnbaResolve, daily);
   await ingestSport('mls', (d) => fetchEspnSchedule(ESPN_SPORT_PATH.mls!, d), mlsResolve, weekly);
+  // College scoreboards default to a featured subset — pass the groups filter.
+  await ingestSport('cfb', (d) => fetchEspnSchedule(ESPN_SPORT_PATH.cfb!, d, undefined, '&groups=80&limit=300'), cfbResolve, weekly);
+  await ingestSport('cbb', (d) => fetchEspnSchedule(ESPN_SPORT_PATH.cbb!, d, undefined, '&groups=50&limit=400'), cbbResolve, daily);
 
   // Vegas odds (idea #4) from the ESPN scoreboard — for every sport, matched back to
   // the schedule rows above by team + date. Best-effort: games without odds stay null.
@@ -124,6 +131,8 @@ async function main() {
   await ingestGameOdds('nhl', nhlResolve, daily);
   await ingestGameOdds('wnba', wnbaResolve, daily);
   await ingestGameOdds('mls', mlsResolve, weekly);
+  await ingestGameOdds('cfb', cfbResolve, weekly);
+  await ingestGameOdds('cbb', cbbResolve, daily);
 
   // Prune games older than 3 days so the table stays small.
   const cutoff = new Date(Date.now() - 3 * 86_400_000);

@@ -17,6 +17,9 @@ export const PROP_STATS: Record<Sport, StatKey[]> = {
   // so a goalie never gets a shots-on-goal page and vice versa).
   nhl: ['sog', 'pts', 'goals', 'ast', 'nhlHits', 'blocked', 'saves'],
   mls: ['shots', 'sot', 'goals', 'ast', 'saves'],
+  // College mirrors the pro football/basketball markets (same shared keys).
+  cfb: ['passYds', 'passTds', 'passCmp', 'rushYds', 'carries', 'rushTds', 'rec', 'recYds', 'recTds', 'fantasyScore'],
+  cbb: ['pts', 'reb', 'ast', 'fg3m', 'pra', 'stl', 'blk', 'tov', 'fs'],
 };
 
 export function isPropStat(sport: Sport, stat: string): stat is StatKey {

@@ -27,7 +27,7 @@ const HEADERS = {
   Referer: 'https://underdogfantasy.com/',
 };
 
-const UD_SPORT: Record<string, Sport> = { NBA: 'nba', MLB: 'mlb', NFL: 'nfl', WNBA: 'wnba', NHL: 'nhl' };
+const UD_SPORT: Record<string, Sport> = { NBA: 'nba', MLB: 'mlb', NFL: 'nfl', WNBA: 'wnba', NHL: 'nhl', CFB: 'cfb', CBB: 'cbb' };
 
 /** line_type values we ingest: the standard balanced line + numeric alternates. */
 const UD_LINE_TYPES = new Set(['balanced', 'alternate']);
@@ -108,6 +108,30 @@ const UD_STAT_MAP: Record<Sport, Record<string, StatKey>> = {
   },
   // Underdog mixes soccer competitions in one feed — not ingested for MLS.
   mls: {},
+  // College mirrors the pro machine names (best-guess — verify in season).
+  cfb: {
+    passing_yards: 'passYds',
+    passing_tds: 'passTds',
+    completions: 'passCmp',
+    pass_attempts: 'passAtt',
+    interceptions: 'ints',
+    rushing_yards: 'rushYds',
+    rush_attempts: 'carries',
+    rushing_tds: 'rushTds',
+    receiving_yards: 'recYds',
+    receptions: 'rec',
+    receiving_tds: 'recTds',
+  },
+  cbb: {
+    points: 'pts',
+    rebounds: 'reb',
+    assists: 'ast',
+    three_pointers_made: 'fg3m',
+    pts_rebs_asts: 'pra',
+    steals: 'stl',
+    blocks: 'blk',
+    turnovers: 'tov',
+  },
 };
 
 interface UdOption {

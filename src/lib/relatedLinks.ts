@@ -8,6 +8,8 @@ export const DEFAULT_LEADERS_STAT: Record<Sport, string> = {
   nfl: 'passYds',
   nhl: 'pts',
   mls: 'goals',
+  cfb: 'passYds',
+  cbb: 'pts',
 };
 
 /**

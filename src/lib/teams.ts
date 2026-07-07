@@ -221,6 +221,13 @@ const MLS_TEAMS: Record<string, Entry> = {
   VAN: { name: 'Vancouver Whitecaps', city: '', primary: '#9DC2E5', secondary: '#12284C' },
 };
 
+// College (CFB FBS ~134 schools, CBB D1 ~360): no curated brand tables — the
+// counts would bloat this client-shipped module for marginal gain. getTeam falls
+// back to the neutral brand and the UI shows the full school name stored on the
+// Team row at ingest (ESPN displayName, e.g. "Alabama Crimson Tide").
+const CFB_TEAMS: Record<string, Entry> = {};
+const CBB_TEAMS: Record<string, Entry> = {};
+
 const TABLES: Record<Sport, Record<string, Entry>> = {
   nba: NBA_TEAMS,
   mlb: MLB_TEAMS,
@@ -228,6 +235,8 @@ const TABLES: Record<Sport, Record<string, Entry>> = {
   nhl: NHL_TEAMS,
   wnba: WNBA_TEAMS,
   mls: MLS_TEAMS,
+  cfb: CFB_TEAMS,
+  cbb: CBB_TEAMS,
 };
 
 const FALLBACK: TeamBrand = {
@@ -255,6 +264,8 @@ const ESPN_LEAGUE: Partial<Record<Sport, string>> = {
   nhl: 'nhl',
   wnba: 'wnba',
   mls: 'soccer',
+  cfb: 'college-football',
+  cbb: 'mens-college-basketball',
 };
 
 /** Official headshot URL for a player's external id. Missing ids return a silhouette. */
@@ -280,6 +291,10 @@ export function teamLogoUrl(sport: Sport, externalId: number, abbr?: string | nu
   }
   if (sport === 'mls') {
     return `https://a.espncdn.com/i/teamlogos/soccer/500/${externalId}.png`;
+  }
+  if (sport === 'cfb' || sport === 'cbb') {
+    // College logos live under one shared "ncaa" bucket, keyed by ESPN team id.
+    return `https://a.espncdn.com/i/teamlogos/ncaa/500/${externalId}.png`;
   }
   const league = ESPN_LEAGUE[sport];
   if (league) {

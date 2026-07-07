@@ -23,6 +23,8 @@ const JOB_LABELS: Record<JobName, string> = {
   nhl: 'NHL ingest',
   wnba: 'WNBA ingest',
   mls: 'MLS ingest',
+  cfb: 'CFB ingest',
+  cbb: 'CBB ingest',
   schedule: 'Schedule pull',
   indexnow: 'IndexNow ping',
 };

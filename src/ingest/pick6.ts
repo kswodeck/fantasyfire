@@ -34,7 +34,7 @@ const HEADERS = {
 
 /** Pick6 league abbreviation → our Sport. Only per-game player-prop leagues; the
  *  season-long "NFL SZN" product is deliberately excluded. */
-const P6_SPORT: Record<string, Sport> = { NBA: 'nba', MLB: 'mlb', NFL: 'nfl', WNBA: 'wnba', NHL: 'nhl' };
+const P6_SPORT: Record<string, Sport> = { NBA: 'nba', MLB: 'mlb', NFL: 'nfl', WNBA: 'wnba', NHL: 'nhl', CFB: 'cfb', CBB: 'cbb' };
 
 /** Pick6 market NAME → our StatKey, scoped by sport (names come from pickSixMarketById).
  *  MLB confirmed live; NBA/NFL best-guess (off-season) — verify in season. */
@@ -126,6 +126,31 @@ const P6_STAT_MAP: Record<Sport, Record<string, StatKey>> = {
   },
   // Pick6's soccer offering mixes competitions — not ingested for MLS.
   mls: {},
+  // College mirrors the pro market names (best-guess — verify in season).
+  cfb: {
+    'Passing Yards': 'passYds',
+    'Passing Touchdowns': 'passTds',
+    Completions: 'passCmp',
+    'Pass Attempts': 'passAtt',
+    Interceptions: 'ints',
+    'Rushing Yards': 'rushYds',
+    'Rushing Attempts': 'carries',
+    'Rushing Touchdowns': 'rushTds',
+    'Receiving Yards': 'recYds',
+    Receptions: 'rec',
+    'Receiving Touchdowns': 'recTds',
+  },
+  cbb: {
+    Points: 'pts',
+    Rebounds: 'reb',
+    Assists: 'ast',
+    'Three Pointers Made': 'fg3m',
+    '3-Pointers Made': 'fg3m',
+    'Pts + Reb + Ast': 'pra',
+    Steals: 'stl',
+    Blocks: 'blk',
+    Turnovers: 'tov',
+  },
 };
 
 /** More = the "over" side. */

@@ -84,10 +84,10 @@ export function posBucketLabel(sport: Sport, bucket: string | null | undefined):
 
 /** Position filter options for a sport (the "All positions" default is added by the UI). */
 export function positionFilterOptions(sport: Sport): FilterOption[] {
-  if (sport === 'nba' || sport === 'wnba') return NBA_POSITIONS;
+  if (sport === 'nba' || sport === 'wnba' || sport === 'cbb') return NBA_POSITIONS;
   if (sport === 'nhl') return NHL_POSITIONS;
   if (sport === 'mls') return SOCCER_POSITIONS;
-  const groups = sport === 'nfl' ? NFL_POSITION_GROUPS : MLB_POSITION_GROUPS;
+  const groups = sport === 'nfl' || sport === 'cfb' ? NFL_POSITION_GROUPS : MLB_POSITION_GROUPS;
   return groups.map(({ value, label }) => ({ value, label }));
 }
 
@@ -103,7 +103,7 @@ export function playerMatchesPosition(
   posBucket: string | null,
 ): boolean {
   if (!category) return true;
-  if (sport === 'nba' || sport === 'wnba') {
+  if (sport === 'nba' || sport === 'wnba' || sport === 'cbb') {
     const p = (position ?? posBucket ?? '').toUpperCase();
     return p.includes(category); // category ∈ G | F | C
   }
@@ -111,7 +111,7 @@ export function playerMatchesPosition(
     // posBucket is authoritative (collapsed at ingest: F/D/G, F/M/D/G).
     return posBucket === category;
   }
-  if (sport === 'nfl') {
+  if (sport === 'nfl' || sport === 'cfb') {
     // posBucket is authoritative (QB/RB/WR/TE); fall back to the position abbr.
     if (posBucket) return posBucket === category;
     const g = NFL_POSITION_GROUPS.find((x) => x.value === category);

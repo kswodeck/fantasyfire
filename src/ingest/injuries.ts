@@ -31,6 +31,8 @@ const ESPN_PATH: Record<Sport, string> = {
   nhl: 'hockey/nhl',
   wnba: 'basketball/wnba',
   mls: 'soccer/usa.1',
+  cfb: 'football/college-football',
+  cbb: 'basketball/mens-college-basketball',
 };
 
 /** Map ESPN's many status strings to our four buckets. */
