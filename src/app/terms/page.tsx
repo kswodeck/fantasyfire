@@ -6,7 +6,7 @@ import { SITE } from '@/lib/site';
 
 export const metadata: Metadata = {
   title: 'Terms of Use',
-  description: `The terms for using ${SITE.name} — an informational NBA, MLB, and NFL research tool.`,
+  description: `The terms for using ${SITE.name} — an informational multi-sport research tool.`,
   alternates: { canonical: '/terms' },
 };
 
@@ -31,7 +31,7 @@ export default function TermsPage() {
         <h2>Informational use only — not advice</h2>
         <p>
           The Service provides statistics and research derived from publicly available
-          NBA, MLB, and NFL data. It is for informational and entertainment purposes only and is{' '}
+          NBA, WNBA, MLB, NFL, NHL, MLS, CFB, CBB, and college football and basketball data. It is for informational and entertainment purposes only and is{' '}
           <strong>not betting, financial, investment, legal, or professional advice</strong>.
           Hit rates and matchup figures describe past performance and are not predictions
           or guarantees of any outcome. You are solely responsible for any decisions you
@@ -70,7 +70,7 @@ export default function TermsPage() {
         <h2>Intellectual property</h2>
         <p>
           {SITE.name}{' '}is independent and is not affiliated with, endorsed by, or
-          sponsored by the NBA, MLB, NFL, or any team. League and team names, logos, and player
+          sponsored by the NBA, WNBA, MLB, NFL, NHL, MLS, CFB, CBB, or any team. League and team names, logos, and player
           likenesses are the property of their respective owners and are used for
           identification only.
         </p>

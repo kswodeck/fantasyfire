@@ -18,8 +18,10 @@ import { scrapeFetch } from './scrapeFetch';
 
 const BASE = 'https://partner-api.prizepicks.com/projections';
 // One filtered request per league shrinks the payload from ~15 MB (all leagues) to
-// just the three we use — cheaper proxy bandwidth + faster runs. IDs from /leagues.
-const PP_LEAGUE_IDS: Record<Sport, number> = { nba: 7, mlb: 2, nfl: 9 };
+// just the ones we use — cheaper proxy bandwidth + faster runs. IDs from /leagues.
+// Partial: PP folds ALL soccer competitions into one SOCCER league, so MLS is
+// deliberately absent — cross-league name matching would mis-attribute players.
+const PP_LEAGUE_IDS: Partial<Record<Sport, number>> = { nba: 7, mlb: 2, nfl: 9, wnba: 3, nhl: 8 };
 const HEADERS = {
   'User-Agent':
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
@@ -28,7 +30,7 @@ const HEADERS = {
   Referer: 'https://app.prizepicks.com/',
 };
 
-const PP_LEAGUE: Record<string, Sport> = { NBA: 'nba', MLB: 'mlb', NFL: 'nfl' };
+const PP_LEAGUE: Record<string, Sport> = { NBA: 'nba', MLB: 'mlb', NFL: 'nfl', WNBA: 'wnba', NHL: 'nhl', CFB: 'cfb', CBB: 'cbb' };
 
 /** Payout variants we ingest. Anything else (promos, flash sales) is skipped. */
 const PP_ODDS_TYPES = new Set(['standard', 'goblin', 'demon']);
@@ -88,6 +90,70 @@ const PP_STAT_MAP: Record<Sport, Record<string, StatKey>> = {
     'Receiving TDs': 'recTds',
     // PrizePicks' own scoring — see the NBA note above.
     'Fantasy Score': 'fantasyScore',
+  },
+  // WNBA uses the same market vocabulary (and PP fantasy scoring) as the NBA.
+  wnba: {
+    Points: 'pts',
+    Rebounds: 'reb',
+    Assists: 'ast',
+    '3-PT Made': 'fg3m',
+    'Pts+Rebs+Asts': 'pra',
+    'Pts+Rebs': 'pr',
+    'Pts+Asts': 'pa',
+    'Rebs+Asts': 'ra',
+    Steals: 'stl',
+    'Blocked Shots': 'blk',
+    'Blks+Stls': 'stocks',
+    Turnovers: 'tov',
+    'Offensive Rebounds': 'oreb',
+    'Defensive Rebounds': 'dreb',
+    'Fantasy Score': 'fs',
+  },
+  // Best-guess NHL market names (off-season as of mid-2026) — verify in season.
+  // No Fantasy Score mapping: we don't compute an NHL FS (no verified scoring table).
+  nhl: {
+    'Shots On Goal': 'sog',
+    Points: 'pts',
+    Goals: 'goals',
+    Assists: 'ast',
+    Hits: 'nhlHits',
+    'Blocked Shots': 'blocked',
+    'Faceoffs Won': 'fow',
+    'Goalie Saves': 'saves',
+    Saves: 'saves',
+    'Goals Against': 'ga',
+  },
+  // PP folds all soccer into one SOCCER league (see PP_LEAGUE_IDS) — not ingested.
+  mls: {},
+  // College mirrors the pro market names. DORMANT until a league id is added to
+  // PP_LEAGUE_IDS (verify the id + names in the PP app once the season starts).
+  cfb: {
+    'Pass Yards': 'passYds',
+    'Pass TDs': 'passTds',
+    'Pass Completions': 'passCmp',
+    'Pass Attempts': 'passAtt',
+    INT: 'ints',
+    'Rush Yards': 'rushYds',
+    'Rush Attempts': 'carries',
+    'Rush TDs': 'rushTds',
+    'Receiving Yards': 'recYds',
+    Receptions: 'rec',
+    'Receiving TDs': 'recTds',
+    'Fantasy Score': 'fantasyScore',
+  },
+  cbb: {
+    Points: 'pts',
+    Rebounds: 'reb',
+    Assists: 'ast',
+    '3-PT Made': 'fg3m',
+    'Pts+Rebs+Asts': 'pra',
+    'Pts+Rebs': 'pr',
+    'Pts+Asts': 'pa',
+    'Rebs+Asts': 'ra',
+    Steals: 'stl',
+    'Blocked Shots': 'blk',
+    Turnovers: 'tov',
+    'Fantasy Score': 'fs',
   },
 };
 

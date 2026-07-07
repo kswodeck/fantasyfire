@@ -3,6 +3,25 @@
 _Last updated: 2026-06-24. This is a strategy/sequencing doc, not a spec. Each item lists the
 concrete files it touches so it can be picked up directly._
 
+> **Update 2026-07-07 — Three more sports: NHL, WNBA, MLS.** The shared
+> schema + `[sport]` routes absorbed three new leagues, all ingested from ESPN's
+> hidden site API via one config-driven runner (`src/ingest/run-ingest-espn.ts`)
+> that walks the scoreboard incrementally (first run backfills the season).
+> WNBA reuses the NBA stat keys/columns wholesale (incl. pace + DvP); NHL adds
+> skater/goalie columns (TOI drives the same minutes-gated qualification as NBA);
+> MLS adds shots/SOT/goals/keeper columns — no per-player minutes in the feed,
+> so soccer is not opportunity-filtered. Schedule/injuries/game-odds/provided-
+> lines all extended; team identity for the ESPN sports resolves by ESPN team id
+> (abbreviations differ between ESPN endpoints). The Premier League was built and
+> then removed by request — the soccer plumbing is league-generic, so re-adding
+> it (or La Liga etc.) is one registry entry + one ingest config. A follow-up in
+> the same PR added **CFB + men's CBB** (ESPN college feeds; scoreboards need
+> groups filters, teams resolve from box scores since /teams lists all 755
+> schools with non-unique abbreviations, and there are no curated college brand
+> tables — the UI uses the DB display name + neutral colors). "Three sports"
+> below is now **eight**. NOTE: several states restrict college player props —
+> the site is research-only, but keep that in mind before monetizing college.
+
 > **Update 2026-06-25 — NFL added + FireFactor.** A third sport, **NFL** (ESPN
 > `football/nfl` ingest), now rides the same shared schema and section routes
 > (board / streaks / trends / leaders / matchups / players / today), so

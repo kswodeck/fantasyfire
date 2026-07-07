@@ -42,7 +42,7 @@ const HEADERS = {
 };
 
 /** Sleeper `sport` string → our Sport (others — cs/golf/tennis/soccer — are ignored). */
-const SLEEPER_SPORT: Record<string, Sport> = { nba: 'nba', mlb: 'mlb', nfl: 'nfl' };
+const SLEEPER_SPORT: Record<string, Sport> = { nba: 'nba', mlb: 'mlb', nfl: 'nfl', wnba: 'wnba', nhl: 'nhl', ncaaf: 'cfb', ncaab: 'cbb' };
 
 /** Sleeper `wager_type` → our StatKey, scoped by sport. MLB is confirmed live; NBA/NFL
  *  names are best-guess (both off-season as of mid-2026) — verify in season. Unmapped
@@ -90,6 +90,59 @@ const SLEEPER_STAT_MAP: Record<Sport, Record<string, StatKey>> = {
     receiving_yards: 'recYds',
     receptions: 'rec',
     receiving_tds: 'recTds',
+  },
+  // WNBA shares the NBA wager types (best-guess — verify in season).
+  wnba: {
+    points: 'pts',
+    rebounds: 'reb',
+    assists: 'ast',
+    three_pointers_made: 'fg3m',
+    pts_rebs_asts: 'pra',
+    pts_rebs: 'pr',
+    pts_asts: 'pa',
+    rebs_asts: 'ra',
+    steals: 'stl',
+    blocks: 'blk',
+    steals_blocks: 'stocks',
+    turnovers: 'tov',
+  },
+  // Best-guess NHL wager types (off-season) — verify in season.
+  nhl: {
+    shots_on_goal: 'sog',
+    points: 'pts',
+    goals: 'goals',
+    assists: 'ast',
+    hits: 'nhlHits',
+    blocked_shots: 'blocked',
+    faceoffs_won: 'fow',
+    saves: 'saves',
+    goals_against: 'ga',
+  },
+  // Sleeper's soccer feed mixes competitions — not ingested for MLS.
+  mls: {},
+  // College mirrors the pro wager types (best-guess — verify in season).
+  cfb: {
+    pass_yards: 'passYds',
+    pass_tds: 'passTds',
+    pass_completions: 'passCmp',
+    pass_attempts: 'passAtt',
+    pass_interceptions: 'ints',
+    rush_yards: 'rushYds',
+    rush_attempts: 'carries',
+    rush_tds: 'rushTds',
+    receiving_yards: 'recYds',
+    receptions: 'rec',
+    receiving_tds: 'recTds',
+  },
+  cbb: {
+    points: 'pts',
+    rebounds: 'reb',
+    assists: 'ast',
+    three_pointers_made: 'fg3m',
+    pts_rebs_asts: 'pra',
+    steals: 'stl',
+    blocks: 'blk',
+    turnovers: 'tov',
   },
 };
 

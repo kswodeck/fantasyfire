@@ -8,7 +8,7 @@ import { FreshnessNote } from '@/components/FreshnessNote';
 import { RelatedLinks } from '@/components/RelatedLinks';
 import { JsonLd } from '@/components/JsonLd';
 import { getLeaders, getDataFreshness } from '@/lib/server/players';
-import { sportMeshLinks } from '@/lib/relatedLinks';
+import { sportMeshLinks, DEFAULT_LEADERS_STAT } from '@/lib/relatedLinks';
 import { breadcrumbList, datasetNode, graph } from '@/lib/jsonLd';
 import { currentSeason } from '@/lib/season';
 import { num1 } from '@/lib/format';
@@ -20,10 +20,16 @@ export const revalidate = 3600;
 export const dynamicParams = false;
 
 // Leaders-eligible stats per sport (those with a clean per-game aggregate).
+// Keep in sync with LEADER_STATS in src/app/sitemap.ts.
 const LEADER_STATS: Record<Sport, StatKey[]> = {
   nba: ['pts', 'reb', 'ast', 'fg3m', 'stl', 'blk', 'pra'],
   mlb: ['hits', 'tb', 'hr', 'rbi', 'runs', 'sb', 'bb', 'so'],
   nfl: ['passYds', 'passTds', 'rushYds', 'rushTds', 'rec', 'recYds', 'recTds'],
+  nhl: ['pts', 'goals', 'ast', 'sog', 'nhlHits', 'blocked', 'saves'],
+  wnba: ['pts', 'reb', 'ast', 'fg3m', 'stl', 'blk', 'pra'],
+  mls: ['goals', 'ast', 'shots', 'sot', 'saves'],
+  cfb: ['passYds', 'passTds', 'rushYds', 'rushTds', 'rec', 'recYds', 'recTds'],
+  cbb: ['pts', 'reb', 'ast', 'fg3m', 'stl', 'blk', 'pra'],
 };
 
 export function generateStaticParams() {
@@ -64,7 +70,7 @@ export default async function LeadersPage({ params }: PageProps) {
   const label = STAT_DEFS[stat].label;
   const short = STAT_DEFS[stat].short;
   const season = currentSeason(sport);
-  const defaultStat = sport === 'mlb' ? 'hits' : sport === 'nfl' ? 'passYds' : 'pts';
+  const defaultStat = DEFAULT_LEADERS_STAT[sport];
 
   let rows: LeaderRow[] = [];
   let freshness: string | null = null;

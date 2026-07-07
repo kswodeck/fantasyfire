@@ -47,7 +47,16 @@ const KEY = 'ff:savedprops:v1';
 // How long after first pitch / tip-off / kickoff a game is safely over — used to
 // expire a pick "by the time the game ends". Generous (extra innings / OT) so a
 // pick never vanishes mid-game.
-const GAME_OVER_HOURS: Record<Sport, number> = { mlb: 5, nba: 4, nfl: 4.5 };
+const GAME_OVER_HOURS: Record<Sport, number> = {
+  mlb: 5,
+  nba: 4,
+  nfl: 4.5,
+  nhl: 4, // OT/shootout
+  wnba: 3.5,
+  mls: 3,
+  cfb: 4.5,
+  cbb: 3,
+};
 const HOUR_MS = 3_600_000;
 /** Dispatched on the window when saved props change, so hooks re-read in the same tab. */
 export const SAVED_PROPS_EVENT = 'ff:savedprops-changed';

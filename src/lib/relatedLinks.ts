@@ -1,5 +1,17 @@
 import { SPORTS, type Sport } from './sports';
 
+/** The headline leaderboard stat per sport — the default /[sport]/leaders view. */
+export const DEFAULT_LEADERS_STAT: Record<Sport, string> = {
+  nba: 'pts',
+  wnba: 'pts',
+  mlb: 'hits',
+  nfl: 'passYds',
+  nhl: 'pts',
+  mls: 'goals',
+  cfb: 'passYds',
+  cbb: 'pts',
+};
+
 /**
  * Cross-links between a sport's research surfaces — the internal-link mesh that
  * keeps every page reachable (no orphans). `excludeSeg` drops the current page.
@@ -9,7 +21,7 @@ export function sportMeshLinks(
   excludeSeg?: string,
 ): { label: string; href: string; hint?: string }[] {
   const name = SPORTS[sport].name;
-  const leadersStat = sport === 'mlb' ? 'hits' : sport === 'nfl' ? 'passYds' : 'pts';
+  const leadersStat = DEFAULT_LEADERS_STAT[sport];
   const items: { seg: string; label: string; href: string; hint: string }[] = [
     { seg: 'board', label: `${name} Heat Check`, href: `/${sport}`, hint: "Strongest FireFactor reads + today's slate." },
     { seg: 'trends', label: `${name} Trends`, href: `/${sport}/trends`, hint: 'Form swings + current streaks vs the line.' },

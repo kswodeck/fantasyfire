@@ -32,17 +32,49 @@ export const revalidate = 86400;
 export const dynamicParams = true;
 
 export async function generateStaticParams() {
-  const lists = await Promise.all(
-    SPORT_LIST.map(async (sport) => {
-      const slugs = await getTopPlayerSlugs(sport, 100);
-      return slugs.map((playerSlug) => ({ sport, playerSlug }));
-    }),
-  );
-  return lists.flat();
+  // DB-resilient: with no reachable database (e.g. a Vercel preview, whose env
+  // has no DATABASE_URL) prerender nothing — dynamicParams=true renders every
+  // player on demand instead, so the BUILD always succeeds. A production build
+  // with a healthy DB still prerenders the busiest players as before.
+  try {
+    const lists = await Promise.all(
+      SPORT_LIST.map(async (sport) => {
+        const slugs = await getTopPlayerSlugs(sport, 100);
+        return slugs.map((playerSlug) => ({ sport, playerSlug }));
+      }),
+    );
+    return lists.flat();
+  } catch (e) {
+    console.warn('[build] player prerender list unavailable (DB unreachable?):', e instanceof Error ? e.message : e);
+    return [];
+  }
 }
 
 type PageProps = {
   params: Promise<{ sport: string; playerSlug: string }>;
+};
+
+// The marquee markets named in the meta description, per sport.
+const STATS_BIT: Record<Sport, string> = {
+  nba: 'points, rebounds, assists, 3PM and PRA',
+  wnba: 'points, rebounds, assists, 3PM and PRA',
+  mlb: 'hits, home runs, RBIs, total bases and strikeout',
+  nfl: 'passing yards, rushing yards, receptions, receiving yards and touchdown',
+  nhl: 'shots on goal, points, goals, assists and saves',
+  mls: 'shots, shots on target, goals, assists and saves',
+  cfb: 'passing yards, rushing yards, receptions, receiving yards and touchdown',
+  cbb: 'points, rebounds, assists, 3PM and PRA',
+};
+
+const JOB_TITLE: Record<Sport, string> = {
+  nba: 'Basketball Player',
+  wnba: 'Basketball Player',
+  mlb: 'Baseball Player',
+  nfl: 'Football Player',
+  nhl: 'Hockey Player',
+  mls: 'Soccer Player',
+  cfb: 'Football Player',
+  cbb: 'Basketball Player',
 };
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -53,12 +85,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const cfg = SPORTS[sport];
   const teamBit = player.teamAbbreviation ? ` (${player.teamAbbreviation})` : '';
-  const statsBit =
-    sport === 'mlb'
-      ? 'hits, home runs, RBIs, total bases and strikeout'
-      : sport === 'nfl'
-        ? 'passing yards, rushing yards, receptions, receiving yards and touchdown'
-        : 'points, rebounds, assists, 3PM and PRA';
+  const statsBit = STATS_BIT[sport];
   const title = `${player.fullName} — Hit Rates, Props & Matchup Research`;
   const description =
     `${player.fullName}${teamBit} prop research: ${statsBit} hit rates over recent ` +
@@ -103,7 +130,7 @@ export default async function PlayerPage({ params }: PageProps) {
       {
         '@type': 'Person',
         name: player.fullName,
-        jobTitle: sport === 'mlb' ? 'Baseball Player' : sport === 'nfl' ? 'Football Player' : 'Basketball Player',
+        jobTitle: JOB_TITLE[sport],
         ...(player.teamName
           ? { affiliation: { '@type': 'SportsTeam', name: player.teamName } }
           : {}),

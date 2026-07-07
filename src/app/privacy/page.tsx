@@ -84,7 +84,7 @@ export default function PrivacyPage() {
             ).
           </li>
           <li>
-            <strong>Supabase</strong> — the database storing public NBA, MLB, and NFL statistics (
+            <strong>Supabase</strong> — the database storing public sports statistics (
             <a href="https://supabase.com/privacy" target="_blank" rel="noopener noreferrer">
               privacy
             </a>

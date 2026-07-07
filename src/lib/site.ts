@@ -23,7 +23,7 @@ export const SITE = {
   /** Short tagline used in titles and OG. */
   tagline: 'Player Props Research',
   description:
-    "NBA, MLB, and NFL player-prop research that's honest about uncertainty: hit rates over recent windows and the full season, matchup context, sample-size confidence intervals, and fair-price math — from public game logs.",
+    "NBA, WNBA, MLB, NFL, NHL, MLS, CFB, CBB, and college football and basketball player-prop research that's honest about uncertainty: hit rates over recent windows and the full season, matchup context, sample-size confidence intervals, and fair-price math — from public game logs.",
   /** Canonical origin with no trailing slash. */
   url: rawUrl.replace(/\/+$/, ''),
   /** Public contact email. */

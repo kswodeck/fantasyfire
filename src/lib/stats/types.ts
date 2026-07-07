@@ -60,6 +60,20 @@ export interface GameStatLine {
   recYards?: number | null;
   recTds?: number | null;
   fumblesLost?: number | null;
+  // NHL skaters (goals/saves/goalsAgainst/shotsAgainst shared with soccer;
+  // assists/points/minutes/plusMinus shared with the NBA columns)
+  goals?: number | null;
+  shotsOnGoal?: number | null;
+  hitsDelivered?: number | null;
+  blockedShots?: number | null;
+  faceoffsWon?: number | null;
+  // NHL goalies / soccer goalkeepers
+  saves?: number | null;
+  goalsAgainst?: number | null;
+  shotsAgainst?: number | null;
+  // Soccer (MLS) — fouls committed reuses the shared `fouls` column
+  shots?: number | null;
+  shotsOnTarget?: number | null;
   // Optional context for display / charts.
   minutes?: number | null;
   gameDate?: string;
@@ -67,8 +81,10 @@ export interface GameStatLine {
   isHome?: boolean;
 }
 
-/** Position buckets. NBA: G/F/C (DvP). MLB: H/P. NFL: QB/RB/WR/TE. */
-export type PosBucket = 'G' | 'F' | 'C' | 'H' | 'P' | 'QB' | 'RB' | 'WR' | 'TE';
+/** Position buckets. NBA/WNBA: G/F/C (DvP). MLB: H/P. NFL: QB/RB/WR/TE.
+ *  NHL: F/D/G (G = goalie). Soccer (MLS): F/M/D/G (G = goalkeeper).
+ *  Letters are shared across sports — the meaning is always sport-scoped. */
+export type PosBucket = 'G' | 'F' | 'C' | 'H' | 'P' | 'QB' | 'RB' | 'WR' | 'TE' | 'D' | 'M';
 
 /** All researchable stat keys across sports (kept unique so one registry works). */
 export type StatKey =
@@ -124,10 +140,28 @@ export type StatKey =
   | 'recTds'
   // NFL — misc
   | 'fumbles'
-  | 'fantasyScore';
+  | 'fantasyScore'
+  // NHL — skaters ('pts' and 'ast' are shared with the NBA defs; NHL rows store
+  // points = goals + assists in the shared `points` column)
+  | 'goals'
+  | 'sog'
+  | 'nhlHits'
+  | 'blocked'
+  | 'fow'
+  // NHL goalies / soccer goalkeepers (shared)
+  | 'saves'
+  | 'ga'
+  | 'sa'
+  // Soccer (MLS) — 'goals' and 'ast' shared
+  | 'shots'
+  | 'sot'
+  | 'foulsCommitted';
 
 export interface StatDef {
   key: StatKey;
+  /** The stat's canonical sport (labels/tests). Keys can be SHARED across sports —
+   *  which sport offers which keys is defined by statKeysForSport, not this field
+   *  (WNBA reuses the NBA keys; NHL and soccer share the goalie keys). */
   sport: Sport;
   label: string;
   short: string;
@@ -250,6 +284,23 @@ export const STAT_DEFS: Record<StatKey, StatDef> = {
   // ---- NFL misc ----
   fumbles: { key: 'fumbles', sport: 'nfl', label: 'Fumbles Lost', short: 'FUM', value: (g) => n(g.fumblesLost) },
   fantasyScore: { key: 'fantasyScore', sport: 'nfl', label: 'Fantasy Score (PrizePicks)', short: 'FS', value: nflFantasyScore },
+
+  // ---- NHL skaters ('pts'/'ast' above are shared — NHL rows populate points/assists) ----
+  goals: { key: 'goals', sport: 'nhl', label: 'Goals', short: 'G', value: (g) => n(g.goals) },
+  sog: { key: 'sog', sport: 'nhl', label: 'Shots on Goal', short: 'SOG', value: (g) => n(g.shotsOnGoal) },
+  nhlHits: { key: 'nhlHits', sport: 'nhl', label: 'Hits', short: 'HITS', value: (g) => n(g.hitsDelivered) },
+  blocked: { key: 'blocked', sport: 'nhl', label: 'Blocked Shots', short: 'BLKD', value: (g) => n(g.blockedShots) },
+  fow: { key: 'fow', sport: 'nhl', label: 'Faceoffs Won', short: 'FOW', value: (g) => n(g.faceoffsWon) },
+
+  // ---- NHL goalies / soccer goalkeepers (shared keys) ----
+  saves: { key: 'saves', sport: 'nhl', label: 'Saves', short: 'SV', value: (g) => n(g.saves) },
+  ga: { key: 'ga', sport: 'nhl', label: 'Goals Against', short: 'GA', value: (g) => n(g.goalsAgainst) },
+  sa: { key: 'sa', sport: 'nhl', label: 'Shots Against', short: 'SA', value: (g) => n(g.shotsAgainst) },
+
+  // ---- Soccer (MLS; 'goals'/'ast' shared) ----
+  shots: { key: 'shots', sport: 'mls', label: 'Shots', short: 'SH', value: (g) => n(g.shots) },
+  sot: { key: 'sot', sport: 'mls', label: 'Shots on Target', short: 'SOT', value: (g) => n(g.shotsOnTarget) },
+  foulsCommitted: { key: 'foulsCommitted', sport: 'mls', label: 'Fouls Committed', short: 'FC', value: (g) => n(g.fouls) },
 };
 
 export const STAT_KEYS = Object.keys(STAT_DEFS) as StatKey[];
@@ -270,12 +321,23 @@ export const NFL_RB_KEYS: StatKey[] = ['rushYds', 'carries', 'rushTds', 'rec', '
 export const NFL_WR_KEYS: StatKey[] = ['rec', 'targets', 'recYds', 'recTds', 'fantasyScore'];
 export const NFL_TE_KEYS: StatKey[] = ['rec', 'targets', 'recYds', 'recTds', 'fantasyScore'];
 
-/** Ordered stat keys offered for a sport (and role: MLB hitter/pitcher, NFL position). */
+// NHL keys are role-specific: skaters (F/D) share one market list; goalies have
+// their own. 'pts'/'ast' reuse the shared defs (NHL rows populate points/assists).
+export const NHL_SKATER_KEYS: StatKey[] = ['sog', 'pts', 'goals', 'ast', 'nhlHits', 'blocked', 'fow'];
+export const NHL_GOALIE_KEYS: StatKey[] = ['saves', 'ga', 'sa'];
+
+// Soccer (MLS): outfield players (F/M/D) vs goalkeepers.
+export const SOCCER_OUTFIELD_KEYS: StatKey[] = ['shots', 'sot', 'goals', 'ast', 'foulsCommitted'];
+export const SOCCER_GK_KEYS: StatKey[] = ['saves', 'ga', 'sa'];
+
+/** Ordered stat keys offered for a sport (and role: MLB hitter/pitcher, football
+ *  position, NHL/soccer goalie vs everyone else). WNBA and CBB share the NBA
+ *  keys; CFB shares the NFL keys. */
 export function statKeysForSport(sport: Sport, posBucket?: string | null): StatKey[] {
   if (sport === 'mlb') {
     return posBucket === 'P' ? MLB_PITCHING_KEYS : MLB_HITTING_KEYS;
   }
-  if (sport === 'nfl') {
+  if (sport === 'nfl' || sport === 'cfb') {
     switch (posBucket) {
       case 'QB':
         return NFL_QB_KEYS;
@@ -285,17 +347,23 @@ export function statKeysForSport(sport: Sport, posBucket?: string | null): StatK
         return NFL_WR_KEYS;
       case 'TE':
         return NFL_TE_KEYS;
-      default:
-        return NFL_QB_KEYS; // fallback (shouldn't happen — every NFL player has a bucket)
+        default:
+        return NFL_QB_KEYS; // fallback (shouldn't happen — every football player has a bucket)
     }
   }
-  return NBA_STAT_KEYS;
+  if (sport === 'nhl') {
+    return posBucket === 'G' ? NHL_GOALIE_KEYS : NHL_SKATER_KEYS;
+  }
+  if (sport === 'mls') {
+    return posBucket === 'G' ? SOCCER_GK_KEYS : SOCCER_OUTFIELD_KEYS;
+  }
+  return NBA_STAT_KEYS; // NBA + WNBA + CBB
 }
 
 /** The default stat to open a player page on. */
 export function defaultStatForSport(sport: Sport, posBucket?: string | null): StatKey {
   if (sport === 'mlb') return posBucket === 'P' ? 'k' : 'hits';
-  if (sport === 'nfl') {
+  if (sport === 'nfl' || sport === 'cfb') {
     switch (posBucket) {
       case 'QB':
         return 'passYds';
@@ -308,7 +376,9 @@ export function defaultStatForSport(sport: Sport, posBucket?: string | null): St
         return 'passYds';
     }
   }
-  return 'pts';
+  if (sport === 'nhl') return posBucket === 'G' ? 'saves' : 'sog';
+  if (sport === 'mls') return posBucket === 'G' ? 'saves' : 'shots';
+  return 'pts'; // NBA + WNBA + CBB
 }
 
 /** Get a stat's value from a game line. */
@@ -316,17 +386,23 @@ export function statValue(stat: StatKey, g: GameStatLine): number {
   return STAT_DEFS[stat].value(g);
 }
 
-/** The fantasy-score keys (one per sport) and the sport → key lookup — used to
- *  normalize a generic "fantasy score" mention to the right sport's key. */
+/** The fantasy-score keys and the sport → key lookup — used to normalize a generic
+ *  "fantasy score" mention to the right sport's key. WNBA shares the NBA key
+ *  (PrizePicks scores both basketball leagues identically). Sports without a
+ *  verified PrizePicks scoring table (NHL, soccer; MLB pitchers) are deliberately
+ *  absent — we never compute a fantasy score we can't stand behind. */
 export const FANTASY_SCORE_KEYS: ReadonlySet<StatKey> = new Set<StatKey>([
   'fs',
   'hitterFs',
   'fantasyScore',
 ]);
-export const FANTASY_SCORE_KEY_BY_SPORT: Record<Sport, StatKey> = {
+export const FANTASY_SCORE_KEY_BY_SPORT: Partial<Record<Sport, StatKey>> = {
   nba: 'fs',
+  wnba: 'fs',
+  cbb: 'fs',
   mlb: 'hitterFs',
   nfl: 'fantasyScore',
+  cfb: 'fantasyScore',
 };
 
 /** Analysis windows. Numeric = last N games; 'season' = all games. */

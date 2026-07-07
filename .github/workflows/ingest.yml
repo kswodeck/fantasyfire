@@ -1,4 +1,4 @@
-name: Ingest NBA + MLB + NFL data
+name: Ingest NBA + MLB + NFL + NHL + WNBA + MLS + CFB + CBB data
 
 # Pulls stats.nba.com (playerindex + leaguegamelog), statsapi.mlb.com, and ESPN's
 # hidden football/nfl API, and upserts into Postgres.
@@ -46,6 +46,11 @@ jobs:
       NBA_SEASON: ${{ vars.NBA_SEASON || '' }}
       MLB_SEASON: ${{ vars.MLB_SEASON || '' }}
       NFL_SEASON: ${{ vars.NFL_SEASON || '' }}
+      NHL_SEASON: ${{ vars.NHL_SEASON || '' }}
+      WNBA_SEASON: ${{ vars.WNBA_SEASON || '' }}
+      MLS_SEASON: ${{ vars.MLS_SEASON || '' }}
+      CFB_SEASON: ${{ vars.CFB_SEASON || '' }}
+      CBB_SEASON: ${{ vars.CBB_SEASON || '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -87,6 +92,29 @@ jobs:
       - name: Run NFL ingest
         if: ${{ success() || failure() }}
         run: pnpm ingest:nfl
+
+      # The ESPN-native sports (nhl, wnba, mls, college football/basketball)
+      # share one config-driven runner. Each walks the scoreboard incrementally
+      # (first run backfills the season); off-season pulls are harmless no-ops.
+      - name: Run NHL ingest
+        if: ${{ success() || failure() }}
+        run: pnpm ingest:nhl
+
+      - name: Run WNBA ingest
+        if: ${{ success() || failure() }}
+        run: pnpm ingest:wnba
+
+      - name: Run MLS ingest
+        if: ${{ success() || failure() }}
+        run: pnpm ingest:mls
+
+      - name: Run CFB ingest
+        if: ${{ success() || failure() }}
+        run: pnpm ingest:cfb
+
+      - name: Run CBB ingest
+        if: ${{ success() || failure() }}
+        run: pnpm ingest:cbb
 
       # Free schedule feed (statsapi.mlb.com + ESPN scoreboard) for the "tonight"
       # slate. Best-effort and non-fatal — runs even if an ingest step failed.

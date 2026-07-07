@@ -69,6 +69,19 @@ const STAT_ALIASES: Array<[StatKey, string[]]> = [
   ['rec', ['receptions', 'reception', 'recs', 'catches', 'rec']],
   ['targets', ['targets', 'target', 'tgts', 'tgt']],
   ['fumbles', ['fumbles lost', 'fumbles', 'fumble']],
+  // NHL + soccer — multi-word forms before their bare parts ("shots on goal"
+  // before "shots"). Bare "hits" stays the MLB key and bare "fouls" the NBA key;
+  // analyzeSlate remaps them per sport (like the fantasy-score normalization).
+  ['sog', ['shots on goal', 'sog']],
+  ['sot', ['shots on target', 'sot']],
+  ['sa', ['shots against', 'shots faced']],
+  ['ga', ['goals against', 'goals conceded']],
+  ['blocked', ['blocked shots', 'blkd']],
+  ['fow', ['faceoffs won', 'faceoff wins', 'fow']],
+  ['saves', ['goalie saves', 'saves', 'save']],
+  ['goals', ['goals', 'goal']],
+  ['shots', ['shots', 'shot']],
+  ['foulsCommitted', ['fouls committed', 'fc']],
 ];
 
 function escapeRe(s: string): string {

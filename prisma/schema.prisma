@@ -152,6 +152,23 @@ model PlayerGameStat {
   recTds          Int?
   fumblesLost     Int?
 
+  // NHL (nullable) — skaters reuse points/assists/minutes(TOI)/plusMinus above;
+  // goals/saves/goalsAgainst/shotsAgainst are shared with soccer
+  goals        Int?
+  shotsOnGoal  Int?
+  hitsDelivered Int? // NHL hits (named to avoid the MLB batting `hits` column)
+  blockedShots Int?
+  faceoffsWon  Int?
+  saves        Int?
+  goalsAgainst Int?
+  shotsAgainst Int? // NHL shots against / soccer shots faced
+
+  // Soccer (MLS, nullable) — goals/assists/saves shared above; fouls committed
+  // reuses the shared `fouls` column
+  shots         Int?
+  shotsOnTarget Int?
+  started       Boolean? // started vs sub appearance (no per-player minutes in the feed)
+
   player       Player @relation(fields: [playerId], references: [id])
   game         Game   @relation(fields: [gameId], references: [id])
   team         Team   @relation("statTeam", fields: [teamId], references: [id])

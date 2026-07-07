@@ -4,18 +4,9 @@ import { STAT_DEFS } from '@/lib/stats';
 import { num1, ordinal, formatIsoDate } from '@/lib/format';
 import { getTeam } from '@/lib/teams';
 import type { Sport } from '@/lib/sports';
+import { posBucketLabel } from '@/lib/filters';
 import { TeamLogo } from './TeamLogo';
 import { MatchupTime } from './MatchupTime';
-
-const POS_LABEL: Record<string, string> = {
-  G: 'guards',
-  F: 'forwards',
-  C: 'centers',
-  QB: 'quarterbacks',
-  RB: 'running backs',
-  WR: 'wide receivers',
-  TE: 'tight ends',
-};
 
 /**
  * Matchup block for the player's upcoming opponent (next/current scheduled game;
@@ -57,7 +48,7 @@ export function DvpBlock({
   const team = getTeam(sport, opponentAbbreviation);
   const short = STAT_DEFS[dvp.stat].short;
   // Whom the average is allowed to.
-  const unit = sport === 'mlb' ? 'hitters' : (POS_LABEL[dvp.posBucket] ?? 'this position');
+  const unit = posBucketLabel(sport, dvp.posBucket);
   const allower = sport === 'mlb' ? `${opponentAbbreviation} pitching` : opponentAbbreviation;
   // Softness: low rank number = allows the most = softer matchup.
   const softness = dvp.rank / dvp.totalRanked;
