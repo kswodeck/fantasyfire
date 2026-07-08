@@ -85,6 +85,7 @@ import {
   isNormalKind,
   isOverOnly,
   resolvedBreakeven,
+  sidedBreakevens,
   sidedMultiplier,
   bestVariantScore,
 } from '@/lib/payoutVariant';
@@ -1513,9 +1514,11 @@ export async function getPlayerResearch(
     // Demon/goblin/alternate rungs only pay the over — pin the read to that side —
     // and are scored against their payout's breakeven, not a coin flip. The bar is
     // best-info-first: exact multiplier → market-implied (de-vigged book odds at
-    // this exact line) → configured approximation.
+    // this exact line) → configured approximation. A line priced per side (Sleeper
+    // sided multipliers) anchors at the leaned side's own payout breakeven instead.
     overOnly: selectedVariant ? isOverOnly(selectedVariant.oddsType) : false,
     benchmark: selectedVariant ? resolvedBreakeven(selectedVariant, variants, rungQuotes) : undefined,
+    benchmarkBySide: selectedVariant ? (sidedBreakevens(selectedVariant) ?? undefined) : undefined,
   };
   // FireFactor is the pure directional signal (hit · projection · consistency · matchup)
   // so it's IDENTICAL on the board and the player page. Price/line-value info (best book,
@@ -1572,8 +1575,11 @@ export async function getPlayerResearch(
   // games + line-independent projection; the shown line's read IS the page verdict.
   const scoredVariants = variants.map((v): ProvidedVariant => {
     const rungBreakeven = resolvedBreakeven(v, variants, rungQuotes);
+    // A side-priced rung's echoed bar is the SCORED side's payout breakeven — the
+    // same anchor computeFireFactor used — so the UI explains the exact score shown.
+    const sided = sidedBreakevens(v);
     if (v.line === line)
-      return { ...v, breakeven: rungBreakeven, multiplier: sidedMultiplier(v, gatedFireScore.side), read: { side: gatedFireScore.side, score: gatedFireScore.score, tier: gatedFireScore.tier } };
+      return { ...v, breakeven: (sided ? sided[gatedFireScore.side] : null) ?? rungBreakeven, multiplier: sidedMultiplier(v, gatedFireScore.side), read: { side: gatedFireScore.side, score: gatedFireScore.score, tier: gatedFireScore.tier } };
     const rungWindows = STAT_WINDOWS.map((w) => {
       const hr = computeHitRate(games, stat, v.line, w);
       return { window: String(w), overs: hr.overs, decided: hr.decided };
@@ -1596,10 +1602,11 @@ export async function getPlayerResearch(
         gamesPlayed: games.length,
         overOnly: isOverOnly(v.oddsType),
         benchmark: rungBreakeven,
+        benchmarkBySide: sided ?? undefined,
       }),
       availability?.status,
     );
-    return { ...v, breakeven: rungBreakeven, multiplier: sidedMultiplier(v, fs.side), read: { side: fs.side, score: fs.score, tier: fs.tier } };
+    return { ...v, breakeven: (sided ? sided[fs.side] : null) ?? rungBreakeven, multiplier: sidedMultiplier(v, fs.side), read: { side: fs.side, score: fs.score, tier: fs.tier } };
   });
 
   return {
@@ -2148,9 +2155,11 @@ function computeBoardRows(
         matchup: opts.matchupGrades?.get(`${p.id}:${stat}`),
         gamesPlayed: games.length,
         // Demon/goblin/alternate rungs only pay the over — pin the read to that side —
-        // and are scored against their payout's breakeven, not a coin flip.
+        // and are scored against their payout's breakeven, not a coin flip. A line
+        // priced per side (Sleeper) anchors at the leaned side's payout breakeven.
         overOnly: shownRung ? isOverOnly(shownRung.oddsType) : false,
         benchmark: shownRung && variants ? resolvedBreakeven(shownRung, variants, rungQuotes) : undefined,
+        benchmarkBySide: shownRung ? (sidedBreakevens(shownRung) ?? undefined) : undefined,
       };
       // FireFactor is the pure directional signal — IDENTICAL to the player page for the
       // same line/stat/matchup. Line-value (best price, cross-book discount) is a separate
@@ -2197,8 +2206,11 @@ function computeBoardRows(
       // a hot demon keeps an otherwise-passing row on the board.
       const scoredVariants = variants?.map((v): ProvidedVariant => {
         const rungBreakeven = resolvedBreakeven(v, variants, rungQuotes);
+        // Echo the SCORED side's payout breakeven for side-priced rungs — the same
+        // anchor computeFireFactor used, so the UI explains the exact score shown.
+        const sided = sidedBreakevens(v);
         if (v.line === line)
-          return { ...v, breakeven: rungBreakeven, multiplier: sidedMultiplier(v, fireScore.side), read: { side: fireScore.side, score: fireScore.score, tier: fireScore.tier } };
+          return { ...v, breakeven: (sided ? sided[fireScore.side] : null) ?? rungBreakeven, multiplier: sidedMultiplier(v, fireScore.side), read: { side: fireScore.side, score: fireScore.score, tier: fireScore.tier } };
         const rungWindows = STAT_WINDOWS.map((w) => {
           const hr = computeHitRate(games, stat, v.line, w);
           return { window: String(w), overs: hr.overs, decided: hr.decided };
@@ -2221,10 +2233,11 @@ function computeBoardRows(
             gamesPlayed: games.length,
             overOnly: isOverOnly(v.oddsType),
             benchmark: rungBreakeven,
+            benchmarkBySide: sided ?? undefined,
           }),
           avail?.status,
         );
-        return { ...v, breakeven: rungBreakeven, multiplier: sidedMultiplier(v, fs.side), read: { side: fs.side, score: fs.score, tier: fs.tier } };
+        return { ...v, breakeven: (sided ? sided[fs.side] : null) ?? rungBreakeven, multiplier: sidedMultiplier(v, fs.side), read: { side: fs.side, score: fs.score, tier: fs.tier } };
       });
 
       out.push({

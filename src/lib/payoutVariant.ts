@@ -129,6 +129,29 @@ export function decimalFromAmerican(odds: number): number {
 }
 
 /**
+ * Payout-implied breakeven PER SIDE for a rung that prices its two sides separately
+ * (Sleeper's sided multipliers, sportsbook lines — stored as two-sided American odds):
+ * 1/decimal payout of a side is the win rate a pick at that price needs to profit
+ * (vig included — the bar you actually face, not the market's fair probability).
+ * This is what makes FireFactor value-focused on these books: a 1.36× favorite must
+ * clear a ~74% bar, while a 2.84× dog only needs ~35% — so a likely-but-poorly-paid
+ * play no longer outscores a well-paid one by likelihood alone. Null when either
+ * side is unpriced (PrizePicks/Underdog standard legs pay a flat table — their
+ * relative 0.5 anchor is unchanged).
+ */
+export function sidedBreakevens(v: {
+  overOdds?: number | null;
+  underOdds?: number | null;
+}): { over: number; under: number } | null {
+  if (v.overOdds == null || v.underOdds == null) return null;
+  const clamp = (x: number) => Math.max(0.05, Math.min(0.95, x));
+  return {
+    over: clamp(1 / decimalFromAmerican(v.overOdds)),
+    under: clamp(1 / decimalFromAmerican(v.underOdds)),
+  };
+}
+
+/**
  * The payout multiplier to DISPLAY for a rung given the side the read leans. Books that
  * price the two sides differently on a single line (Sleeper: e.g. over 1.62× / under
  * 1.98×, stored as over/under odds) should show the LEANED side's payout, not always
