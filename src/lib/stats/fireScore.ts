@@ -173,6 +173,16 @@ export interface FireFactorInput {
    * in log-odds space, so benchmark 0.5 reproduces the standard behavior exactly.
    */
   benchmark?: number;
+  /**
+   * Per-side payout breakevens for a line whose two sides are priced separately
+   * (Sleeper's sided multipliers, sportsbook odds — see sidedBreakevens). The bar
+   * depends on which side the read leans, and the side is chosen in here — so both
+   * are passed and the CHOSEN side's breakeven anchors the score. When present this
+   * overrides `benchmark`. This is the value-focus: a low-multiplier favorite is
+   * scored against the high bar its payout implies, so it must be extremely likely
+   * to grade high, while a well-paid dog can grade well on value.
+   */
+  benchmarkBySide?: { over: number; under: number };
 }
 
 export interface FireFactorComponent {
@@ -278,12 +288,16 @@ export function computeFireFactor(input: FireFactorInput): FireFactorResult {
   const blended = blendWilson(windows, side);
 
   // The anchor every probability-shaped component is measured against. 0.5 for a
-  // standard line; a payout variant's breakeven otherwise — so the fused score reads
-  // "edge over what the payout needs", not "edge over a coin flip". Expressed for
-  // the CHOSEN side (an under vs a 0.5 benchmark is also 0.5, so standard lines are
-  // bit-for-bit unchanged).
+  // flat-payout standard line; a payout variant's breakeven otherwise — so the fused
+  // score reads "edge over what the payout needs", not "edge over a coin flip".
+  // Expressed for the CHOSEN side (an under vs a 0.5 benchmark is also 0.5, so
+  // flat-payout standard lines are bit-for-bit unchanged). A line priced per side
+  // (benchmarkBySide) anchors at the chosen side's own payout breakeven.
   const bench = Math.max(0.05, Math.min(0.95, input.benchmark ?? 0.5));
-  const benchSide = side === 'over' ? bench : 1 - bench;
+  const sidedBench = input.benchmarkBySide
+    ? Math.max(0.05, Math.min(0.95, side === 'over' ? input.benchmarkBySide.over : input.benchmarkBySide.under))
+    : null;
+  const benchSide = sidedBench ?? (side === 'over' ? bench : 1 - bench);
 
   // Trust is the Wilson LOWER bound's distance below the benchmark, re-centered so a
   // benchmark of 0.5 reproduces the original formula. Without the shift, every
@@ -423,11 +437,11 @@ export function computeFireFactor(input: FireFactorInput): FireFactorResult {
   const thinSample = blended !== null && blended.decided < FIREFACTOR_MIN_GAMES;
   const tier = tierFor(score, !insufficient && score >= FIREFACTOR_TIER_CUTOFFS.none);
 
-  const calibrated = (input.benchmark ?? 0.5) !== 0.5;
+  const calibrated = sidedBench !== null || (input.benchmark ?? 0.5) !== 0.5;
   const note = insufficient
     ? 'No decided games at this line yet — no read.'
     : calibrated
-      ? `Scored against this payout variant's ~${Math.round(bench * 100)}% breakeven — 0 means fairly priced for its payout, not a coin flip.${
+      ? `Scored against this ${sidedBench !== null ? "side's payout-implied" : "payout variant's"} ~${Math.round((sidedBench ?? bench) * 100)}% breakeven — 0 means fairly priced for its payout, not a coin flip.${
           thinSample ? ' Small sample, so read with extra caution.' : ''
         } Descriptive research from past games — not betting advice.`
       : input.overOnly && historySide === 'under'

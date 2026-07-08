@@ -8,6 +8,7 @@ import {
   resolvedBreakeven,
   shownBreakeven,
   decimalFromAmerican,
+  sidedBreakevens,
   sidedMultiplier,
   pickRepresentative,
 } from './payoutVariant';
@@ -154,5 +155,28 @@ describe('sidedMultiplier', () => {
     expect(sidedMultiplier({ multiplier: 1.31, overOdds: null, underOdds: null }, 'over')).toBe(1.31);
     // Plain line with no multiplier at all.
     expect(sidedMultiplier({ multiplier: null, overOdds: -110, underOdds: -110 }, 'over')).toBeNull();
+  });
+});
+
+describe('sidedBreakevens', () => {
+  it('derives each side’s payout-implied breakeven from two-sided odds (vig included)', () => {
+    // Sleeper-style: over 1.36× (−278) / under 2.84× (+184).
+    const b = sidedBreakevens({ overOdds: -278, underOdds: 184 })!;
+    expect(b.over).toBeCloseTo(1 / decimalFromAmerican(-278), 10); // ≈ 0.735
+    expect(b.under).toBeCloseTo(1 / decimalFromAmerican(184), 10); // ≈ 0.352
+    // The two bars sum past 1 — that overround IS the vig the player faces.
+    expect(b.over + b.under).toBeGreaterThan(1);
+  });
+
+  it('returns null when either side is unpriced (flat-payout pick’em legs)', () => {
+    expect(sidedBreakevens({ overOdds: null, underOdds: null })).toBeNull();
+    expect(sidedBreakevens({ overOdds: -110, underOdds: null })).toBeNull();
+    expect(sidedBreakevens({})).toBeNull();
+  });
+
+  it('clamps extreme prices into the FireFactor benchmark range', () => {
+    const b = sidedBreakevens({ overOdds: -10000, underOdds: 5000 })!;
+    expect(b.over).toBeLessThanOrEqual(0.95);
+    expect(b.under).toBeGreaterThanOrEqual(0.05);
   });
 });

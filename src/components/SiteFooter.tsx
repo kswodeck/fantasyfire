@@ -1,15 +1,16 @@
 import Link from 'next/link';
 import { FlameMark } from './FlameMark';
 import { SITE, activeSocials } from '@/lib/site';
-import { SPORT_LIST, SPORTS } from '@/lib/sports';
 
 const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
   {
-    title: 'Sports',
-    // Derived from the registry so a new sport lands here automatically.
+    // The all-sports surfaces, not a per-league directory — every league is one
+    // tap away inside each of these (and in the header nav).
+    title: 'Research',
     links: [
       { label: 'My Playbook', href: '/playbook' },
-      ...SPORT_LIST.map((sport) => ({ label: SPORTS[sport].name, href: `/${sport}` })),
+      { label: 'Heat Check — all sports', href: '/board' },
+      { label: 'Trends — all sports', href: '/trends' },
     ],
   },
   {
