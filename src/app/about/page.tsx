@@ -6,7 +6,7 @@ import { SITE } from '@/lib/site';
 
 export const metadata: Metadata = {
   title: 'About',
-  description: `What ${SITE.name} is: matchup-adjusted projections and +EV for NBA, WNBA, MLB, NFL, NHL, MLS, CFB, CBB, and college football and basketball player props, priced against the market and shown with their uncertainty.`,
+  description: `What ${SITE.name} is: matchup-adjusted projections and +EV for NBA, WNBA, MLB, NFL, NHL, MLS, CFB, and CBB player props, priced against the market and shown with their uncertainty.`,
   alternates: { canonical: '/about' },
 };
 
@@ -21,7 +21,7 @@ export default function AboutPage() {
 
       <Prose>
         <p>
-          {SITE.name}{' '}is a projection and +EV research tool for NBA, WNBA, MLB, NFL, NHL, MLS, CFB, CBB, and college football and basketball player
+          {SITE.name}{' '}is a projection and +EV research tool for NBA, WNBA, MLB, NFL, NHL, MLS, CFB, and CBB player
           props. We turn public game logs into a matchup-adjusted projection for every prop,
           convert it to the probability the line clears, and price it against the market — so
           you can find the soft number instead of trusting someone else&rsquo;s
@@ -73,10 +73,10 @@ export default function AboutPage() {
 
         <h2>Where the data comes from</h2>
         <p>
-          Projections are computed from publicly available NBA, WNBA, MLB, NFL, NHL, MLS, CFB, CBB, and college football and basketball game logs, refreshed
+          Projections are computed from publicly available NBA, WNBA, MLB, NFL, NHL, MLS, CFB, and CBB game logs, refreshed
           nightly. The market prices, Vegas game totals, and injury status come from public
           sportsbook and league feeds, refreshed through the day. {SITE.name} is independent and
-          is not affiliated with or endorsed by the NBA, WNBA, MLB, NFL, NHL, MLS, CFB, CBB, any team, or any sportsbook;
+          is not affiliated with or endorsed by the NBA, WNBA, MLB, NFL, NHL, MLS, the NCAA, any team or school, or any sportsbook;
           league and team names and logos are the property of their respective owners.
         </p>
 
