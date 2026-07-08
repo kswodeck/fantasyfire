@@ -95,7 +95,7 @@ export function SiteFooter() {
         <div className="mt-8 space-y-2 border-t border-line pt-6 text-xs leading-relaxed text-muted">
           <p>
             <strong className="text-foreground">{SITE.name}</strong> is a research tool
-            built on public NBA, WNBA, MLB, NFL, NHL, MLS, CFB, and CBB game logs. Hit rates and matchup numbers are
+            built on public game logs from eight pro and college leagues. Hit rates and matchup numbers are
             descriptive statistics about past performance — they are{' '}
             <strong className="text-foreground">
               not predictions, advice, or a guarantee
@@ -104,7 +104,7 @@ export function SiteFooter() {
             1-800-GAMBLER.
           </p>
           <p>
-            Not affiliated with or endorsed by the NBA, WNBA, MLB, NFL, NHL, MLS, the NCAA, or any team or school. © {year}{' '}
+            Not affiliated with or endorsed by any league, the NCAA, or any team or school. © {year}{' '}
             {SITE.name}.
           </p>
         </div>

@@ -12,7 +12,7 @@ export const revalidate = 900; // 15 min — matches the per-sport Heat Check ca
 export const metadata: Metadata = {
   title: 'Heat Check — All Sports Player Props, Ranked by FireFactor',
   description:
-    'The strongest recent-form player-prop reads across every in-season league — NBA, WNBA, MLB, NFL, NHL, MLS, CFB, and CBB — merged into one board and ranked by our sample-size-adjusted FireFactor. Switch books or pick a single sport. Research, not picks.',
+    'The strongest recent-form player-prop reads across every in-season league, merged into one board and ranked by our sample-size-adjusted FireFactor. Switch books or pick a single sport. Research, not picks.',
   alternates: { canonical: '/board' },
   openGraph: { type: 'website', title: 'Heat Check — All Sports', url: '/board' },
 };
