@@ -1,15 +1,15 @@
 import Link from 'next/link';
 import { FlameMark } from './FlameMark';
 import { SITE, activeSocials } from '@/lib/site';
+import { SPORT_LIST, SPORTS } from '@/lib/sports';
 
 const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
   {
     title: 'Sports',
+    // Derived from the registry so a new sport lands here automatically.
     links: [
       { label: 'My Playbook', href: '/playbook' },
-      { label: 'NBA', href: '/nba' },
-      { label: 'MLB', href: '/mlb' },
-      { label: 'NFL', href: '/nfl' },
+      ...SPORT_LIST.map((sport) => ({ label: SPORTS[sport].name, href: `/${sport}` })),
     ],
   },
   {
@@ -95,7 +95,7 @@ export function SiteFooter() {
         <div className="mt-8 space-y-2 border-t border-line pt-6 text-xs leading-relaxed text-muted">
           <p>
             <strong className="text-foreground">{SITE.name}</strong> is a research tool
-            built on public NBA, WNBA, MLB, NFL, NHL, MLS, CFB, CBB, and college football and basketball game logs. Hit rates and matchup numbers are
+            built on public NBA, WNBA, MLB, NFL, NHL, MLS, CFB, and CBB game logs. Hit rates and matchup numbers are
             descriptive statistics about past performance — they are{' '}
             <strong className="text-foreground">
               not predictions, advice, or a guarantee
@@ -104,7 +104,7 @@ export function SiteFooter() {
             1-800-GAMBLER.
           </p>
           <p>
-            Not affiliated with or endorsed by the NBA, WNBA, MLB, NFL, NHL, MLS, CFB, CBB, or any team. © {year}{' '}
+            Not affiliated with or endorsed by the NBA, WNBA, MLB, NFL, NHL, MLS, the NCAA, or any team or school. © {year}{' '}
             {SITE.name}.
           </p>
         </div>
