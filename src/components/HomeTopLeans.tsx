@@ -6,7 +6,7 @@ import type { BoardRow } from '@/lib/types';
 import { BoardTable } from './BoardTable';
 import { SourceSelector } from './SourceSelector';
 import { useSelectedSource } from './SelectedSourceProvider';
-import { orderSources, DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
+import { orderSources, sourceLabel, DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 
 export interface HomeCard {
   sport: Sport;
@@ -65,11 +65,12 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
 
       <div className={`grid gap-5 ${gridCols}`}>
         {cards.map((c) => {
-          const hasSources = Object.keys(c.boardsBySource).length > 0;
-          const rows = (hasSources ? (c.boardsBySource[shown] ?? []) : c.medianLeans).slice(
-            0,
-            DISPLAY,
-          );
+          // The one selector governs EVERY card: when any book is live on this page,
+          // a sport with no rows on the chosen book gets an honest empty state — never
+          // a silent substitution of median-line leans (those aren't that book's
+          // lines). Median leans only render when no book is live anywhere.
+          const rows = (liveSources.length > 0 ? (c.boardsBySource[shown] ?? []) : c.medianLeans)
+            .slice(0, DISPLAY);
           return (
             <div
               key={c.sport}
@@ -87,8 +88,8 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
                 </h3>
                 {rows.length === 0 ? (
                   <p className="px-1 py-4 text-sm text-muted">
-                    {hasSources
-                      ? 'No reads on this book for the current slate.'
+                    {liveSources.length > 0
+                      ? `No ${sourceLabel(shown)} lines for ${c.name} on the current slate.`
                       : 'No data available yet.'}
                   </p>
                 ) : (

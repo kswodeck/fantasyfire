@@ -198,7 +198,9 @@ export default async function PlayerPage({ params }: PageProps) {
           background: `linear-gradient(120deg, color-mix(in srgb, ${team.primary} 22%, var(--surface)) 0%, var(--surface) 62%)`,
         }}
       >
-        <div className="flex items-center gap-4 p-5">
+        {/* flex-wrap + w-full buttons: on narrow phones the Save/Share pair drops to
+            its own row instead of squeezing the name column until it overflows. */}
+        <div className="flex flex-wrap items-center gap-4 p-5">
           <PlayerAvatar
             sport={sport}
             externalId={player.externalId}
@@ -217,7 +219,7 @@ export default async function PlayerPage({ params }: PageProps) {
               />
               <span className="truncate">{player.teamName ?? player.teamAbbreviation}</span>
             </div>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">{player.fullName}</h1>
+            <h1 className="mt-1 break-words text-2xl font-bold tracking-tight sm:text-3xl">{player.fullName}</h1>
             <p className="mt-1 text-sm text-muted">
               {[
                 player.jersey ? `#${player.jersey}` : null,
@@ -236,7 +238,7 @@ export default async function PlayerPage({ params }: PageProps) {
               </p>
             )}
           </div>
-          <div className="flex shrink-0 flex-col gap-2 self-start">
+          <div className="flex w-full shrink-0 gap-2 sm:w-auto sm:flex-col sm:self-start">
             <FavoriteToggle
               sport={sport}
               slug={player.slug}

@@ -49,8 +49,8 @@ export default function HowItWorksPage() {
 
         <h2>The data</h2>
         <p>
-          The projections are computed from publicly available NBA, WNBA, MLB, NFL, NHL, MLS, CFB, and CBB box-score game
-          logs, ingested nightly. On top of that we read three public feeds through the day:{' '}
+          The projections are computed from publicly available box-score game logs for every
+          league we cover, ingested nightly. On top of that we read three public feeds through the day:{' '}
           <strong>book lines and odds</strong> (PrizePicks, Underdog, and major sportsbooks),{' '}
           <strong>Vegas game odds</strong> (the total and spread), and{' '}
           <strong>injury status</strong>. The app only reads this data — it never invents it. Each
