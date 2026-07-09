@@ -276,6 +276,63 @@ describe('computeFireFactor', () => {
     });
   });
 
+  describe('side-priced lines (benchmarkBySide — Sleeper sided multipliers)', () => {
+    // 1.36× favorite / 2.84× dog: breakevens 1/1.36 ≈ 0.735 and 1/2.84 ≈ 0.352.
+    const sided = { over: 1 / 1.36, under: 1 / 2.84 };
+
+    it('a likely-but-poorly-paid favorite no longer grades high on likelihood alone', () => {
+      // ~70% over history — a strong lean vs a coin flip, but well SHORT of the
+      // ~74% its 1.36× payout needs: the sided score must drop hard.
+      const flat = computeFireFactor(base);
+      const value = computeFireFactor({ ...base, benchmarkBySide: sided });
+      expect(value.side).toBe('over'); // side still follows history
+      expect(value.score).toBeLessThan(flat.score * 0.5);
+      expect(value.note).toMatch(/payout-implied ~74% breakeven/i);
+    });
+
+    it('a well-paid dog with a modest edge over its low bar reads as real value', () => {
+      // History leans under at ~60% — nothing special vs 50%, but far above the
+      // ~35% bar the 2.84× under payout needs: a genuine value read.
+      const dog: FireFactorInput = {
+        ...base,
+        windows: [win(4, 10, '5'), win(8, 20, '10'), win(16, 40, '20'), win(25, 62, 'season')],
+        projection: 18,
+      };
+      const flat = computeFireFactor(dog);
+      const value = computeFireFactor({ ...dog, benchmarkBySide: sided });
+      expect(value.side).toBe('under');
+      expect(value.score).toBeGreaterThan(flat.score);
+      expect(value.tier).not.toBe('Pass');
+    });
+
+    it('an extremely likely favorite still clears its high bar', () => {
+      // 90%+ over history DOES clear the ~74% bar — the favorite isn't banned,
+      // it just has to be extremely likely, exactly the product intent.
+      const lock = computeFireFactor({
+        ...base,
+        windows: [win(9, 10, '5'), win(19, 20, '10'), win(37, 40, '20'), win(57, 62, 'season')],
+        projection: 26,
+        benchmarkBySide: sided,
+      });
+      expect(lock.side).toBe('over');
+      expect(lock.score).toBeGreaterThanOrEqual(FIREFACTOR_TIER_CUTOFFS.slight);
+    });
+
+    it('even per-side pricing at 0.5/0.5 reproduces the flat behavior exactly', () => {
+      const std = computeFireFactor(base);
+      const even = computeFireFactor({ ...base, benchmarkBySide: { over: 0.5, under: 0.5 } });
+      expect(even.score).toBe(std.score);
+      expect(even.tier).toBe(std.tier);
+      expect(even.side).toBe(std.side);
+    });
+
+    it('benchmarkBySide overrides a flat benchmark when both are supplied', () => {
+      const sidedOnly = computeFireFactor({ ...base, benchmarkBySide: sided });
+      const both = computeFireFactor({ ...base, benchmark: 0.5, benchmarkBySide: sided });
+      expect(both.score).toBe(sidedOnly.score);
+    });
+  });
+
   it('VALUE mode lifts the score and flags valueMode when a price gives positive EV', () => {
     const lean = computeFireFactor(base);
     const value = computeFireFactor({ ...base, evPerDollar: { over: 0.2 } });
