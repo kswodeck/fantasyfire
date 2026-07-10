@@ -52,13 +52,20 @@ export function BoardRowCard({
   const [line, setLine] = useState(initialLine ?? row.line);
   const variants = row.variants ?? [];
   const isDefault = line === row.line;
+  const currentRung = variants.find((v) => v.line === line) ?? null;
 
   // On-click recompute for a non-default rung; the default rung already has its read.
+  // The rung's payout context rides along (oddsType + multiplier) so the live verdict
+  // stays anchored to the payout being shown even if the book moved/pulled this rung
+  // after the board rendered — without it a stale rung would re-score as a plain
+  // line against a coin-flip benchmark (a huge, misleading FF cliff).
   const q = useQuery<PlayerResearch>({
-    queryKey: ['hitrate', sport, row.player.slug, row.stat, line, source ?? null],
+    queryKey: ['hitrate', sport, row.player.slug, row.stat, line, source ?? null, currentRung?.oddsType ?? null, currentRung?.multiplier ?? null],
     queryFn: async ({ signal }) => {
       const params = new URLSearchParams({ playerSlug: row.player.slug, stat: row.stat, line: String(line) });
       if (source) params.set('source', source);
+      if (currentRung?.oddsType) params.set('oddsType', currentRung.oddsType);
+      if (currentRung?.multiplier != null) params.set('multiplier', String(currentRung.multiplier));
       const res = await fetch(`/api/v1/${sport}/hitrate?${params.toString()}`, { signal });
       if (!res.ok) throw new Error(`Request failed (${res.status})`);
       return (await res.json()) as PlayerResearch;
@@ -67,9 +74,8 @@ export function BoardRowCard({
     staleTime: 5 * 60 * 1000,
   });
 
-  const currentRung = variants.find((v) => v.line === line) ?? null;
   // The rung's precomputed read paints the switch instantly; the on-click refetch
-  // then confirms it with the full live verdict (they agree — same math).
+  // then confirms it with the full live verdict (same math + the payout hint).
   const pre = currentRung?.read ?? null;
   const fireScore = isDefault
     ? row.fireScore

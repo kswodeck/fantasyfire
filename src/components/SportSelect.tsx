@@ -39,7 +39,7 @@ export function SportSelect({
         onChange={(e) => router.push(hrefFor(e.target.value as Sport | 'all', section))}
         className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-brand"
       >
-        {includeAll && <option value="all">All Sports</option>}
+        {includeAll && <option value="all">All</option>}
         {SPORT_LIST.map((s) => (
           <option key={s} value={s}>
             {SPORTS[s].name}

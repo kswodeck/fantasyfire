@@ -25,6 +25,15 @@ export const hitRateQuerySchema = z.object({
   stat: statKeySchema,
   line: lineSchema.optional(),
   source: providedSourceSchema.optional(),
+  // The selected rung's payout context (see RungHint) — keeps a clicked variant
+  // scored against ITS payout even when the book has re-priced/pulled that rung
+  // since the caller rendered. Only meaningful alongside an explicit `line`.
+  oddsType: z
+    .string()
+    .max(20)
+    .regex(/^[a-z_]+$/, 'Invalid oddsType')
+    .optional(),
+  multiplier: z.coerce.number().positive().max(100).optional(),
 });
 export type HitRateQuery = z.infer<typeof hitRateQuerySchema>;
 

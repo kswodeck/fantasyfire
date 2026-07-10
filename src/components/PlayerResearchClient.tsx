@@ -97,6 +97,12 @@ export function PlayerResearchClient({
   // True when the URL pinned a book (?source=…): a shared link must open on the book
   // it was shared from, so the visitor's own saved choice doesn't override it.
   const urlPinnedSource = useRef(false);
+  // The payout context of the rung selected via the chips/ladder/top-reads, captured
+  // AT CLICK TIME — so the refetch stays anchored to that payout even if the book
+  // re-prices/pulls the rung mid-session (see RungHint on the server).
+  const [rungHint, setRungHint] = useState<
+    { oddsType?: string | null; multiplier?: number | null } | undefined
+  >(undefined);
 
   // Hydrate stat/line/source from the URL once on mount — syncing from an external
   // system (the URL) into React. Done in an effect (not a lazy initializer) so
@@ -140,6 +146,8 @@ export function PlayerResearchClient({
     stat,
     line,
     source,
+    oddsType: line !== undefined ? rungHint?.oddsType : undefined,
+    multiplier: line !== undefined ? rungHint?.multiplier : undefined,
     initialData: isInitialKey ? initialResearch : undefined,
     hasLiveLines: availableSources.length > 0,
   });
@@ -175,10 +183,16 @@ export function PlayerResearchClient({
     }
     setStat(next);
     setLine(undefined); // reset to the new stat's default line
+    setRungHint(undefined);
     syncUrl(next, undefined, source);
   }
 
   function handleLine(next: number) {
+    // Capture the clicked rung's payout context from the ladder AS RENDERED — the
+    // refetch this triggers must score against the payout the user saw, even if
+    // the book has since moved/pulled the rung.
+    const rung = data.variants?.find((v) => v.line === next);
+    setRungHint(rung ? { oddsType: rung.oddsType, multiplier: rung.multiplier } : undefined);
     setLine(next);
     syncUrl(stat, next, source);
     track('line_entered', { sport, stat });
@@ -187,10 +201,11 @@ export function PlayerResearchClient({
   // A "top reads" pick loads that prop+line into the whole page — same effect as
   // choosing the stat then typing the line. On the per-stat SEO page it navigates
   // to the hub (like handleStat) with the line pinned in the URL.
-  function handlePick(nextStat: StatKey, nextLine: number) {
+  function handlePick(nextStat: StatKey, nextLine: number, hint?: { oddsType?: string | null; multiplier?: number | null }) {
     track('top_read_clicked', { sport, stat: nextStat });
     if (nextStat === stat) {
       // Same stat — just move the line (no navigation even on the per-stat page).
+      setRungHint(hint);
       setLine(nextLine);
       syncUrl(stat, nextLine, source);
       return;
@@ -201,6 +216,7 @@ export function PlayerResearchClient({
       return;
     }
     setStat(nextStat);
+    setRungHint(hint);
     setLine(nextLine);
     syncUrl(nextStat, nextLine, source);
   }
@@ -209,6 +225,7 @@ export function PlayerResearchClient({
     setSource(next);
     setGlobalSource(next); // persist the choice + sync it across pages
     setLine(undefined); // show the new book's line, not a stale custom line
+    setRungHint(undefined);
     syncUrl(stat, undefined, next);
     track('source_switched', { sport, source: next });
   }
