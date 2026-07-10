@@ -10,11 +10,11 @@ import type { AllSportsTrends } from '@/lib/server/allSports';
 export const revalidate = 21600; // 6h — matches the per-sport Trends cadence (egress-heavy scans)
 
 export const metadata: Metadata = {
-  title: 'Player Trends — All Sports Form Swings & Streaks',
+  title: 'Player Trends — Form Swings & Streaks',
   description:
     'Players across every in-season league whose last-10 over/under rate has swung hardest from their season baseline — merged into one board and ranked by a 95% Wilson lower bound, with each streak shown alongside. Research, not picks.',
   alternates: { canonical: '/trends' },
-  openGraph: { type: 'website', title: 'Player Trends — All Sports', url: '/trends' },
+  openGraph: { type: 'website', title: 'Player Trends', url: '/trends' },
 };
 
 export default async function AllTrendsPage() {
@@ -37,7 +37,7 @@ export default async function AllTrendsPage() {
         items={[{ label: 'Home', href: '/' }, { label: 'Trends' }]}
       />
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <h1 className="text-3xl font-bold tracking-tight">Player Trends — All Sports</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Player Trends</h1>
         <SportSelect section="trends" value="all" includeAll />
       </div>
       <p className="mt-2 max-w-2xl text-sm text-muted">
