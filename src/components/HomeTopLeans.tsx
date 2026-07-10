@@ -51,18 +51,27 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
 
   return (
     <section className={single ? 'mx-auto max-w-md pb-10' : 'pb-10'}>
-      {liveSources.length > 0 && (
-        <div className="mb-3 flex justify-end">
-          <SourceSelector sources={liveSources} value={shown} onChange={setSource} />
-        </div>
-      )}
+      {/* Width = the card row's natural width (N cards at their 400px basis + the
+          20px gaps), capped at the container — so the selector's right edge tracks
+          the RIGHTMOST CARD instead of floating at the much wider page container.
+          Computed explicitly (numbers mirror basis-[400px] / gap-5 below) because
+          fit-content on a nested wrap-flex resolves inconsistently in Chrome. */}
+      <div
+        className="mx-auto"
+        style={{ width: `min(100%, ${cards.length * 400 + (cards.length - 1) * 20}px)` }}
+      >
+        {liveSources.length > 0 && (
+          <div className="mb-3 flex justify-end">
+            <SourceSelector sources={liveSources} value={shown} onChange={setSource} />
+          </div>
+        )}
 
-      {/* Each card holds a 400px width and wraps to the next line when the row can't
-          fit another — and rows are centered, so a card that wraps onto its own row
-          sits in the middle rather than hugging the left. Cards don't grow past their
-          basis (a lone wrapped card stays card-sized, not stretched); they shrink to
-          the container's width on phones. A single card keeps the section's max-w-md. */}
-      <div className={single ? '' : 'flex flex-wrap justify-center gap-5'}>
+        {/* Each card holds a 400px width and wraps to the next line when the row can't
+            fit another — and rows are centered, so a card that wraps onto its own row
+            sits in the middle rather than hugging the left. Cards don't grow past their
+            basis (a lone wrapped card stays card-sized, not stretched); they shrink to
+            the container's width on phones. A single card keeps the section's max-w-md. */}
+        <div className={single ? '' : 'flex flex-wrap justify-center gap-5'}>
         {cards.map((c) => {
           // The one selector governs EVERY card: when any book is live on this page,
           // a sport with no rows on the chosen book gets an honest empty state — never
@@ -107,6 +116,7 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
             </div>
           );
         })}
+        </div>
       </div>
     </section>
   );
