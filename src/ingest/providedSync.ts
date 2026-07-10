@@ -33,6 +33,25 @@ export const RETIRED_SOURCE_TAGS: Readonly<Record<string, readonly string[]>> = 
   sleeper: ['demon', 'goblin'],
 };
 
+/**
+ * Canonical form for club/team display names so a book's spelling matches ours:
+ * lowercase, diacritics stripped (CF Montréal ↔ CF Montreal), punctuation dropped,
+ * and the generic club tokens fc/cf/sc removed ("Atlanta United FC" ↔ "Atlanta
+ * United", "Inter Miami CF" ↔ "Inter Miami"). Equality on this form is the gate
+ * for combined-feed sports (see ProvidedLineRow.externalTeamName) — deliberately
+ * exact-match only, so "Chicago Stars" (NWSL) never matches "Chicago Fire" (MLS).
+ */
+export function normalizeClubName(raw: string): string {
+  return raw
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // strip diacritics (post-NFD combining marks)
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .split(/\s+/)
+    .filter((t) => t.length > 0 && t !== 'fc' && t !== 'cf' && t !== 'sc')
+    .join(' ');
+}
+
 export interface RowKey {
   playerId: number;
   stat: string;

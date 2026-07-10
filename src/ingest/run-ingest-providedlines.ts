@@ -24,7 +24,7 @@ import { fetchSleeperLines } from './sleeper';
 import { fetchPick6Lines } from './pick6';
 import { fetchRotowireLines } from './rotowire';
 import type { ProvidedLineRow } from './providedTypes';
-import { staleRows, RETIRED_SOURCE_TAGS, type RowKey } from './providedSync';
+import { staleRows, normalizeClubName, RETIRED_SOURCE_TAGS, type RowKey } from './providedSync';
 import { normalizeName } from '../lib/slate';
 import type { Sport } from '../lib/sports';
 import { isPropStat } from '../lib/propStats';
@@ -84,6 +84,19 @@ async function main(): Promise<number> {
     indexBySport.set(sport, await playerIndex(sport));
   }
 
+  // MLS rows come from COMBINED soccer feeds (PP folds MLS/NWSL/EPL/… into one
+  // SOCCER league), so name matching alone could attach another competition's
+  // same-named player to ours. Gate: an MLS row must carry a club that matches an
+  // MLS team of ours — rows without a club, or from any other competition, drop.
+  const mlsClubs = new Set<string>();
+  if (rows.some((r) => r.sport === 'mls')) {
+    const teams = await withDbRetry(
+      () => db.team.findMany({ where: { sport: 'mls' }, select: { name: true } }),
+      'teamIndex(mls)',
+    );
+    for (const t of teams) mlsClubs.add(normalizeClubName(t.name));
+  }
+
   type Resolved = {
     sport: Sport;
     playerId: number;
@@ -98,9 +111,17 @@ async function main(): Promise<number> {
   };
 
   let unmatched = 0;
+  let clubRejected = 0;
   const resolved: Resolved[] = [];
   const perSource = new Map<string, number>();
   for (const r of rows) {
+    if (r.sport === 'mls') {
+      const club = r.externalTeamName ? normalizeClubName(r.externalTeamName) : '';
+      if (!club || !mlsClubs.has(club)) {
+        clubRejected++; // another competition (NWSL/EPL/…) or no club context
+        continue;
+      }
+    }
     const playerId = indexBySport.get(r.sport)?.get(normalizeName(r.externalPlayerName));
     if (!playerId) {
       unmatched++;
@@ -182,7 +203,7 @@ async function main(): Promise<number> {
 
   const summary = [...perSource.entries()].map(([s, n]) => `${s}=${n}`).join(', ');
   console.log(
-    `[providedlines] upserted ${ops.length} (${summary}); ${unmatched} skipped; ${pruned.removed} stale + ${retired.removed} retired-tag row(s) removed.`,
+    `[providedlines] upserted ${ops.length} (${summary}); ${unmatched} skipped; ${clubRejected} non-MLS soccer row(s) club-gated; ${pruned.removed} stale + ${retired.removed} retired-tag row(s) removed.`,
   );
 
   // Revalidate the changed pages — best-effort, only when the site actually shows
