@@ -100,6 +100,12 @@ interface EspnIngestConfig {
   /** First day of a season, for the initial backfill walk. `season` is this
    *  sport's season string ("2025-26" or "2026"). */
   seasonStartIso: (season: string) => string;
+  /** Last plausible day of a season — a safe margin PAST the final/championship,
+   *  before any date the next season could start. Used to tell an in-season date
+   *  (games possible; a scoreboard failure must not be swallowed) from an
+   *  off-season one (no games; ESPN routinely 500s on these). `season` matches
+   *  seasonStartIso's. */
+  seasonEndIso: (season: string) => string;
   /** Extra scoreboard query — college scoreboards default to a featured subset
    *  (Top 25) unless a groups filter + a high limit are passed. */
   scoreboardQuery?: string;
@@ -143,6 +149,8 @@ const CONFIGS: Partial<Record<Sport, EspnIngestConfig>> = {
     seasonTypes: new Set([2, 3]), // regular + playoffs, no preseason
     // "2025-26" -> Oct 1 2025 (opening night is early October).
     seasonStartIso: (season) => `${season.slice(0, 4)}-10-01`,
+    // Stanley Cup wraps in late June; next season opens in October.
+    seasonEndIso: (season) => `${Number(season.slice(0, 4)) + 1}-07-01`,
   },
   wnba: {
     sport: 'wnba',
@@ -153,6 +161,8 @@ const CONFIGS: Partial<Record<Sport, EspnIngestConfig>> = {
     seasonTypes: new Set([2, 3]),
     // "2026" -> May 1 2026 (tip-off is mid-May).
     seasonStartIso: (season) => `${season}-05-01`,
+    // Finals wrap in mid-October; next season tips off the following May.
+    seasonEndIso: (season) => `${season}-11-15`,
   },
   mls: {
     sport: 'mls',
@@ -162,6 +172,8 @@ const CONFIGS: Partial<Record<Sport, EspnIngestConfig>> = {
     inferPosBucket: soccerInfer,
     // "2026" -> Feb 15 2026 (the regular season kicks off late February).
     seasonStartIso: (season) => `${season}-02-15`,
+    // MLS Cup is early December; the next season kicks off late February.
+    seasonEndIso: (season) => `${season}-12-20`,
   },
   cfb: {
     sport: 'cfb',
@@ -172,6 +184,8 @@ const CONFIGS: Partial<Record<Sport, EspnIngestConfig>> = {
     seasonTypes: new Set([2, 3]), // regular + bowls/playoff
     // "2025" -> Aug 20 2025 (Week 0 kicks off late August).
     seasonStartIso: (season) => `${season}-08-20`,
+    // The CFP title game is mid-January; the next season is Week 0 in late August.
+    seasonEndIso: (season) => `${Number(season) + 1}-02-01`,
     scoreboardQuery: '&groups=80&limit=300', // FBS, whole slate
     skipLeagueTeams: true,
     rosterFromBoxTeams: true,
@@ -185,6 +199,8 @@ const CONFIGS: Partial<Record<Sport, EspnIngestConfig>> = {
     seasonTypes: new Set([2, 3]),
     // "2025-26" -> Nov 1 2025 (tip-off is the first week of November).
     seasonStartIso: (season) => `${season.slice(0, 4)}-11-01`,
+    // The title game is early April; the next season tips off in November.
+    seasonEndIso: (season) => `${Number(season.slice(0, 4)) + 1}-05-01`,
     scoreboardQuery: '&groups=50&limit=400', // Division I, whole slate
     skipLeagueTeams: true,
     rosterFromBoxTeams: true,
@@ -335,11 +351,28 @@ async function main() {
       (d) => d,
     );
     if (stillFailing.length > 0) {
-      // Loud abort so the next nightly run re-walks these dates — a silently
-      // skipped date is a PERMANENT hole the incremental walk never revisits.
-      throw new Error(
-        `[${SPORT}] scoreboard still failing after ${RETRY_PASSES} slow passes: ${stillFailing.join(', ')}`,
-      );
+      // A date that failed EVERY slow pass splits by whether it's in-season: an
+      // in-season date can carry games, and silently skipping it would leave a
+      // PERMANENT hole (the incremental walk never revisits it) — abort loudly so
+      // the next run retries. An off-season date has no games — ESPN routinely
+      // 500s on those — so skipping it is safe and keeps one flaky off-season day
+      // from wedging the whole sport's ingest indefinitely (the walk always runs
+      // to today, months past the final for a just-finished season).
+      const inSeason = (d: string): boolean => {
+        const s = currentSeason(SPORT, new Date(`${d}T12:00:00Z`));
+        return d >= cfg.seasonStartIso(s) && d <= cfg.seasonEndIso(s);
+      };
+      const fatal = stillFailing.filter(inSeason);
+      for (const d of stillFailing.filter((x) => !inSeason(x))) {
+        console.warn(
+          `[${SPORT}] off-season scoreboard ${d} still failing after ${RETRY_PASSES} slow passes — skipped`,
+        );
+      }
+      if (fatal.length > 0) {
+        throw new Error(
+          `[${SPORT}] in-season scoreboard still failing after ${RETRY_PASSES} slow passes: ${fatal.join(', ')}`,
+        );
+      }
     }
   }
   console.log(`[${SPORT}] ${events.length} completed games`);

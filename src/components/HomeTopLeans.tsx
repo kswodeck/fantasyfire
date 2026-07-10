@@ -48,12 +48,6 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
       : (liveSources[0] ?? DEFAULT_PROVIDED_SOURCE);
 
   const single = cards.length === 1;
-  const gridCols =
-    cards.length >= 3
-      ? 'sm:grid-cols-2 lg:grid-cols-3'
-      : cards.length === 2
-        ? 'sm:grid-cols-2'
-        : '';
 
   return (
     <section className={single ? 'mx-auto max-w-md pb-10' : 'pb-10'}>
@@ -63,7 +57,12 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
         </div>
       )}
 
-      <div className={`grid gap-5 ${gridCols}`}>
+      {/* Each card holds a 400px width and wraps to the next line when the row can't
+          fit another — and rows are centered, so a card that wraps onto its own row
+          sits in the middle rather than hugging the left. Cards don't grow past their
+          basis (a lone wrapped card stays card-sized, not stretched); they shrink to
+          the container's width on phones. A single card keeps the section's max-w-md. */}
+      <div className={single ? '' : 'flex flex-wrap justify-center gap-5'}>
         {cards.map((c) => {
           // The one selector governs EVERY card: when any book is live on this page,
           // a sport with no rows on the chosen book gets an honest empty state — never
@@ -74,7 +73,9 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
           return (
             <div
               key={c.sport}
-              className="overflow-hidden rounded-2xl border border-line bg-surface"
+              className={`overflow-hidden rounded-2xl border border-line bg-surface ${
+                single ? '' : 'min-w-0 max-w-full shrink grow-0 basis-[400px]'
+              }`}
               style={{ borderTop: `3px solid ${c.accent}` }}
             >
               <div className="p-5">
