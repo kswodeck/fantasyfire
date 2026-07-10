@@ -40,7 +40,7 @@ describe('GET /api/v1/{sport}/hitrate', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.player.slug).toBe('luka-doncic');
-    expect(mockResearch).toHaveBeenCalledWith('nba', 'luka-doncic', 'pts', 25.5, undefined);
+    expect(mockResearch).toHaveBeenCalledWith('nba', 'luka-doncic', 'pts', 25.5, undefined, undefined);
   });
 
   it('omitted line passes undefined (server computes the default)', async () => {
@@ -51,7 +51,7 @@ describe('GET /api/v1/{sport}/hitrate', () => {
       sportCtx('nba'),
     );
     expect(res.status).toBe(200);
-    expect(mockResearch).toHaveBeenCalledWith('nba', 'nikola-jokic', 'reb', undefined, undefined);
+    expect(mockResearch).toHaveBeenCalledWith('nba', 'nikola-jokic', 'reb', undefined, undefined, undefined);
   });
 
   it('works for an MLB stat key', async () => {
@@ -62,7 +62,7 @@ describe('GET /api/v1/{sport}/hitrate', () => {
       sportCtx('mlb'),
     );
     expect(res.status).toBe(200);
-    expect(mockResearch).toHaveBeenCalledWith('mlb', 'aaron-judge', 'hits', undefined, undefined);
+    expect(mockResearch).toHaveBeenCalledWith('mlb', 'aaron-judge', 'hits', undefined, undefined, undefined);
   });
 
   it('forwards the source query param (the chosen book)', async () => {
@@ -73,7 +73,21 @@ describe('GET /api/v1/{sport}/hitrate', () => {
       sportCtx('nba'),
     );
     expect(res.status).toBe(200);
-    expect(mockResearch).toHaveBeenCalledWith('nba', 'luka-doncic', 'pts', undefined, 'underdog');
+    expect(mockResearch).toHaveBeenCalledWith('nba', 'luka-doncic', 'pts', undefined, 'underdog', undefined);
+  });
+
+  it('forwards the selected rung payout hint (oddsType + multiplier) with an explicit line', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockResearch.mockResolvedValue({ stat: 'pts' } as any);
+    const res = await hitrateGET(
+      req('http://localhost:3000/api/v1/nba/hitrate?playerSlug=luka-doncic&stat=pts&line=30.5&source=sleeper&oddsType=alternate&multiplier=3.69'),
+      sportCtx('nba'),
+    );
+    expect(res.status).toBe(200);
+    expect(mockResearch).toHaveBeenCalledWith('nba', 'luka-doncic', 'pts', 30.5, 'sleeper', {
+      oddsType: 'alternate',
+      multiplier: 3.69,
+    });
   });
 
   it('returns 404 for an unknown sport', async () => {

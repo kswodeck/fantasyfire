@@ -160,7 +160,7 @@ export function MobileNav() {
                     aria-current={pathname === '/board' ? 'page' : undefined}
                     className={`${itemBase}${pathname === '/board' ? ' bg-surface-2' : ''}`}
                   >
-                    Heat Check — all sports
+                    Heat Check
                   </Link>
                 </li>
                 <li className="border-t border-line/60">
@@ -170,7 +170,7 @@ export function MobileNav() {
                     aria-current={pathname === '/trends' ? 'page' : undefined}
                     className={`${itemBase}${pathname === '/trends' ? ' bg-surface-2' : ''}`}
                   >
-                    Trends — all sports
+                    Trends
                   </Link>
                 </li>
 
