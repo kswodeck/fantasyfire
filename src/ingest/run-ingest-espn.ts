@@ -44,6 +44,48 @@ const CHUNK = 1000;
 const RECENT_DAYS = 5;
 /** Hard cap on the date walk — one full season plus slack, never more. */
 const MAX_WALK_DAYS = 400;
+/** Slow retry passes for scoreboard dates / summaries that failed the burst pass.
+ *  ESPN 5xx blips regularly outlast back-to-back retries (a 500 on one CFB
+ *  off-season date survived the burst pass AND an immediate sequential retry,
+ *  aborting the run — the same URL served 200 an hour later), so the passes wait
+ *  RETRY_PASS_BASE_MS × pass (30s, 60s, 90s) before re-trying what's left. */
+const RETRY_PASSES = 3;
+const RETRY_PASS_BASE_MS = 30_000;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Run `attempt` over `items` in slow sequential passes (pause before each pass,
+ *  small gap between items), dropping items as they succeed. Returns whatever
+ *  still fails after every pass — the CALLER decides if that's fatal (scoreboard
+ *  dates: yes, a skipped date is a permanent history hole) or skippable
+ *  (summaries: logged and dropped). */
+async function retryInPasses<T>(
+  label: string,
+  items: T[],
+  attempt: (item: T) => Promise<void>,
+  describe: (item: T) => string,
+): Promise<T[]> {
+  let pending = items;
+  for (let pass = 1; pass <= RETRY_PASSES && pending.length > 0; pass++) {
+    const waitMs = RETRY_PASS_BASE_MS * pass;
+    console.warn(
+      `${label} retry pass ${pass}/${RETRY_PASSES} for ${pending.length} item(s) after ${Math.round(waitMs / 1000)}s pause`,
+    );
+    await sleep(waitMs);
+    const still: T[] = [];
+    for (const item of pending) {
+      try {
+        await attempt(item);
+      } catch (e) {
+        console.warn(`${label} ${describe(item)} failed (pass ${pass}): ${(e as Error).message}`);
+        still.push(item);
+      }
+      await sleep(500);
+    }
+    pending = still;
+  }
+  return pending;
+}
 
 interface EspnIngestConfig {
   sport: Sport;
@@ -286,10 +328,18 @@ async function main() {
   };
   for (const list of perDate) collect(list);
   if (failedDates.length > 0) {
-    console.warn(`[${SPORT}] retrying ${failedDates.length} failed dates (sequential)`);
-    for (const d of failedDates) {
-      collect(await fetchEspnCompletedEvents(cfg.path, d, cfg.scoreboardQuery ?? '')); // throws -> run fails -> next run retries
-      await new Promise((r) => setTimeout(r, 500));
+    const stillFailing = await retryInPasses(
+      `[${SPORT}] scoreboard`,
+      failedDates,
+      async (d) => collect(await fetchEspnCompletedEvents(cfg.path, d, cfg.scoreboardQuery ?? '')),
+      (d) => d,
+    );
+    if (stillFailing.length > 0) {
+      // Loud abort so the next nightly run re-walks these dates — a silently
+      // skipped date is a PERMANENT hole the incremental walk never revisits.
+      throw new Error(
+        `[${SPORT}] scoreboard still failing after ${RETRY_PASSES} slow passes: ${stillFailing.join(', ')}`,
+      );
     }
   }
   console.log(`[${SPORT}] ${events.length} completed games`);
@@ -312,14 +362,18 @@ async function main() {
     5,
   );
   if (failedEvents.length > 0) {
-    console.warn(`[${SPORT}] retrying ${failedEvents.length} failed summaries (sequential)`);
-    for (const e of failedEvents) {
-      try {
+    const stillFailing = await retryInPasses(
+      `[${SPORT}] summary`,
+      failedEvents,
+      async (e) => {
         perGame.push(await cfg.fetchBoxScores(cfg.path, e.eventId, e.dateIso));
-      } catch (err) {
-        console.warn(`[${SPORT}] summary ${e.eventId} PERMANENTLY skipped: ${(err as Error).message}`);
-      }
-      await new Promise((r) => setTimeout(r, 500));
+      },
+      (e) => e.eventId,
+    );
+    // Rare enough to accept — logged loudly, never wedging the pipeline on one
+    // bad event. (Scoreboard dates above are the fatal case instead.)
+    for (const e of stillFailing) {
+      console.warn(`[${SPORT}] summary ${e.eventId} PERMANENTLY skipped after ${RETRY_PASSES} slow passes`);
     }
   }
   const boxRows = perGame.flatMap((g) => g.rows);
