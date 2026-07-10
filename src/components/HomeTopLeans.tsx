@@ -48,12 +48,6 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
       : (liveSources[0] ?? DEFAULT_PROVIDED_SOURCE);
 
   const single = cards.length === 1;
-  const gridCols =
-    cards.length >= 3
-      ? 'sm:grid-cols-2 lg:grid-cols-3'
-      : cards.length === 2
-        ? 'sm:grid-cols-2'
-        : '';
 
   return (
     <section className={single ? 'mx-auto max-w-md pb-10' : 'pb-10'}>
@@ -63,7 +57,16 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
         </div>
       )}
 
-      <div className={`grid gap-5 ${gridCols}`}>
+      {/* Each card grows to fill the row but never shrinks below 400px (min() keeps
+          it to the container's width on phones); when the row can't fit another
+          400px track the grid wraps the card to the next line. A lone card stays in
+          the section's max-w-md so it doesn't stretch across the full width. */}
+      <div
+        className="grid gap-5"
+        style={
+          single ? undefined : { gridTemplateColumns: 'repeat(auto-fit, minmax(min(400px, 100%), 1fr))' }
+        }
+      >
         {cards.map((c) => {
           // The one selector governs EVERY card: when any book is live on this page,
           // a sport with no rows on the chosen book gets an honest empty state — never

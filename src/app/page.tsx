@@ -75,47 +75,57 @@ export default async function Home() {
   });
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-2 sm:px-4">
-      <section className="flex flex-col items-center gap-6 py-14 text-center">
-        <FlameMark className="h-14 w-14 text-brand" />
-        <h1 className="max-w-2xl text-4xl font-bold tracking-tight sm:text-5xl">
-          Find the heat in every player prop
-        </h1>
-        <p className="max-w-xl text-lg text-muted">
-          {SITE.name} projects every player prop across eight pro and college leagues from public game logs —
-          adjusted for matchup, pace, the Vegas game total, and usage — then prices it against the
-          market to show where the number is soft. Built on the uncertainty most tools hide.
-        </p>
-      </section>
-
-      {/* Teaser cards with the one page-wide (site-synced) book selector — everything
-          else (filters, slate toggle) is each sport's Heat Check, one tap away. */}
-      {cards.length > 0 ? (
-        <HomeTopLeans cards={cards} />
-      ) : (
-        <section className="mb-10 rounded-2xl border border-line bg-surface p-8 text-center">
-          <p className="mx-auto max-w-md text-sm text-muted">
-            No games on the slate across our sports right now. You can still browse every
-            player&rsquo;s game history and hit rates from the menu above.
+    <>
+      <div className="mx-auto w-full max-w-5xl px-2 sm:px-4">
+        <section className="flex flex-col items-center gap-6 py-14 text-center">
+          <FlameMark className="h-14 w-14 text-brand" />
+          <h1 className="max-w-2xl text-4xl font-bold tracking-tight sm:text-5xl">
+            Find the heat in every player prop
+          </h1>
+          <p className="max-w-xl text-lg text-muted">
+            {SITE.name} projects every player prop across eight pro and college leagues from public game logs —
+            adjusted for matchup, pace, the Vegas game total, and usage — then prices it against the
+            market to show where the number is soft. Built on the uncertainty most tools hide.
           </p>
         </section>
+      </div>
+
+      {/* Teaser cards with the one page-wide (site-synced) book selector — everything
+          else (filters, slate toggle) is each sport's Heat Check, one tap away. This
+          section breaks out wider than the site's reading column so every sport card
+          has room (each reaches ≥400px before wrapping; see HomeTopLeans). */}
+      {cards.length > 0 ? (
+        <div className="mx-auto w-full max-w-7xl px-2 sm:px-4">
+          <HomeTopLeans cards={cards} />
+        </div>
+      ) : (
+        <div className="mx-auto w-full max-w-5xl px-2 sm:px-4">
+          <section className="mb-10 rounded-2xl border border-line bg-surface p-8 text-center">
+            <p className="mx-auto max-w-md text-sm text-muted">
+              No games on the slate across our sports right now. You can still browse every
+              player&rsquo;s game history and hit rates from the menu above.
+            </p>
+          </section>
+        </div>
       )}
 
-      <section className="grid gap-4 pb-10 sm:grid-cols-3">
-        <FeatureCard
-          title="Matchup-aware projections"
-          body="A model number for every prop — opponent, pace, the Vegas total, and recent usage folded in — turned into the probability the line clears."
-        />
-        <FeatureCard
-          title="Edge vs. the market"
-          body="We de-vig the books we track to a no-vig fair price, flag the best available number, and show the +EV — automatically, no odds to type."
-        />
-        <FeatureCard
-          title="Honest by construction"
-          body="A 95% Wilson interval on every rate and a trust factor that discounts thin samples, so a hot streak never masquerades as an edge."
-        />
-      </section>
-    </div>
+      <div className="mx-auto w-full max-w-5xl px-2 sm:px-4">
+        <section className="grid gap-4 pb-10 sm:grid-cols-3">
+          <FeatureCard
+            title="Matchup-aware projections"
+            body="A model number for every prop — opponent, pace, the Vegas total, and recent usage folded in — turned into the probability the line clears."
+          />
+          <FeatureCard
+            title="Edge vs. the market"
+            body="We de-vig the books we track to a no-vig fair price, flag the best available number, and show the +EV — automatically, no odds to type."
+          />
+          <FeatureCard
+            title="Honest by construction"
+            body="A 95% Wilson interval on every rate and a trust factor that discounts thin samples, so a hot streak never masquerades as an edge."
+          />
+        </section>
+      </div>
+    </>
   );
 }
 
