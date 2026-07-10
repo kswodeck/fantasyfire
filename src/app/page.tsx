@@ -114,7 +114,7 @@ export default async function Home() {
             href="/board"
             className="rounded-full bg-brand px-6 py-3 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90"
           >
-            Open the All-Sports Heat Check →
+            Open the Heat Check →
           </Link>
         </section>
       </div>
