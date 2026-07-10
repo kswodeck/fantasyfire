@@ -77,6 +77,7 @@ import {
   getProvidedLinesBySource,
   getProvidedQuotesBySource,
   getBookQuoteMap,
+  providedLinesEnabled,
 } from '@/lib/server/providedLines';
 import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import {
@@ -1870,6 +1871,54 @@ export async function getSourcedBoards(
     });
   }
   return result;
+}
+
+/**
+ * The strongest prop+line combos for ONE player — the player page's "top reads"
+ * mini dashboard. Runs the board pipeline on a single-player pool, so every row's
+ * FireFactor / rung / matchup / availability math is IDENTICAL to the Heat Check
+ * (and to the page verdict once that row is clicked into the main controls).
+ * Uses the chosen book's real lines when it lists this player (pure-slate, one
+ * row per stat via the representative rung); falls back to computed default
+ * lines when the book has nothing for them. Ranked by FireFactor, capped at
+ * `limit`. Empty for unknown players and thin histories (< 5 decided games) —
+ * the same gates the board applies.
+ */
+export async function getPlayerTopReads(
+  sport: Sport,
+  slug: string,
+  source: string = DEFAULT_PROVIDED_SOURCE,
+  limit = 5,
+): Promise<BoardRow[]> {
+  const player = await db.player.findFirst({
+    where: { sport, slug },
+    include: { team: { select: { abbreviation: true, name: true, externalId: true } } },
+  });
+  if (!player) return [];
+  const rows = (await db.playerGameStat.findMany({
+    where: { playerId: player.id },
+    orderBy: { gameDate: 'desc' },
+    select: boardStatSelect(sport),
+  })) as unknown as Array<StatGameRow & { playerId: number }>;
+  const pool: BoardPool = {
+    players: [player],
+    gamesByPlayer: new Map([[player.id, rows.map(toPlayerGame)]]),
+  };
+  // One player fills the whole list — lift the per-player/per-stat board caps.
+  // Over-fetch so filtering out the non-reads below still fills `limit`.
+  const scan = Math.max(limit * 3, 12);
+  const caps: BoardOptions = { pool, limit: scan, perPlayerCap: scan, perStatCap: scan, source };
+  // "Top picks" means real leans — a Pass / No-read row is never a pick.
+  const leans = (all: BoardRow[]) =>
+    all.filter((r) => r.fireScore.tier !== 'Pass' && r.fireScore.tier !== 'No lean').slice(0, limit);
+  if (providedLinesEnabled()) {
+    const boards = await getSourcedBoards(sport, [source], caps).catch(
+      () => ({}) as Record<string, BoardRow[]>,
+    );
+    const sourced = leans(boards[source] ?? []);
+    if (sourced.length > 0) return sourced;
+  }
+  return getBoard(sport, caps).then(leans).catch(() => []);
 }
 
 /** Median line per `${playerId}:${stat}` key across every book's line map — the market

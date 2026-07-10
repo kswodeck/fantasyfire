@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { getTopPlayerSlugs, getPlayerBySlug, getPlayerResearch } from '@/lib/server/players';
+import { getTopPlayerSlugs, getPlayerBySlug, getPlayerResearch, getPlayerTopReads } from '@/lib/server/players';
 import { getAvailableSources } from '@/lib/server/providedLines';
 import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import { absoluteUrl } from '@/lib/site';
@@ -116,6 +116,9 @@ export default async function PlayerPage({ params }: PageProps) {
     : (availableSources[0] ?? DEFAULT_PROVIDED_SOURCE);
   const research = await getPlayerResearch(sport, playerSlug, undefined, undefined, initialSource);
   if (!research) notFound();
+  // Seed for the "top reads" mini dashboard (board-identical scoring; the client
+  // refetches per book). Never fails the page — no reads simply hides the card.
+  const topReads = await getPlayerTopReads(sport, playerSlug, initialSource).catch(() => []);
 
   const { player } = research;
   const team = getTeam(sport, player.teamAbbreviation);
@@ -259,6 +262,7 @@ export default async function PlayerPage({ params }: PageProps) {
         initialStat={research.stat}
         availableSources={availableSources}
         initialSource={initialSource}
+        initialTopReads={topReads}
       />
 
       {/* The player's other prop pages — a compact link row (not big tiles) so it
