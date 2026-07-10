@@ -93,8 +93,16 @@ export default async function Home() {
       <div className="mx-auto w-full max-w-5xl px-2 sm:px-4">
         <section className="flex flex-col items-center gap-6 py-14 text-center">
           <FlameMark className="h-14 w-14 text-brand" />
-          <h1 className="max-w-2xl text-4xl font-bold tracking-tight sm:text-5xl">
-            Find the heat in every player prop
+          {/* Two deliberate lines: the brand phrase leads, flame-gradient and a size
+              up; the qualifier sits under it in plain foreground. (No awkward
+              mid-phrase wrap like "…player / prop".) */}
+          <h1 className="max-w-2xl font-bold tracking-tight">
+            <span className="block bg-gradient-to-r from-heat-1 via-brand to-heat-3 bg-clip-text pb-1 text-5xl text-transparent sm:text-6xl">
+              Find the heat
+            </span>
+            <span className="mt-1 block text-3xl text-foreground sm:text-4xl">
+              in every player prop
+            </span>
           </h1>
           <p className="max-w-xl text-lg text-muted">
             {SITE.name} projects every player prop across eight pro and college leagues from public game logs —
