@@ -4,8 +4,8 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { SPORT_LIST, SPORTS, type Sport } from '@/lib/sports';
-import { sectionHref, sportSections } from '@/lib/sportNav';
+import { SPORTS, type Sport } from '@/lib/sports';
+import { NAV_SPORT_ORDER, sectionHref, sportSections } from '@/lib/sportNav';
 
 /**
  * Mobile (sub-sm) site navigation: a hamburger button that opens a full-width panel
@@ -152,8 +152,29 @@ export function MobileNav() {
                     Home
                   </Link>
                 </li>
+                {/* The all-sports surfaces — mirrors the desktop header's links. */}
+                <li className="border-t border-line/60">
+                  <Link
+                    href="/board"
+                    onClick={close}
+                    aria-current={pathname === '/board' ? 'page' : undefined}
+                    className={`${itemBase}${pathname === '/board' ? ' bg-surface-2' : ''}`}
+                  >
+                    Heat Check — all sports
+                  </Link>
+                </li>
+                <li className="border-t border-line/60">
+                  <Link
+                    href="/trends"
+                    onClick={close}
+                    aria-current={pathname === '/trends' ? 'page' : undefined}
+                    className={`${itemBase}${pathname === '/trends' ? ' bg-surface-2' : ''}`}
+                  >
+                    Trends — all sports
+                  </Link>
+                </li>
 
-                {SPORT_LIST.map((s) => {
+                {NAV_SPORT_ORDER.map((s) => {
                   const name = SPORTS[s].name;
                   const isOpen = expanded === s;
                   const hub = `/${s}`;
