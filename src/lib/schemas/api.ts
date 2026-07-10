@@ -43,6 +43,14 @@ export const playerResearchQuerySchema = z.object({
 });
 export type PlayerResearchQuery = z.infer<typeof playerResearchQuerySchema>;
 
+/** Query for GET /api/v1/{sport}/topreads?playerSlug=&source= — one player's
+ *  strongest prop+line combos (the player-page mini dashboard). */
+export const topReadsQuerySchema = z.object({
+  playerSlug: playerSlugSchema,
+  source: providedSourceSchema.optional(),
+});
+export type TopReadsQuery = z.infer<typeof topReadsQuerySchema>;
+
 /** Body for POST /api/v1/{sport}/slate — the user's pasted prop lines. */
 export const slateBodySchema = z.object({
   text: z.string().min(1).max(8000),
