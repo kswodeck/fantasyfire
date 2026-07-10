@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { FlameMark } from '@/components/FlameMark';
 import { HomeTopLeans, type HomeCard } from '@/components/HomeTopLeans';
 import { getBoard, getSourcedBoards, getTonightSlate, hasUpcomingGames } from '@/lib/server/players';
@@ -20,17 +21,26 @@ const TEASER_ROWS = 4;
 async function loadSport(sport: Sport): Promise<{
   boardsBySource: Record<string, BoardRow[]>;
   medianLeans: BoardRow[];
+  /** False when the sport's next slate isn't TODAY — the card is hidden entirely
+   *  (a sport with no games today has nothing actionable to tease). */
+  hasGamesToday: boolean;
 }> {
   // A taste of each book's top reads, switched by the page-wide site source selector
   // (our median line only when no book lines are ingested). The teaser defaults to
-  // PLAYERS WITH GAMES TODAY (this week for NFL) — filtered server-side against the
-  // slate, since the card has no toggle — falling back to all players only when
-  // there's no slate to filter against. We pull deeper than the rows we show so the
-  // filter still yields a full teaser.
+  // PLAYERS WITH GAMES TODAY — filtered server-side against the slate, since the
+  // card has no toggle. We pull deeper than the rows we show so the filter still
+  // yields a full teaser.
   const [sources, slate] = await Promise.all([
     getAvailableSources(sport).catch(() => [] as string[]),
     getTonightSlate(sport).catch(() => ({ date: null, games: [] as TonightGame[] })),
   ]);
+  // getTonightSlate anchors on the SOONEST slate on/after today — which can be days
+  // out (a weekend-only league midweek). No games today → skip the card AND the
+  // heavy board scan; the sport is one nav tap away, and an empty teaser sells
+  // nothing. Dates compare in UTC, the schedule feed's day convention.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const hasGamesToday = slate.games.length > 0 && slate.date === todayIso;
+  if (!hasGamesToday) return { boardsBySource: {}, medianLeans: [], hasGamesToday };
   const teams = slateTeams(slate.games);
   const onSlate = (rows: BoardRow[]): BoardRow[] =>
     teams.size === 0
@@ -45,15 +55,17 @@ async function loadSport(sport: Sport): Promise<{
     }).catch(() => ({}) as Record<string, BoardRow[]>);
     const boardsBySource: Record<string, BoardRow[]> = {};
     for (const [s, rows] of Object.entries(boards)) boardsBySource[s] = onSlate(rows);
-    return { boardsBySource, medianLeans: [] };
+    return { boardsBySource, medianLeans: [], hasGamesToday };
   }
   const medianLeans = onSlate(await getBoard(sport, { limit: 24 }).catch(() => [] as BoardRow[]));
-  return { boardsBySource: {}, medianLeans };
+  return { boardsBySource: {}, medianLeans, hasGamesToday };
 }
 
 export default async function Home() {
-  // Only surface sports with an upcoming slate — off-season "leans" are computed
-  // from past games and aren't actionable props, so those sports are hidden here.
+  // Only surface sports with GAMES TODAY — off-season sports have nothing
+  // actionable, and an in-season sport whose next slate is days away (a
+  // weekend-only league midweek) would render an empty teaser. hasUpcomingGames
+  // is the cheap first gate; loadSport then confirms the slate is today's.
   // DB unavailable → no sports (the no-slate empty state), never a 500.
   const activeSports = (
     await Promise.all(
@@ -61,7 +73,9 @@ export default async function Home() {
     )
   ).filter((s): s is Sport => s !== null);
 
-  const loaded = await Promise.all(activeSports.map(async (s) => [s, await loadSport(s)] as const));
+  const loaded = (
+    await Promise.all(activeSports.map(async (s) => [s, await loadSport(s)] as const))
+  ).filter(([, d]) => d.hasGamesToday);
   const cards: HomeCard[] = loaded.map(([sport, d]) => {
     const cfg = SPORTS[sport];
     return {
@@ -87,6 +101,13 @@ export default async function Home() {
             adjusted for matchup, pace, the Vegas game total, and usage — then prices it against the
             market to show where the number is soft. Built on the uncertainty most tools hide.
           </p>
+          {/* The one clear next step from the hero: the all-sports board. */}
+          <Link
+            href="/board"
+            className="rounded-full bg-brand px-6 py-3 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90"
+          >
+            Open the All-Sports Heat Check →
+          </Link>
         </section>
       </div>
 

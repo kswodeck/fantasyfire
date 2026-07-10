@@ -1,5 +1,21 @@
 import type { Sport } from './sports';
 
+/**
+ * Display order for sport lists in the navigation — by mainstream US prop/pick'em
+ * popularity (NFL first), NOT the registry's insertion order. Every sport in the
+ * registry must appear exactly once (asserted by a unit test).
+ */
+export const NAV_SPORT_ORDER: readonly Sport[] = [
+  'nfl',
+  'nba',
+  'mlb',
+  'cfb',
+  'cbb',
+  'nhl',
+  'wnba',
+  'mls',
+];
+
 export interface SportSection {
   label: string;
   seg: string;
@@ -14,7 +30,7 @@ export function sectionHref(sport: Sport, seg: string): string {
 
 /**
  * The per-sport section pages — the single source shared by the header hover menu
- * (SportMenu), the in-page sub-nav (SportNav), and the mobile nav (MobileNav). `seg` is
+ * (SportsMenu), the in-page sub-nav (SportNav), and the mobile nav (MobileNav). `seg` is
  * the path segment under /[sport] ('' = the sport home; build hrefs via sectionHref);
  * `desc` is the one-line hint shown in the dropdowns.
  *

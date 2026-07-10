@@ -1,9 +1,8 @@
 import Link from 'next/link';
 import { FlameMark } from './FlameMark';
-import { SportMenu } from './SportMenu';
+import { SportsMenu } from './SportsMenu';
 import { ThemeToggle } from './ThemeToggle';
 import { MobileNav } from './MobileNav';
-import { SPORT_LIST } from '@/lib/sports';
 
 // Site chrome. Data-agnostic; safe to reuse in any build.
 export function SiteHeader() {
@@ -25,9 +24,15 @@ export function SiteHeader() {
           <Link href="/" className="transition-colors hover:text-foreground">
             Home
           </Link>
-          {SPORT_LIST.map((s) => (
-            <SportMenu key={s} sport={s} />
-          ))}
+          {/* One condensed Sports menu (each sport + its section pages inside)
+              instead of eight top-level buttons, then the all-sports surfaces. */}
+          <SportsMenu />
+          <Link href="/board" className="transition-colors hover:text-foreground">
+            Heat Check
+          </Link>
+          <Link href="/trends" className="transition-colors hover:text-foreground">
+            Trends
+          </Link>
           <Link
             href="/playbook"
             className="transition-colors hover:text-foreground"
