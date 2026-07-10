@@ -19,9 +19,11 @@ import { scrapeFetch } from './scrapeFetch';
 const BASE = 'https://partner-api.prizepicks.com/projections';
 // One filtered request per league shrinks the payload from ~15 MB (all leagues) to
 // just the ones we use — cheaper proxy bandwidth + faster runs. IDs from /leagues.
-// Partial: PP folds ALL soccer competitions into one SOCCER league, so MLS is
-// deliberately absent — cross-league name matching would mis-attribute players.
-const PP_LEAGUE_IDS: Partial<Record<Sport, number>> = { nba: 7, mlb: 2, nfl: 9, wnba: 3, nhl: 8 };
+// Partial: college ids TBD. PP folds ALL soccer competitions (MLS/NWSL/EPL/…) into
+// one SOCCER league (82) — those rows ship with `externalTeamName`, and the ingest
+// runner only keeps ones whose club matches an MLS team of ours, so a same-named
+// player from another competition can never mis-attribute.
+const PP_LEAGUE_IDS: Partial<Record<Sport, number>> = { nba: 7, mlb: 2, nfl: 9, wnba: 3, nhl: 8, mls: 82 };
 const HEADERS = {
   'User-Agent':
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
@@ -30,7 +32,10 @@ const HEADERS = {
   Referer: 'https://app.prizepicks.com/',
 };
 
-const PP_LEAGUE: Record<string, Sport> = { NBA: 'nba', MLB: 'mlb', NFL: 'nfl', WNBA: 'wnba', NHL: 'nhl', CFB: 'cfb', CBB: 'cbb' };
+// SOCCER → 'mls' is TENTATIVE: the combined feed mixes competitions, and the ingest
+// runner drops any SOCCER row whose club isn't one of our MLS teams (see
+// ProvidedLineRow.externalTeamName).
+const PP_LEAGUE: Record<string, Sport> = { NBA: 'nba', MLB: 'mlb', NFL: 'nfl', WNBA: 'wnba', NHL: 'nhl', SOCCER: 'mls', CFB: 'cfb', CBB: 'cbb' };
 
 /** Payout variants we ingest. Anything else (promos, flash sales) is skipped. */
 const PP_ODDS_TYPES = new Set(['standard', 'goblin', 'demon']);
@@ -123,8 +128,16 @@ const PP_STAT_MAP: Record<Sport, Record<string, StatKey>> = {
     Saves: 'saves',
     'Goals Against': 'ga',
   },
-  // PP folds all soccer into one SOCCER league (see PP_LEAGUE_IDS) — not ingested.
-  mls: {},
+  // From PP's combined SOCCER feed (club-gated to MLS teams by the runner). Shots /
+  // SOT / Goalie Saves confirmed live in the feed; Goals / Assists are PP's standard
+  // vocabulary elsewhere and map ahead of an MLS slate (harmless if absent).
+  mls: {
+    Shots: 'shots',
+    'Shots On Target': 'sot',
+    Goals: 'goals',
+    Assists: 'ast',
+    'Goalie Saves': 'saves',
+  },
   // College mirrors the pro market names. DORMANT until a league id is added to
   // PP_LEAGUE_IDS (verify the id + names in the PP app once the season starts).
   cfb: {
@@ -197,11 +210,15 @@ function parsePpBody(body: PpResponse, out: ProvidedLineRow[]): void {
     if (!Number.isFinite(line)) continue;
     const name = String(pa.display_name ?? pa.name ?? '').trim();
     if (!name) continue;
+    // Club context for combined-feed gating (`market` is the full club name,
+    // `team` a short form) — the runner requires an MLS club match for SOCCER rows.
+    const teamName = String(pa.market ?? pa.team ?? '').trim() || null;
     out.push({
       sport,
       source: 'prizepicks',
       externalPlayerId: playerId!,
       externalPlayerName: name,
+      externalTeamName: teamName,
       stat,
       line,
       overOdds: null, // PrizePicks lines are fixed-payout (no American odds)
