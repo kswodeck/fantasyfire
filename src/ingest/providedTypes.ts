@@ -13,6 +13,14 @@ export interface ProvidedLineRow {
   externalPlayerId: string;
   /** Display name used to match our Player rows. */
   externalPlayerName: string;
+  /**
+   * The source's club/team display name for the player, when the feed carries one.
+   * Required context for sports scraped from a COMBINED multi-competition feed
+   * (PrizePicks folds MLS/NWSL/EPL/… into one SOCCER league): the ingest only
+   * accepts such rows when this club matches a team of ours for that sport, so a
+   * same-named player from another competition can never attach to our player.
+   */
+  externalTeamName?: string | null;
   stat: StatKey;
   line: number;
   /** American odds for over/under when the source posts them (DFS pick'em often null). */

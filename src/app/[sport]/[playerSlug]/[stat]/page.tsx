@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
-import { getPropStatParams, getPlayerBySlug, getPlayerResearch } from '@/lib/server/players';
+import { getPropStatParams, getPlayerBySlug, getPlayerResearch, getPlayerTopReads } from '@/lib/server/players';
 import { getAvailableSources } from '@/lib/server/providedLines';
 import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import { absoluteUrl } from '@/lib/site';
@@ -94,6 +94,10 @@ export default async function PlayerStatPage({ params }: PageProps) {
   // The role-specific default stat lives on the base player page — redirect there.
   const defaultStat = defaultStatForSport(sport, research.player.posBucket);
   if (rawStat === defaultStat) redirect(`/${sport}/${playerSlug}`);
+
+  // Seed for the "top reads" mini dashboard (board-identical scoring; the client
+  // refetches per book). Never fails the page — no reads simply hides the card.
+  const topReads = await getPlayerTopReads(sport, playerSlug, initialSource).catch(() => []);
 
   const stat = research.stat;
   const label = STAT_DEFS[stat].label;
@@ -216,6 +220,7 @@ export default async function PlayerStatPage({ params }: PageProps) {
         statHrefBase={basePath}
         availableSources={availableSources}
         initialSource={initialSource}
+        initialTopReads={topReads}
       />
 
       <RelatedLinks

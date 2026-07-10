@@ -5,15 +5,18 @@ import { NextRequest } from 'next/server';
 vi.mock('@/lib/server/players', () => ({
   getPlayerResearch: vi.fn(),
   searchPlayers: vi.fn(),
+  getPlayerTopReads: vi.fn(),
 }));
 
 import { GET as hitrateGET } from './[sport]/hitrate/route';
 import { GET as playersGET } from './[sport]/players/route';
 import { GET as playerSlugGET } from './[sport]/players/[slug]/route';
-import { getPlayerResearch, searchPlayers } from '@/lib/server/players';
+import { GET as topReadsGET } from './[sport]/topreads/route';
+import { getPlayerResearch, searchPlayers, getPlayerTopReads } from '@/lib/server/players';
 
 const mockResearch = vi.mocked(getPlayerResearch);
 const mockSearch = vi.mocked(searchPlayers);
+const mockTopReads = vi.mocked(getPlayerTopReads);
 
 function req(url: string): NextRequest {
   return new NextRequest(url);
@@ -114,6 +117,40 @@ describe('GET /api/v1/{sport}/hitrate', () => {
       sportCtx('nba'),
     );
     expect(res.status).toBe(404);
+  });
+});
+
+describe('GET /api/v1/{sport}/topreads', () => {
+  it('returns 200 with the rows for valid input and passes the source through', async () => {
+    const rows = [{ stat: 'pts', line: 25.5, fireScore: { score: 80, tier: 'Strong lean', side: 'over' } }];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockTopReads.mockResolvedValue(rows as any);
+    const res = await topReadsGET(
+      req('http://localhost:3000/api/v1/nba/topreads?playerSlug=luka-doncic&source=prizepicks'),
+      sportCtx('nba'),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.rows).toHaveLength(1);
+    expect(mockTopReads).toHaveBeenCalledWith('nba', 'luka-doncic', 'prizepicks');
+  });
+
+  it('404s an unknown sport without touching the server layer', async () => {
+    const res = await topReadsGET(
+      req('http://localhost:3000/api/v1/xfl/topreads?playerSlug=someone'),
+      sportCtx('xfl'),
+    );
+    expect(res.status).toBe(404);
+    expect(mockTopReads).not.toHaveBeenCalled();
+  });
+
+  it('400s a missing playerSlug', async () => {
+    const res = await topReadsGET(
+      req('http://localhost:3000/api/v1/nba/topreads'),
+      sportCtx('nba'),
+    );
+    expect(res.status).toBe(400);
+    expect(mockTopReads).not.toHaveBeenCalled();
   });
 });
 

@@ -3,13 +3,15 @@
 import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { usePathname, useRouter } from 'next/navigation';
-import type { PlayerResearch } from '@/lib/types';
+import type { BoardRow, PlayerResearch } from '@/lib/types';
 import { STAT_DEFS, statKeysForSport, altLineTable, type StatKey } from '@/lib/stats';
 import { statKeySchema, lineSchema } from '@/lib/schemas';
 import { fairPriceReadout } from '@/lib/odds';
 import { num1, pct } from '@/lib/format';
 import { track } from '@/lib/analytics';
 import { useHitRate } from '@/hooks/useHitRate';
+import { useTopReads } from '@/hooks/useTopReads';
+import { PlayerTopReads } from './PlayerTopReads';
 import { StatSelector } from './StatSelector';
 import { LineInput } from './LineInput';
 import { OddsInputs } from './OddsInputs';
@@ -65,6 +67,7 @@ export function PlayerResearchClient({
   statHrefBase,
   availableSources = [],
   initialSource,
+  initialTopReads,
 }: {
   slug: string;
   initialResearch: PlayerResearch;
@@ -77,6 +80,8 @@ export function PlayerResearchClient({
   availableSources?: string[];
   /** The book the SSR payload's line came from (default selection). */
   initialSource: string;
+  /** SSR seed for the "top reads" mini dashboard (computed for initialSource). */
+  initialTopReads?: BoardRow[];
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -140,6 +145,16 @@ export function PlayerResearchClient({
   });
   const data = query.data ?? initialResearch;
 
+  // The "top reads" mini dashboard — this player's strongest prop+line combos for
+  // the chosen book. Seeded from SSR for the initial source; refetches per source.
+  const topReads = useTopReads({
+    sport,
+    slug,
+    source,
+    initialData: source === initialSource ? initialTopReads : undefined,
+    hasLiveLines: availableSources.length > 0,
+  });
+
   function syncUrl(nextStat: StatKey, nextLine: number | undefined, nextSource: string) {
     const params = new URLSearchParams();
     params.set('stat', nextStat);
@@ -167,6 +182,27 @@ export function PlayerResearchClient({
     setLine(next);
     syncUrl(stat, next, source);
     track('line_entered', { sport, stat });
+  }
+
+  // A "top reads" pick loads that prop+line into the whole page — same effect as
+  // choosing the stat then typing the line. On the per-stat SEO page it navigates
+  // to the hub (like handleStat) with the line pinned in the URL.
+  function handlePick(nextStat: StatKey, nextLine: number) {
+    track('top_read_clicked', { sport, stat: nextStat });
+    if (nextStat === stat) {
+      // Same stat — just move the line (no navigation even on the per-stat page).
+      setLine(nextLine);
+      syncUrl(stat, nextLine, source);
+      return;
+    }
+    if (statHrefBase) {
+      const src = source !== initialSource ? `&source=${source}` : '';
+      router.push(`${statHrefBase}?stat=${nextStat}&line=${nextLine}${src}`);
+      return;
+    }
+    setStat(nextStat);
+    setLine(nextLine);
+    syncUrl(nextStat, nextLine, source);
   }
 
   function handleSource(next: string) {
@@ -225,6 +261,15 @@ export function PlayerResearchClient({
 
   return (
     <div>
+      {/* Top reads — the strongest prop+line combos for this player + matchup,
+          each one click away from becoming the page's selected prop/line. */}
+      <PlayerTopReads
+        rows={topReads.data}
+        currentStat={stat}
+        currentLine={effectiveLine}
+        onPick={handlePick}
+      />
+
       {/* Controls */}
       <div className="mb-5 space-y-3 rounded-xl border border-line bg-surface-2 p-4">
         <StatSelector value={stat} keys={statKeys} onChange={handleStat} />
