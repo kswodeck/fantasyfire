@@ -10,11 +10,11 @@ import type { AllSportsBoard } from '@/lib/server/allSports';
 export const revalidate = 900; // 15 min — matches the per-sport Heat Check cadence
 
 export const metadata: Metadata = {
-  title: 'Heat Check — All Sports Player Props, Ranked by FireFactor',
+  title: 'Heat Check — Player Props Ranked by FireFactor',
   description:
     'The strongest recent-form player-prop reads across every in-season league, merged into one board and ranked by our sample-size-adjusted FireFactor. Switch books or pick a single sport. Research, not picks.',
   alternates: { canonical: '/board' },
-  openGraph: { type: 'website', title: 'Heat Check — All Sports', url: '/board' },
+  openGraph: { type: 'website', title: 'Heat Check', url: '/board' },
 };
 
 export default async function AllBoardPage() {
@@ -44,7 +44,7 @@ export default async function AllBoardPage() {
         items={[{ label: 'Home', href: '/' }, { label: 'Heat Check' }]}
       />
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <h1 className="text-3xl font-bold tracking-tight">Heat Check — All Sports</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Heat Check</h1>
         <SportSelect section="board" value="all" includeAll />
       </div>
       <p className="mt-2 max-w-2xl text-sm text-muted">
