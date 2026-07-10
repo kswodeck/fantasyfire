@@ -23,7 +23,13 @@ export function PlayerTopReads({
   rows: BoardRow[] | undefined;
   currentStat: StatKey;
   currentLine: number;
-  onPick: (stat: StatKey, line: number) => void;
+  onPick: (
+    stat: StatKey,
+    line: number,
+    /** The pick's payout context, so the loaded read scores against it even if the
+     *  book moves the rung before the refetch lands (see RungHint). */
+    hint?: { oddsType?: string | null; multiplier?: number | null },
+  ) => void;
 }) {
   if (!rows || rows.length === 0) return null;
   return (
@@ -43,7 +49,7 @@ export function PlayerTopReads({
             <li key={`${r.stat}:${r.line}`}>
               <button
                 type="button"
-                onClick={() => onPick(r.stat, r.line)}
+                onClick={() => onPick(r.stat, r.line, { oddsType: r.oddsType, multiplier: r.multiplier })}
                 aria-pressed={active}
                 title={STAT_DEFS[r.stat].label}
                 className={

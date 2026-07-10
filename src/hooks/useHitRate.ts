@@ -19,6 +19,8 @@ export function useHitRate({
   stat,
   line,
   source,
+  oddsType,
+  multiplier,
   initialData,
   hasLiveLines = true,
 }: {
@@ -28,6 +30,10 @@ export function useHitRate({
   line?: number;
   /** Which book's line to prefer (when the user hasn't typed a custom line). */
   source?: string;
+  /** The selected rung's payout context — keeps the read anchored to that payout
+   *  even if the book re-prices/pulls the rung mid-session (see RungHint). */
+  oddsType?: string | null;
+  multiplier?: number | null;
   initialData?: PlayerResearch;
   /** Whether book lines exist for this sport. Off (median-line pages), the SSR
    *  seed only goes stale with the nightly ingest, so the always-refetch on
@@ -35,11 +41,13 @@ export function useHitRate({
   hasLiveLines?: boolean;
 }) {
   return useQuery<PlayerResearch>({
-    queryKey: ['hitrate', sport, slug, stat, line ?? null, source ?? null],
+    queryKey: ['hitrate', sport, slug, stat, line ?? null, source ?? null, oddsType ?? null, multiplier ?? null],
     queryFn: async ({ signal }) => {
       const params = new URLSearchParams({ playerSlug: slug, stat });
       if (line !== undefined) params.set('line', String(line));
       if (source) params.set('source', source);
+      if (line !== undefined && oddsType) params.set('oddsType', oddsType);
+      if (line !== undefined && multiplier != null) params.set('multiplier', String(multiplier));
       const res = await fetch(`/api/v1/${sport}/hitrate?${params.toString()}`, { signal });
       if (!res.ok) throw new Error(`Request failed (${res.status})`);
       return (await res.json()) as PlayerResearch;

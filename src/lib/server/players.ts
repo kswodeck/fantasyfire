@@ -1287,12 +1287,23 @@ function lineValueComparison(
   return { side, consensusLine, books, best };
 }
 
+/** The payout context of the rung the CALLER selected — used only when the stored
+ *  ladder no longer carries that exact line (books move/pull rungs intraday, and a
+ *  board rendered minutes ago can hand us a line the live data lost). Without it, a
+ *  clicked 3.7× alternate would silently re-score as a plain line against a 0.5
+ *  coin-flip anchor — a huge, misleading FireFactor cliff. */
+export interface RungHint {
+  oddsType?: string | null;
+  multiplier?: number | null;
+}
+
 export async function getPlayerResearch(
   sport: Sport,
   slug: string,
   statParam?: StatKey,
   lineParam?: number,
   source?: string,
+  rungHint?: RungHint,
 ): Promise<PlayerResearch | null> {
   const record = await getPlayerRecord(sport, slug);
   if (!record) return null;
@@ -1333,7 +1344,21 @@ export async function getPlayerResearch(
   const line = lineParam ?? providedLine ?? defaultPropLine(games, stat);
   // Attribute the line to its book when it matches a known rung (auto-picked, or one
   // the user selected via the switcher); a hand-typed custom number stays sourceless.
-  const selectedVariant = variants.find((v) => v.line === line) ?? null;
+  // When the ladder has MOVED since the caller rendered (books re-price intraday) the
+  // rung hint reconstructs the selected payout context, so the read stays anchored to
+  // the payout the user is looking at instead of collapsing to a coin-flip benchmark.
+  const selectedVariant =
+    variants.find((v) => v.line === line) ??
+    (rungHint && lineParam != null
+      ? ({
+          source: src,
+          line,
+          oddsType: rungHint.oddsType ?? null,
+          multiplier: rungHint.multiplier ?? null,
+          overOdds: null,
+          underOdds: null,
+        } satisfies ProvidedVariant)
+      : null);
   const lineSource = selectedVariant ? src : null;
 
   const windows: WindowResult[] = STAT_WINDOWS.map((w) => {
