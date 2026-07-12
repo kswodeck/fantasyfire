@@ -1,0 +1,91 @@
+name: Daily social publish + push digest
+
+# The outward-facing daily comms (docs/MARKETING.md §3 + §6): post today's top
+# leans to Bluesky / Discord / Telegram with the branded card, deliver the private
+# content-pack briefing, then send the web-push lean digest. Runs PRE-SLATE
+# (~11am ET) — separate from the 9:00 UTC data ingest so posts land when US
+# bettors are researching, not overnight.
+#
+# SAFE BY DEFAULT — this workflow is a no-op until the owner:
+#   1. Sets the SOCIAL_PUBLISH_ENABLED repo variable to "true".
+#   2. Adds the channel secrets below (each missing channel is just skipped).
+# A same-day re-run is a no-op (once-per-day guard on the IngestRun table);
+# dispatch with dry_run to print captions without posting.
+#
+# Secrets (Production environment) — all optional except DATABASE_URL:
+#   DATABASE_URL                      — pooled app connection (same as ingest.yml)
+#   BLUESKY_IDENTIFIER                — handle, e.g. fantasyfire.app
+#   BLUESKY_APP_PASSWORD              — an app password, NOT the account password
+#   DISCORD_WEBHOOK_URL               — public #daily-leans channel webhook
+#   DISCORD_CONTENT_PACK_WEBHOOK_URL  — PRIVATE owner-only channel webhook
+#   TELEGRAM_BOT_TOKEN                — from @BotFather
+#   TELEGRAM_CHAT_ID                  — channel id or @handle
+#   VAPID_PRIVATE_KEY                 — web push (with the public-key variable)
+# Variables:
+#   SOCIAL_PUBLISH_ENABLED            — "true" to arm the poster
+#   SOCIAL_SPORTS_EXCLUDE             — default cfb,cbb (college props are state-restricted)
+#   NEXT_PUBLIC_SITE_URL              — public apex (card image + links)
+#   NEXT_PUBLIC_VAPID_PUBLIC_KEY      — web push public key
+
+on:
+  schedule:
+    # 15:00 UTC ≈ 11:00 ET — after the nightly ingest, before the evening slates.
+    - cron: '0 15 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Print captions + card URLs without posting'
+        type: boolean
+        default: false
+
+concurrency:
+  group: social
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: Production
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL || '' }}
+      NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL || 'https://fantasyfire.app' }}
+      SOCIAL_PUBLISH_ENABLED: ${{ vars.SOCIAL_PUBLISH_ENABLED || '' }}
+      SOCIAL_SPORTS_EXCLUDE: ${{ vars.SOCIAL_SPORTS_EXCLUDE || '' }}
+      BLUESKY_IDENTIFIER: ${{ secrets.BLUESKY_IDENTIFIER || '' }}
+      BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD || '' }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL || '' }}
+      DISCORD_CONTENT_PACK_WEBHOOK_URL: ${{ secrets.DISCORD_CONTENT_PACK_WEBHOOK_URL || '' }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || '' }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID || '' }}
+      NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ vars.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '' }}
+      VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY || '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Check database secret
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL secret is not set."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Inert until SOCIAL_PUBLISH_ENABLED=true (the script logs why it skipped).
+      - name: Publish daily social posts
+        run: pnpm social ${{ inputs.dry_run && '--dry-run' || '' }}
+
+      # Web-push lean digest — inert until VAPID keys exist. Best-effort: a push
+      # hiccup shouldn't fail the social job (and vice versa — separate steps).
+      - name: Send push digest
+        if: ${{ (success() || failure()) && !inputs.dry_run }}
+        run: pnpm push

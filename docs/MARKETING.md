@@ -329,22 +329,27 @@ Recurring (the irreducible human part):
 Ordered so each phase is independently shippable and nothing waits on traffic:
 
 **Phase 1 — the publishing engine (the big unlock)**
-1. `src/ingest/run-social.ts` + `pnpm social` (+ `--dry-run`): in-season check →
-   top-leans query → caption composer (with banned-token unit test) → Bluesky /
-   Discord / Telegram posters → content-pack briefing → idempotency guard.
-2. `/api/og/daily/[sport]` card route reusing the existing `next/og` components
-   (top 3–5 leans, Wilson badges, date, RG footer line).
-3. Wire into `ingest.yml` as a best-effort final job + a second pre-slate cron
-   dispatch; gate on `SOCIAL_PUBLISH_ENABLED`.
+1. ✅ `src/ingest/run-social.ts` + `pnpm social` (+ `--dry-run` / `--force`):
+   in-season check → top-leans query (`getDailyLeans`, shared with the card) →
+   caption composer (banned-token-tested, `src/lib/social/compose.ts`) → Bluesky /
+   Discord / Telegram posters (raw fetch, no new deps) → content-pack briefing →
+   once-per-day guard on `IngestRun`.
+2. ✅ `/api/og/daily/[sport]` card route (`next/og`): top 5 leans with tier
+   badges, sport accent, date, RG footer line.
+3. ✅ `.github/workflows/social.yml` — pre-slate cron (15:00 UTC ≈ 11am ET) +
+   manual dispatch with a dry-run input; inert until the
+   `SOCIAL_PUBLISH_ENABLED` repo variable is `true` and channel secrets exist.
 
 **Phase 2 — retention activation**
-4. Schedule `pnpm push` in the workflow (once owner supplies VAPID keys).
+4. ✅ `pnpm push` scheduled in `social.yml` (inert until owner supplies VAPID keys).
 5. PWA install nudge + "save this player" nudge (small).
 
 **Phase 3 — visibility edges**
 6. RSS/Atom feeds per sport + site-wide.
-7. `llms.txt`.
+7. ✅ `llms.txt` (`src/app/llms.txt/route.ts`).
 8. `SITE.socials` fill (5 min, when handles exist).
+   _Also shipped: 1024px social avatars in `public/brand/` (rounded + full-bleed
+   square for circle-cropping platforms), generated from the FlameMark._
 
 **Phase 4 — expansion (only if metrics justify)**
 9. Weekly "streaks of the week" recap post variant.
