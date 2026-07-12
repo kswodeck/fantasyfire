@@ -129,7 +129,9 @@ to **surface** them.
 | (Optional) 2–3 evergreen explainer pages | Dev | half day |
 | (Optional) PWA install nudge | Dev | 1–2 hr |
 
-> See also [`LAUNCH-CHECKLIST.md`](LAUNCH-CHECKLIST.md) for the professional-setup
+> See also [`MARKETING.md`](MARKETING.md) for the free/automated marketing engine
+> (auto-publish pipeline, channel matrix, owner setup checklist),
+> [`LAUNCH-CHECKLIST.md`](LAUNCH-CHECKLIST.md) for the professional-setup
 > details (DNS, email, security headers, backups, status page) and
 > [`GROWTH-PLAN.md`](GROWTH-PLAN.md) §6 for the strategic acquisition rationale.
 </content>
