@@ -1,45 +1,73 @@
-// Generates social profile BANNERS from the flame mark, one per platform size.
-// Deliberately minimal — just the brand lockup on the dark gradient with a
-// flame watermark. No taglines, feature lists, or disclaimers: banner text
-// can't be edited per-platform later, so nothing that might change belongs
-// here (bios carry the words). Same visual language as the OG images and
-// make-icons.mjs. Run once:
+// Generates social profile BANNERS — an abstract "rising embers" pattern in the
+// brand palette. Deliberately NO flame mark or tile: the round profile avatar
+// already shows the flame (and overlaps the banner's bottom-left on most
+// platforms), so the banner repeating it reads as clutter. Two variants per
+// size: the plain pattern, and one with a SMALL centered wordmark (center stays
+// clear of the avatar overlap zone on every platform). No other text — banner
+// copy can't be edited later, so nothing that might change belongs here.
+// Run once:
 //   node scripts/make-banners.mjs
 //
 // Outputs (public/brand/):
-//   banner-x-1500x500.png        X header (also fine on Bluesky)
-//   banner-bluesky-3000x1000.png Bluesky banner (3:1, retina)
-//   banner-youtube-2560x1440.png YouTube channel art (lockup inside the
-//                                1546x423 "safe area" every device shows)
-//   banner-discord-960x540.png   Discord server banner
+//   banner-x-1500x500[-plain].png        X header (also fine on Bluesky)
+//   banner-bluesky-3000x1000[-plain].png Bluesky banner (3:1, retina)
+//   banner-youtube-2560x1440[-plain].png YouTube channel art (wordmark inside
+//                                        the 1546x423 safe area = dead center)
+//   banner-discord-960x540[-plain].png   Discord server banner
 import sharp from 'sharp';
 import { mkdir } from 'node:fs/promises';
 
-const FLAME =
-  'M12 2c.6 3.2-1.3 4.7-2.8 6.2C7.7 9.7 6 11.2 6 14a6 6 0 0 0 12 0c0-2-1-3.7-2.2-5' +
-  '-.5 1-1.3 1.6-2.3 1.7.8-2.2.3-4.6-1.5-6.4-.8-.8-1.4-1.6-1.7-2.3Z';
-
 const FONT = 'Liberation Sans, DejaVu Sans, sans-serif';
+const EMBER_COLORS = ['#fb923c', '#f97316', '#ea580c', '#fdba74'];
+
+/** Deterministic PRNG (LCG) so re-running the script produces identical PNGs. */
+function makeRng(seed) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 0xffffffff;
+  };
+}
 
 /**
- * One layout: the flame-tile + "FantasyFire" wordmark, centered in a content
- * box, over the dark gradient with a huge low-opacity flame bleeding off the
- * right edge. `box` constrains the lockup (YouTube's device safe area).
+ * The pattern: dark stone gradient, two soft radial glows anchoring the
+ * corners, a faint diagonal heat sweep, and scattered ember "sparks" (denser
+ * toward the bottom, like they're rising). Optional small centered wordmark.
  */
-function banner({ width, height, box }) {
-  const b = box ?? { x: 0, y: 0, w: width, h: height };
-  // Lockup height ≈ 40% of the box, capped by width so it always fits with margin.
-  const tile = Math.min(b.h * 0.4, b.w / 9);
-  const wordSize = tile * 0.96;
-  const wordW = wordSize * 0.52 * 'FantasyFire'.length;
-  const lockupW = tile + tile * 0.3 + wordW;
-  const tileX = b.x + (b.w - lockupW) / 2;
-  const tileY = b.y + (b.h - tile) / 2;
-  const wordX = tileX + tile * 1.3;
-  // Baseline that optically centers Liberation Sans caps against the tile.
-  const wordY = tileY + tile * 0.82;
+function banner({ width, height, wordmark, safeH }) {
+  const rng = makeRng(20260712);
+  const u = height / 500; // scale unit relative to the X banner
+  // Wordmark scales with the VISIBLE height — YouTube crops to a 423px center
+  // strip on desktop, so its wordmark keys off that, not the 1440px canvas.
+  const visibleH = safeH ?? height;
 
-  const watermark = height * 1.6;
+  // Sparks — count scales with area; kept clear of a center box when the
+  // wordmark is present so the text sits on calm background.
+  const sparkCount = Math.round((width * height) / 18000);
+  const clearW = wordmark ? Math.min(width * 0.42, visibleH * 2.6) : 0;
+  const clearH = wordmark ? visibleH * 0.3 : 0;
+  let sparks = '';
+  for (let i = 0; i < sparkCount; i++) {
+    const x = rng() * width;
+    // Bias downward: sqrt pushes values toward 1 (the bottom half).
+    const y = Math.sqrt(rng()) * height;
+    if (
+      wordmark &&
+      Math.abs(x - width / 2) < clearW / 2 &&
+      Math.abs(y - height / 2) < clearH / 2
+    ) {
+      continue;
+    }
+    const r = (1 + rng() * 2.6) * u;
+    const color = EMBER_COLORS[Math.floor(rng() * EMBER_COLORS.length)];
+    const opacity = (0.12 + rng() * 0.55).toFixed(2);
+    sparks += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="${color}" opacity="${opacity}"/>`;
+  }
+
+  const wordSize = visibleH * 0.13;
+  const word = wordmark
+    ? `<text x="${width / 2}" y="${height / 2 + wordSize * 0.35}" text-anchor="middle" font-family="${FONT}" font-weight="bold" font-size="${wordSize}" letter-spacing="${wordSize * 0.02}" fill="#f5f5f4">Fantasy<tspan fill="#fb923c">Fire</tspan></text>`
+    : '';
 
   return Buffer.from(
     `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
@@ -48,39 +76,46 @@ function banner({ width, height, box }) {
       <stop offset="0" stop-color="#0c0a09"/>
       <stop offset="1" stop-color="#1c1917"/>
     </linearGradient>
-    <linearGradient id="fire" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#fb923c"/>
-      <stop offset="1" stop-color="#ea580c"/>
+    <radialGradient id="glowBR" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ea580c" stop-opacity="0.5"/>
+      <stop offset="0.55" stop-color="#ea580c" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#ea580c" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowTL" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#f97316" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#f97316" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="sweep" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#ea580c" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#ea580c" stop-opacity="0.07"/>
+      <stop offset="1" stop-color="#fb923c" stop-opacity="0.14"/>
     </linearGradient>
   </defs>
   <rect width="${width}" height="${height}" fill="url(#bg)"/>
-  <g transform="translate(${width - watermark * 0.62},${height / 2 - watermark / 2}) scale(${watermark / 24})" fill="#ea580c" opacity="0.09">
-    <path d="${FLAME}"/>
-  </g>
-  <rect x="${tileX}" y="${tileY}" width="${tile}" height="${tile}" rx="${tile * 0.19}" fill="url(#fire)"/>
-  <g transform="translate(${tileX + tile * 0.14},${tileY + tile * 0.14}) scale(${(tile * 0.72) / 24})" fill="#ffffff">
-    <path d="${FLAME}"/>
-  </g>
-  <text x="${wordX}" y="${wordY}" font-family="${FONT}" font-weight="bold" font-size="${wordSize}" fill="#f5f5f4">Fantasy<tspan fill="#fb923c">Fire</tspan></text>
+  <rect width="${width}" height="${height}" fill="url(#sweep)"/>
+  <ellipse cx="${width * 0.9}" cy="${height * 0.95}" rx="${width * 0.38}" ry="${height * 0.85}" fill="url(#glowBR)"/>
+  <ellipse cx="${width * 0.07}" cy="${height * 0.05}" rx="${width * 0.24}" ry="${height * 0.55}" fill="url(#glowTL)"/>
+  ${sparks}
+  ${word}
 </svg>`,
   );
 }
 
 async function main() {
   await mkdir('public/brand', { recursive: true });
-  const jobs = [
-    { spec: { width: 1500, height: 500 }, out: 'public/brand/banner-x-1500x500.png' },
-    { spec: { width: 3000, height: 1000 }, out: 'public/brand/banner-bluesky-3000x1000.png' },
-    {
-      // YouTube: only the central 1546x423 is guaranteed visible on every device.
-      spec: { width: 2560, height: 1440, box: { x: (2560 - 1546) / 2, y: (1440 - 423) / 2, w: 1546, h: 423 } },
-      out: 'public/brand/banner-youtube-2560x1440.png',
-    },
-    { spec: { width: 960, height: 540 }, out: 'public/brand/banner-discord-960x540.png' },
+  const sizes = [
+    { width: 1500, height: 500, name: 'x-1500x500' },
+    { width: 3000, height: 1000, name: 'bluesky-3000x1000' },
+    // Only the central 1546x423 of YouTube channel art shows on every device.
+    { width: 2560, height: 1440, name: 'youtube-2560x1440', safeH: 423 },
+    { width: 960, height: 540, name: 'discord-960x540' },
   ];
-  for (const j of jobs) {
-    await sharp(banner(j.spec)).png().toFile(j.out);
-    console.log('wrote', j.out);
+  for (const s of sizes) {
+    for (const wordmark of [true, false]) {
+      const out = `public/brand/banner-${s.name}${wordmark ? '' : '-plain'}.png`;
+      await sharp(banner({ ...s, wordmark })).png().toFile(out);
+      console.log('wrote', out);
+    }
   }
 }
 
