@@ -60,3 +60,17 @@ export function isDueNow(now: Date, firstStart: Date | null): boolean {
   const minutesUntilStart = (firstStart.getTime() - now.getTime()) / 60_000;
   return minutesUntilStart <= DUE_BEFORE_MIN && minutesUntilStart >= -DUE_AFTER_MIN;
 }
+
+/**
+ * The start time the due window should anchor on: the earliest game that is
+ * upcoming or started within the last DUE_AFTER_MIN. The schedule feed buckets
+ * days by UTC, so "today's" slate can carry LAST NIGHT's US-evening games
+ * (anything after ~8pm ET crosses UTC midnight) — anchoring on the bucket's
+ * raw minimum made a sport with a game tonight look 20+ hours stale and never
+ * due. Null when every known start is long past (slate effectively over).
+ */
+export function pickRelevantStart(starts: Date[], now: Date): Date | null {
+  const cutoff = now.getTime() - DUE_AFTER_MIN * 60_000;
+  const qualifying = starts.map((s) => s.getTime()).filter((t) => t >= cutoff);
+  return qualifying.length > 0 ? new Date(Math.min(...qualifying)) : null;
+}

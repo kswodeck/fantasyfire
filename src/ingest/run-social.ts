@@ -408,7 +408,7 @@ async function main(): Promise<number> {
     if (EXCLUDED.has(sport)) continue;
     const leans = await getDailyLeans(sport, CARD_LEANS);
     if (leans.length === 0) continue;
-    const { firstStart } = await getTodaySlateTiming(sport);
+    const { firstStart } = await getTodaySlateTiming(sport, now);
     const due = FORCE || (await isSportDue(sport, now));
     posts.push({ sport, sportName: SPORTS[sport].name, leans, due, firstStart });
   }
@@ -420,7 +420,7 @@ async function main(): Promise<number> {
   let posted = 0;
   for (const post of posts) {
     const startLabel = post.firstStart
-      ? `first game ${post.firstStart.toISOString()}`
+      ? `next start ${post.firstStart.toISOString()}`
       : 'no start time (daily-slot fallback)';
     if (DRY_RUN) {
       const c = composeDailyPost({
