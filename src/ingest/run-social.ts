@@ -1,24 +1,35 @@
 // src/ingest/run-social.ts
 //
-// Daily social auto-publish (docs/MARKETING.md §3): for each sport with games
-// TODAY, post the top FireFactor leans — descriptive framing, never picks — to
-// Bluesky / Discord / Telegram with the branded card image, plus a private
-// owner-only "content pack" briefing for manual X/Reddit/community posting.
+// GAME-AWARE social auto-publish (docs/MARKETING.md §3): the workflow ticks
+// hourly through the game-day window, and each sport with games TODAY posts
+// its top FireFactor leans at the first tick inside its pre-game window —
+// ~an hour before ITS first game (which moves day to day) — to Bluesky /
+// Discord / Telegram with the branded card image. The private owner-only
+// "content pack" briefing goes once per day at the fixed daily slot
+// (DAILY_TICK_UTC_HOUR), which is also the fallback for sports whose feed has
+// no start times.
 //
 // SAFE BY DEFAULT, three independent gates:
 //   1. Inert until SOCIAL_PUBLISH_ENABLED=true (repo variable / env).
 //   2. Each channel is skipped unless its secrets are set; every post is
 //      best-effort (a failed channel never fails the job or the pipeline).
-//   3. Once-per-day guard on the IngestRun audit table — a re-run or a second
-//      dispatch the same UTC day is a no-op unless --force.
+//   3. Once-per-day-PER-SPORT markers on the IngestRun audit table
+//      (`social:{sport}`, `social:pack`) — later ticks and re-runs are no-ops
+//      unless --force.
 //
-//   pnpm social            # post (subject to the gates above)
-//   pnpm social --dry-run  # print captions + card URLs, post nothing
-//   pnpm social --force    # bypass the once-per-day guard
+//   pnpm social            # post whatever is due right now
+//   pnpm social --dry-run  # print every sport's due status + captions, post nothing
+//   pnpm social --force    # post all in-season sports now, ignoring windows/markers
 import 'dotenv/config';
 import { db } from '../lib/db';
 import { recordIngestRun } from './ingestRun';
-import { getDailyLeans, type DailyLean } from '../lib/server/social';
+import {
+  getDailyLeans,
+  getTodaySlateTiming,
+  isSportDue,
+  socialPostedToday,
+  type DailyLean,
+} from '../lib/server/social';
 import {
   composeDailyPost,
   composeContentPack,
@@ -27,6 +38,7 @@ import {
 import { postToBluesky } from '../lib/social/bluesky';
 import { postToDiscordWebhook } from '../lib/social/discord';
 import { postToTelegram } from '../lib/social/telegram';
+import { isDailyTick } from '../lib/social/schedule';
 import { SITE, absoluteUrl } from '../lib/site';
 import { SPORT_LIST, SPORTS, type Sport } from '../lib/sports';
 
@@ -45,10 +57,16 @@ const EXCLUDED = new Set(
 const CARD_LEANS = 5;
 const CAPTION_LEANS = 3;
 
-function todayUtcStart(): Date {
-  const d = new Date();
-  d.setUTCHours(0, 0, 0, 0);
-  return d;
+/** Write the once-per-day marker for a sport/pack publish (best-effort). */
+async function writeMarker(job: string, rowsWritten: number): Promise<void> {
+  try {
+    const at = new Date();
+    await db.ingestRun.create({
+      data: { job, status: 'success', rowsWritten, startedAt: at, finishedAt: at, durationMs: 0 },
+    });
+  } catch (e) {
+    console.warn(`[social] failed to write marker "${job}":`, e instanceof Error ? e.message : e);
+  }
 }
 
 /** Public card URL (null on localhost — nothing external can fetch it there). */
@@ -170,30 +188,18 @@ async function main(): Promise<number> {
     return 0;
   }
 
-  // Once-per-day guard: the ingest cron and the pre-slate cron both reach this
-  // job; only the first successful posting run of a UTC day publishes.
-  if (!DRY_RUN && !FORCE) {
-    const already = await db.ingestRun.findFirst({
-      where: {
-        job: 'social',
-        status: 'success',
-        rowsWritten: { gt: 0 },
-        startedAt: { gte: todayUtcStart() },
-      },
-      select: { id: true },
-    });
-    if (already) {
-      console.log('[social] already posted today — skipping (use --force to override).');
-      return 0;
-    }
-  }
+  const now = new Date();
 
-  const posts: SportPost[] = [];
+  // Every in-season sport with leans, annotated with its game-aware due status
+  // (inside the pre-game window of ITS first game today, not yet posted).
+  const posts: (SportPost & { due: boolean; firstStart: Date | null })[] = [];
   for (const sport of SPORT_LIST) {
     if (EXCLUDED.has(sport)) continue;
     const leans = await getDailyLeans(sport, CARD_LEANS);
     if (leans.length === 0) continue;
-    posts.push({ sport, sportName: SPORTS[sport].name, leans });
+    const { firstStart } = await getTodaySlateTiming(sport);
+    const due = FORCE || (await isSportDue(sport, now));
+    posts.push({ sport, sportName: SPORTS[sport].name, leans, due, firstStart });
   }
   if (posts.length === 0) {
     console.log('[social] no sport has publishable leans today — nothing to post.');
@@ -202,6 +208,9 @@ async function main(): Promise<number> {
 
   let posted = 0;
   for (const post of posts) {
+    const startLabel = post.firstStart
+      ? `first game ${post.firstStart.toISOString()}`
+      : 'no start time (daily-slot fallback)';
     if (DRY_RUN) {
       const c = composeDailyPost({
         sport: post.sport,
@@ -211,41 +220,58 @@ async function main(): Promise<number> {
         channel: 'bluesky',
       });
       console.log(
-        `\n[social] DRY RUN — ${post.sport}\n${c.text}\n→ ${c.boardUrl}\ncard: ${cardUrl(post.sport) ?? '(no public site URL)'}`,
+        `\n[social] DRY RUN — ${post.sport} (${startLabel}; due now: ${post.due})\n${c.text}\n→ ${c.boardUrl}\ncard: ${cardUrl(post.sport) ?? '(no public site URL)'}`,
       );
       continue;
     }
-    posted += await publishSport(post);
-  }
-
-  // Private owner briefing for manual posting (X / Reddit / community Discords).
-  const packUrl = process.env.DISCORD_CONTENT_PACK_WEBHOOK_URL ?? '';
-  const entries: ContentPackEntry[] = posts.map((p) => ({
-    sport: p.sport,
-    sportName: p.sportName,
-    leans: p.leans,
-  }));
-  const pack = composeContentPack({
-    entries,
-    siteUrl: SITE.url,
-    dateIso: new Date().toISOString().slice(0, 10),
-  });
-  if (DRY_RUN) {
-    console.log(`\n[social] DRY RUN — content pack\n${pack}`);
-  } else if (packUrl) {
-    // Discord caps messages at 2000 chars — send per-sport blocks separately.
-    try {
-      for (const block of pack.split('\n\n__')) {
-        const content = block.startsWith('**') ? block : `__${block}`;
-        await postToDiscordWebhook(packUrl, { content: content.slice(0, 1990) });
-      }
-      console.log('[social] content pack delivered.');
-    } catch (e) {
-      console.warn('[social] content pack failed —', e instanceof Error ? e.message : e);
+    if (!post.due) {
+      console.log(`[social] ${post.sport}: not due yet (${startLabel}) — skipping this tick.`);
+      continue;
+    }
+    const n = await publishSport(post);
+    if (n > 0) {
+      await writeMarker(`social:${post.sport}`, n);
+      posted += n;
     }
   }
 
-  console.log(`[social] done — ${posted} post(s) across ${posts.length} sport(s).`);
+  // Private owner briefing for manual posting (X / Reddit / community Discords):
+  // once per day at the fixed daily slot, covering ALL of today's sports at once
+  // regardless of their individual posting windows.
+  const packDue =
+    FORCE || (isDailyTick(now) && !(await socialPostedToday('social:pack')));
+  const packUrl = process.env.DISCORD_CONTENT_PACK_WEBHOOK_URL ?? '';
+  if (DRY_RUN || packDue) {
+    const entries: ContentPackEntry[] = posts.map((p) => ({
+      sport: p.sport,
+      sportName: p.sportName,
+      leans: p.leans,
+    }));
+    const pack = composeContentPack({
+      entries,
+      siteUrl: SITE.url,
+      dateIso: now.toISOString().slice(0, 10),
+    });
+    if (DRY_RUN) {
+      console.log(`\n[social] DRY RUN — content pack (due now: ${packDue})\n${pack}`);
+    } else if (packUrl) {
+      // Discord caps messages at 2000 chars — send per-sport blocks separately.
+      try {
+        for (const block of pack.split('\n\n__')) {
+          const content = block.startsWith('**') ? block : `__${block}`;
+          await postToDiscordWebhook(packUrl, { content: content.slice(0, 1990) });
+        }
+        await writeMarker('social:pack', posts.length);
+        console.log('[social] content pack delivered.');
+      } catch (e) {
+        console.warn('[social] content pack failed —', e instanceof Error ? e.message : e);
+      }
+    }
+  }
+
+  console.log(
+    `[social] done — ${posted} post(s); ${posts.filter((p) => p.due).length}/${posts.length} sport(s) due this tick.`,
+  );
   return posted;
 }
 

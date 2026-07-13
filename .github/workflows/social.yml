@@ -1,20 +1,26 @@
-name: Daily social publish + push digest
+name: Game-aware social publish + push digest
 
-# The outward-facing daily comms (docs/MARKETING.md §3 + §6): post today's top
-# leans to Bluesky / Discord / Telegram with the branded card, deliver the private
-# content-pack briefing, then send the web-push lean digest. Runs PRE-SLATE
-# (~11am ET) — separate from the 9:00 UTC data ingest so posts land when US
-# bettors are researching, not overnight.
+# The outward-facing daily comms (docs/MARKETING.md §3 + §6), timed to the games:
+# the workflow ticks HOURLY through the game-day window and each sport posts at
+# the first tick inside its pre-game window — ~an hour before ITS first game,
+# which moves day to day. The owner content pack + web-push digest go once per
+# day at the fixed daily slot (15:00 UTC ≈ 11am ET), which is also the fallback
+# for sports whose schedule feed has no start times.
+#
+# COST CONTROL (private repo = billed Actions minutes): a ~15-second "check" job
+# curls /api/v1/social/due first and skips the full pnpm-install publish job on
+# idle hours. The check fails OPEN (site unreachable → run the publish job; its
+# own guards make that safe).
 #
 # SAFE BY DEFAULT — this workflow is a no-op until the owner:
 #   1. Sets the SOCIAL_PUBLISH_ENABLED repo variable to "true".
 #   2. Adds the channel secrets below (each missing channel is just skipped).
-# A same-day re-run is a no-op (once-per-day guard on the IngestRun table);
-# dispatch with dry_run to print captions without posting.
+# Later ticks and re-runs are no-ops per sport (once-per-day markers on the
+# IngestRun table); dispatch with dry_run to print captions without posting.
 #
 # Secrets (Production environment) — all optional except DATABASE_URL:
 #   DATABASE_URL                      — pooled app connection (same as ingest.yml)
-#   BLUESKY_IDENTIFIER                — handle, e.g. fantasyfire.app
+#   BLUESKY_IDENTIFIER                — handle, e.g. fantasyfire.bsky.social
 #   BLUESKY_APP_PASSWORD              — an app password, NOT the account password
 #   DISCORD_WEBHOOK_URL               — public #daily-leans channel webhook
 #   DISCORD_CONTENT_PACK_WEBHOOK_URL  — PRIVATE owner-only channel webhook
@@ -24,17 +30,23 @@ name: Daily social publish + push digest
 # Variables:
 #   SOCIAL_PUBLISH_ENABLED            — "true" to arm the poster
 #   SOCIAL_SPORTS_EXCLUDE             — default cfb,cbb (college props are state-restricted)
-#   NEXT_PUBLIC_SITE_URL              — public apex (card image + links)
+#   NEXT_PUBLIC_SITE_URL              — public apex (card image + links + due check)
 #   NEXT_PUBLIC_VAPID_PUBLIC_KEY      — web push public key
 
 on:
   schedule:
-    # 15:00 UTC ≈ 11:00 ET — after the nightly ingest, before the evening slates.
-    - cron: '0 15 * * *'
+    # Hourly through the US game-day window: 13:00–23:00 UTC (9am–7pm ET first
+    # starts, incl. London NFL games) and 00:00–02:00 UTC (late West Coast tips).
+    - cron: '0 13-23 * * *'
+    - cron: '0 0-2 * * *'
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Print captions + card URLs without posting'
+        description: 'Print captions + due status without posting'
+        type: boolean
+        default: false
+      force:
+        description: 'Post all in-season sports now, ignoring windows/markers'
         type: boolean
         default: false
 
@@ -43,9 +55,41 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
+  # Cheap hourly gate — no checkout, no install. Manual dispatches skip it.
+  check:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 3
+    if: github.event_name == 'schedule'
+    outputs:
+      due: ${{ steps.due.outputs.due }}
+    steps:
+      - name: Ask the site whether anything is due
+        id: due
+        env:
+          SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL || 'https://fantasyfire.app' }}
+        run: |
+          set +e
+          resp=$(curl -fsS --max-time 20 "$SITE_URL/api/v1/social/due")
+          status=$?
+          set -e
+          if [ $status -ne 0 ] || [ -z "$resp" ]; then
+            echo "due check unreachable — failing open (the publish job has its own guards)."
+            echo "due=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "$resp"
+          anyDue=$(echo "$resp" | jq -r '.anyDue // "true"')
+          echo "due=$anyDue" >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: [check]
+    # Run when the check says something is due, or on any manual dispatch.
+    # always() lets the dispatch path run even though check was skipped.
+    if: >-
+      always() &&
+      (needs.check.outputs.due == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment: Production
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL || '' }}
@@ -81,11 +125,17 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # Inert until SOCIAL_PUBLISH_ENABLED=true (the script logs why it skipped).
-      - name: Publish daily social posts
-        run: pnpm social ${{ inputs.dry_run && '--dry-run' || '' }}
+      # The script itself decides which sports are due this tick.
+      - name: Publish due social posts
+        run: pnpm social ${{ inputs.dry_run && '--dry-run' || '' }} ${{ inputs.force && '--force' || '' }}
 
-      # Web-push lean digest — inert until VAPID keys exist. Best-effort: a push
-      # hiccup shouldn't fail the social job (and vice versa — separate steps).
+      # Web-push lean digest — once per day at the fixed daily slot (inert until
+      # VAPID keys exist). Best-effort: a push hiccup shouldn't fail the job.
       - name: Send push digest
         if: ${{ (success() || failure()) && !inputs.dry_run }}
-        run: pnpm push
+        run: |
+          if [ "$(date -u +%H)" = "15" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            pnpm push
+          else
+            echo "Not the daily slot — skipping push digest."
+          fi

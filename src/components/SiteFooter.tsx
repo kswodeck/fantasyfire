@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { FlameMark } from './FlameMark';
+import { SocialIcon } from './SocialIcons';
 import { SITE, activeSocials } from '@/lib/site';
 
 const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
@@ -55,16 +56,19 @@ export function SiteFooter() {
               {SITE.email}
             </a>
             {activeSocials().length > 0 && (
-              <ul className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+              <ul className="mt-3 flex flex-wrap gap-x-3 gap-y-2 text-xs">
                 {activeSocials().map((s) => (
                   <li key={s.key}>
                     <a
                       href={s.url}
                       target="_blank"
                       rel="me noopener noreferrer"
-                      className="text-muted transition-colors hover:text-foreground"
+                      aria-label={s.label}
+                      title={s.label}
+                      className="inline-flex items-center gap-1.5 text-muted transition-colors hover:text-foreground"
                     >
-                      {s.label}
+                      <SocialIcon network={s.key} className="h-4 w-4" />
+                      <span className="sr-only sm:not-sr-only">{s.label}</span>
                     </a>
                   </li>
                 ))}
