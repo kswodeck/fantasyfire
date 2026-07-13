@@ -125,10 +125,12 @@ ingest.yml (nightly, exists) ──▶ new final job: social-publish
 
 Implementation notes:
 
-- **Timing.** The current ingest cron finishes early UTC (= overnight US). Add a
-  second **pre-slate dispatch** of just the social job (~15:00 UTC / morning US
-  Eastern) so posts land when bettors are researching, not while they sleep.
-  The job is read-only against Postgres, so re-running it is safe.
+- **Timing is game-aware.** The workflow ticks hourly through the game-day
+  window (13:00–02:00 UTC) behind a ~15-second due-check
+  (`/api/v1/social/due`), and each sport posts at the first tick inside its
+  pre-game window — ~an hour before **its** first game today, which moves day
+  to day. Sports with no feed start time, the content pack, and the push
+  digest use the fixed daily slot (15:00 UTC ≈ 11am ET).
 - **Idempotency.** A tiny `SocialPost` table (channel, sport, date, postedAt)
   — or simpler, a per-day guard keyed on (channel, sport, date) — so a re-run
   or a retry never double-posts.
@@ -336,8 +338,9 @@ Ordered so each phase is independently shippable and nothing waits on traffic:
    once-per-day guard on `IngestRun`.
 2. ✅ `/api/og/daily/[sport]` card route (`next/og`): top 5 leans with tier
    badges, sport accent, date, RG footer line.
-3. ✅ `.github/workflows/social.yml` — pre-slate cron (15:00 UTC ≈ 11am ET) +
-   manual dispatch with a dry-run input; inert until the
+3. ✅ `.github/workflows/social.yml` — game-aware hourly ticks (each sport posts
+   ~an hour before its first game; cheap `/api/v1/social/due` pre-check skips
+   idle hours) + manual dispatch with dry-run/force inputs; inert until the
    `SOCIAL_PUBLISH_ENABLED` repo variable is `true` and channel secrets exist.
 
 **Phase 2 — retention activation**

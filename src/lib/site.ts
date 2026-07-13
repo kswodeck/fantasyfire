@@ -11,10 +11,18 @@ const rawUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
  * The `handle` (with leading `@`) is used for `twitter.site` when `key === 'x'`.
  */
 export interface SocialProfile {
-  key: 'x' | 'bluesky' | 'reddit' | 'youtube' | 'discord';
+  key:
+    | 'x'
+    | 'bluesky'
+    | 'reddit'
+    | 'youtube'
+    | 'discord'
+    | 'telegram'
+    | 'instagram'
+    | 'threads';
   label: string;
   url: string;
-  /** e.g. "@fantasyfire" — only needed for X's twitter:site card tag. */
+  /** e.g. "@FantasyFireApp" — only needed for X's twitter:site card tag. */
   handle?: string;
 }
 
@@ -33,8 +41,13 @@ export const SITE = {
    * has no fabricated/abandoned profiles — the honest default.
    */
   socials: [
-    { key: 'x', label: 'X', url: '', handle: '@fantasyfire' },
-    { key: 'bluesky', label: 'Bluesky', url: '' },
+    { key: 'x', label: 'X', url: 'https://x.com/FantasyFireApp', handle: '@FantasyFireApp' },
+    { key: 'instagram', label: 'Instagram', url: 'https://www.instagram.com/fantasyfireapp/' },
+    { key: 'threads', label: 'Threads', url: 'https://www.threads.com/@fantasyfireapp' },
+    { key: 'bluesky', label: 'Bluesky', url: 'https://bsky.app/profile/fantasyfire.bsky.social' },
+    // Server invite link, not a profile — the join CTA users actually need.
+    { key: 'discord', label: 'Discord', url: 'https://discord.gg/724kkfnNS2' },
+    { key: 'telegram', label: 'Telegram', url: 'https://t.me/fantasyfireapp' },
     { key: 'reddit', label: 'Reddit', url: '' },
     { key: 'youtube', label: 'YouTube', url: '' },
   ] satisfies SocialProfile[],
