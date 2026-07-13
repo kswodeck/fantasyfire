@@ -4,7 +4,7 @@
 // and the /api/v1/social/due pre-check can never disagree.
 import { db } from '@/lib/db';
 import { getBoard, getTonightSlate } from '@/lib/server/players';
-import { isDueNow } from '@/lib/social/schedule';
+import { isDueNow, pickRelevantStart } from '@/lib/social/schedule';
 import type { Sport } from '@/lib/sports';
 import type { BoardRow } from '@/lib/types';
 
@@ -68,28 +68,32 @@ export async function getDailyLeans(sport: Sport, limit = 5): Promise<DailyLean[
 }
 
 /**
- * TODAY's slate timing for a sport: whether a slate exists today, and the
- * earliest known start time (null when the feed carries no start times).
- * Drives the "post ~an hour before the first game" window
+ * TODAY's slate timing for a sport: whether a slate exists today, whether the
+ * feed carries any start times at all, and the start the due window should
+ * anchor on — the earliest UPCOMING (or just-started) game, not the bucket's
+ * raw minimum: the feed buckets days by UTC, so "today" can include last
+ * night's US-evening games. Drives the pre-game posting window
  * (src/lib/social/schedule.ts).
  */
 export async function getTodaySlateTiming(
   sport: Sport,
-): Promise<{ hasSlateToday: boolean; firstStart: Date | null }> {
+  now = new Date(),
+): Promise<{ hasSlateToday: boolean; hasKnownStarts: boolean; firstStart: Date | null }> {
   const slate = await getTonightSlate(sport).catch(() => ({
     date: null as string | null,
     games: [] as { startTime: string | null }[],
   }));
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = now.toISOString().slice(0, 10);
   if (slate.date !== todayIso || slate.games.length === 0) {
-    return { hasSlateToday: false, firstStart: null };
+    return { hasSlateToday: false, hasKnownStarts: false, firstStart: null };
   }
   const starts = slate.games
-    .map((g) => (g.startTime ? new Date(g.startTime).getTime() : NaN))
-    .filter((t) => Number.isFinite(t));
+    .map((g) => (g.startTime ? new Date(g.startTime) : null))
+    .filter((d): d is Date => d !== null && Number.isFinite(d.getTime()));
   return {
     hasSlateToday: true,
-    firstStart: starts.length > 0 ? new Date(Math.min(...starts)) : null,
+    hasKnownStarts: starts.length > 0,
+    firstStart: pickRelevantStart(starts, now),
   };
 }
 
@@ -117,7 +121,10 @@ export async function socialPostedToday(job: string): Promise<boolean> {
  */
 export async function isSportDue(sport: Sport, now = new Date()): Promise<boolean> {
   if (await socialPostedToday(`social:${sport}`)) return false;
-  const { hasSlateToday, firstStart } = await getTodaySlateTiming(sport);
+  const { hasSlateToday, hasKnownStarts, firstStart } = await getTodaySlateTiming(sport, now);
   if (!hasSlateToday) return false;
+  // Start times exist but every game is long past → the slate is over; don't
+  // fall back to the daily slot for a finished day.
+  if (hasKnownStarts && !firstStart) return false;
   return isDueNow(now, firstStart);
 }

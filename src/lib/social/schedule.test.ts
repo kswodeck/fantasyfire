@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { etHour, isDailyTick, isDueNow, isWithinPostingWindow } from './schedule';
+import {
+  etHour,
+  isDailyTick,
+  isDueNow,
+  isWithinPostingWindow,
+  pickRelevantStart,
+} from './schedule';
 
 // July dates = EDT (UTC-4): noon ET = 16:00 UTC, 10pm ET = 02:00 UTC next day.
 const START = new Date('2026-07-13T22:30:00Z'); // 6:30pm ET first pitch
@@ -43,6 +49,33 @@ describe('isDueNow', () => {
   it('falls back to the daily slot when the start time is unknown', () => {
     expect(isDueNow(new Date('2026-07-13T16:30:00Z'), null)).toBe(true); // noon ET hour
     expect(isDueNow(new Date('2026-07-13T17:00:00Z'), null)).toBe(false); // 1pm ET
+  });
+});
+
+describe('pickRelevantStart', () => {
+  // The 2026-07-13 WNBA bug: the UTC-day bucket held LAST NIGHT's 6pm PT game
+  // (01:00Z "today") plus tonight's 4pm PT game (23:00Z). Anchoring on the raw
+  // minimum made the slate look 21h stale and the sport never posted.
+  const lastNight = new Date('2026-07-13T01:00:00Z');
+  const tonight = new Date('2026-07-13T23:00:00Z');
+
+  it("skips last night's UTC-midnight-crossers and anchors on tonight's game", () => {
+    const now = new Date('2026-07-13T21:00:00Z'); // 2pm PT — 2h before tip
+    expect(pickRelevantStart([lastNight, tonight], now)).toEqual(tonight);
+  });
+
+  it('keeps a recently started game (in-grace catch-up)', () => {
+    const now = new Date('2026-07-13T23:30:00Z'); // 30 min after tip
+    expect(pickRelevantStart([lastNight, tonight], now)).toEqual(tonight);
+  });
+
+  it('returns null when every start is long past (slate over)', () => {
+    const now = new Date('2026-07-14T05:00:00Z');
+    expect(pickRelevantStart([lastNight, tonight], now)).toBeNull();
+  });
+
+  it('returns null for an empty list', () => {
+    expect(pickRelevantStart([], new Date('2026-07-13T21:00:00Z'))).toBeNull();
   });
 });
 
