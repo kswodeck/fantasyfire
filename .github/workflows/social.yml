@@ -1,11 +1,13 @@
 name: Game-aware social publish + push digest
 
 # The outward-facing daily comms (docs/MARKETING.md §3 + §6), timed to the games:
-# the workflow ticks HOURLY through the game-day window and each sport posts at
-# the first tick inside its pre-game window — ~an hour before ITS first game,
-# which moves day to day. The owner content pack + web-push digest go once per
-# day at the fixed daily slot (15:00 UTC ≈ 11am ET), which is also the fallback
-# for sports whose schedule feed has no start times.
+# the workflow ticks HOURLY through the posting window (NOON–10PM ET — never the
+# middle of the night; the window is computed in America/New_York inside the
+# code, so DST can't shift it) and each sport posts at the first tick where its
+# first game is within 2 hours. Slates whose first game tips before noon ET
+# catch up at the window-open tick. The owner content pack + web-push digest go
+# once per day at the window open (noon ET), which is also the fallback for
+# sports whose schedule feed has no start times.
 #
 # COST CONTROL (private repo = billed Actions minutes): a ~15-second "check" job
 # curls /api/v1/social/due first and skips the full pnpm-install publish job on
@@ -38,10 +40,11 @@ name: Game-aware social publish + push digest
 
 on:
   schedule:
-    # Hourly through the US game-day window: 13:00–23:00 UTC (9am–7pm ET first
-    # starts, incl. London NFL games) and 00:00–02:00 UTC (late West Coast tips).
-    - cron: '0 13-23 * * *'
-    - cron: '0 0-2 * * *'
+    # Hourly ticks covering noon–10pm ET across BOTH DST offsets (EDT: 16:00–02:00
+    # UTC; EST: 17:00–03:00 UTC). The script itself enforces the exact ET window,
+    # so the out-of-window edge ticks exit at the cheap check job.
+    - cron: '0 16-23 * * *'
+    - cron: '0 0-3 * * *'
   workflow_dispatch:
     inputs:
       dry_run:
@@ -139,12 +142,12 @@ jobs:
       - name: Publish due social posts
         run: pnpm social ${{ inputs.dry_run && '--dry-run' || '' }} ${{ inputs.force && '--force' || '' }}
 
-      # Web-push lean digest — once per day at the fixed daily slot (inert until
-      # VAPID keys exist). Best-effort: a push hiccup shouldn't fail the job.
+      # Web-push lean digest — once per day at the daily slot (noon ET; inert
+      # until VAPID keys exist). Best-effort: a push hiccup shouldn't fail the job.
       - name: Send push digest
         if: ${{ (success() || failure()) && !inputs.dry_run }}
         run: |
-          if [ "$(date -u +%H)" = "15" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "$(TZ=America/New_York date +%H)" = "12" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             pnpm push
           else
             echo "Not the daily slot — skipping push digest."
