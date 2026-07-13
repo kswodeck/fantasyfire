@@ -4,6 +4,8 @@ import {
   BANNED_TOKENS,
   assertDescriptive,
   composeContentPack,
+  composeDailyDigest,
+  composeDailyPoll,
   composeDailyPost,
   trackedBoardUrl,
 } from './compose';
@@ -51,7 +53,7 @@ describe('composeDailyPost', () => {
   });
 
   it('never emits banned predictive/tout tokens', () => {
-    for (const channel of ['bluesky', 'discord', 'telegram', 'x'] as const) {
+    for (const channel of ['bluesky', 'discord', 'telegram', 'instagram', 'threads', 'x'] as const) {
       const c = composeDailyPost({
         sport: 'nba',
         sportName: 'NBA',
@@ -108,6 +110,69 @@ describe('composeContentPack', () => {
     for (const token of BANNED_TOKENS) {
       expect(pack.toLowerCase()).not.toContain(token);
     }
+  });
+});
+
+describe('composeDailyDigest', () => {
+  const ENTRIES = [
+    { sport: 'nba', sportName: 'NBA', leans: THREE_LEANS },
+    { sport: 'mlb', sportName: 'MLB', leans: [lean({ slug: 'aaron-judge', firstName: 'Aaron', lastName: 'Judge', statShort: 'HR', line: 0.5 })] },
+    { sport: 'wnba', sportName: 'WNBA', leans: [] },
+  ];
+
+  it('lists one top lean per sport with leans and links the all-sports board', () => {
+    const c = composeDailyDigest({ entries: ENTRIES, siteUrl: SITE_URL, channel: 'discord' });
+    expect(c.text).toContain('2 leagues');
+    expect(c.text).toContain('NBA: L. Dončić Over 32.5 PTS');
+    expect(c.text).toContain('MLB: A. Judge Over 0.5 HR');
+    expect(c.text).not.toContain('WNBA'); // no leans → dropped
+    expect(c.text).toContain('1-800-GAMBLER');
+    expect(c.boardUrl).toContain('/board?utm_source=discord');
+    for (const token of BANNED_TOKENS) expect(c.text.toLowerCase()).not.toContain(token);
+  });
+
+  it('fits the channel budget but never drops below two sports', () => {
+    const many = Array.from({ length: 8 }, (_, i) => ({
+      sport: `s${i}`,
+      sportName: `LEAGUE${i}`,
+      leans: [lean({ slug: `p${i}`, lastName: `Verylonglastname${i}` })],
+    }));
+    const c = composeDailyDigest({ entries: many, siteUrl: SITE_URL, channel: 'bluesky', maxChars: 290 });
+    expect([...c.text].length).toBeLessThanOrEqual(290);
+    expect(c.text).toContain('LEAGUE0');
+    expect(c.text).toContain('LEAGUE1');
+  });
+
+  it('throws with fewer than two sports with leans', () => {
+    expect(() =>
+      composeDailyDigest({
+        entries: [{ sport: 'nba', sportName: 'NBA', leans: THREE_LEANS }],
+        siteUrl: SITE_URL,
+        channel: 'discord',
+      }),
+    ).toThrow();
+  });
+});
+
+describe('composeDailyPoll', () => {
+  it('builds one option per sport, capped at 55 chars, framed as a question', () => {
+    const poll = composeDailyPoll([
+      { sport: 'nba', sportName: 'NBA', leans: THREE_LEANS },
+      { sport: 'mlb', sportName: 'MLB', leans: [lean({ firstName: 'Aaron', lastName: 'Judge', statShort: 'HR', line: 0.5 })] },
+    ]);
+    expect(poll).not.toBeNull();
+    expect(poll!.options).toHaveLength(2);
+    expect(poll!.options[0]).toBe('NBA · L. Dončić Over 32.5 PTS');
+    for (const o of poll!.options) expect(o.length).toBeLessThanOrEqual(55);
+    expect(poll!.question).toContain('?');
+    for (const token of BANNED_TOKENS) {
+      expect(poll!.question.toLowerCase()).not.toContain(token);
+    }
+  });
+
+  it('returns null when fewer than two sports have leans', () => {
+    expect(composeDailyPoll([{ sport: 'nba', sportName: 'NBA', leans: THREE_LEANS }])).toBeNull();
+    expect(composeDailyPoll([])).toBeNull();
   });
 });
 

@@ -33,11 +33,15 @@ import {
 import {
   composeDailyPost,
   composeContentPack,
+  composeDailyDigest,
+  composeDailyPoll,
   type ContentPackEntry,
 } from '../lib/social/compose';
-import { postToBluesky } from '../lib/social/bluesky';
+import { postToBluesky, type BlueskyRef } from '../lib/social/bluesky';
 import { postToDiscordWebhook } from '../lib/social/discord';
-import { postToTelegram } from '../lib/social/telegram';
+import { postToInstagram, postInstagramCarousel } from '../lib/social/instagram';
+import { postToTelegram, postTelegramAlbum, postTelegramPoll } from '../lib/social/telegram';
+import { postToThreads, postThreadsCarousel } from '../lib/social/threads';
 import { isDailyTick } from '../lib/social/schedule';
 import { SITE, absoluteUrl } from '../lib/site';
 import { SPORT_LIST, SPORTS, type Sport } from '../lib/sports';
@@ -179,6 +183,213 @@ async function publishSport(post: SportPost): Promise<number> {
     }
   }
 
+  // Instagram — image required (JPEG variant of the card), caption links are
+  // not clickable so the caption points at the bio link instead of a URL swap.
+  const igUser = process.env.IG_USER_ID ?? '';
+  const igToken = process.env.IG_ACCESS_TOKEN ?? '';
+  if (igUser && igToken) {
+    if (!card) {
+      console.log(`[social] ${sport}: Instagram skipped — needs a public card URL.`);
+    } else {
+      try {
+        const c = composeDailyPost({
+          sport,
+          sportName,
+          leans: post.leans.slice(0, CAPTION_LEANS),
+          siteUrl: SITE.url,
+          channel: 'instagram',
+          maxChars: 1000,
+        });
+        await postToInstagram(
+          { userId: igUser, accessToken: igToken },
+          { imageUrl: `${card}/jpeg`, caption: c.text },
+        );
+        posted++;
+        console.log(`[social] ${sport}: posted to Instagram`);
+      } catch (e) {
+        console.warn(`[social] ${sport}: Instagram failed —`, e instanceof Error ? e.message : e);
+      }
+      // Story alongside the feed post — vertical card, no caption (the API
+      // ignores captions on stories). Independent best-effort.
+      try {
+        await postToInstagram(
+          { userId: igUser, accessToken: igToken },
+          { imageUrl: `${card}/story`, kind: 'story' },
+        );
+        posted++;
+        console.log(`[social] ${sport}: posted Instagram story`);
+      } catch (e) {
+        console.warn(
+          `[social] ${sport}: Instagram story failed —`,
+          e instanceof Error ? e.message : e,
+        );
+      }
+    }
+  }
+
+  // Threads — image when available, text-only otherwise; links in Threads
+  // text are clickable, so swap in the tracked URL like Telegram.
+  const thUser = process.env.THREADS_USER_ID ?? '';
+  const thToken = process.env.THREADS_ACCESS_TOKEN ?? '';
+  if (thUser && thToken) {
+    try {
+      const c = composeDailyPost({
+        sport,
+        sportName,
+        leans: post.leans.slice(0, CAPTION_LEANS),
+        siteUrl: SITE.url,
+        channel: 'threads',
+        maxChars: 480,
+      });
+      const text = c.text.replace(c.linkDisplay, c.boardUrl);
+      await postToThreads(
+        { userId: thUser, accessToken: thToken },
+        { text, ...(card ? { imageUrl: card } : {}) },
+      );
+      posted++;
+      console.log(`[social] ${sport}: posted to Threads`);
+    } catch (e) {
+      console.warn(`[social] ${sport}: Threads failed —`, e instanceof Error ? e.message : e);
+    }
+  }
+
+  return posted;
+}
+
+/**
+ * The multi-sport "today's slate" digest — the daily-slot bundle formats that
+ * only make sense across sports: Instagram/Threads carousels, a Telegram
+ * album, a Discord multi-embed message, a Bluesky thread (one reply per
+ * sport's card), and engagement polls on Telegram + Discord. Runs once per day
+ * when ≥2 sports have leans (a single-sport day is already covered by that
+ * sport's own post). Every format is independent best-effort.
+ */
+async function publishDigest(posts: SportPost[]): Promise<number> {
+  const entries: ContentPackEntry[] = posts.map((p) => ({
+    sport: p.sport,
+    sportName: p.sportName,
+    leans: p.leans,
+  }));
+  const cards = posts
+    .map((p) => ({ sport: p.sport, sportName: p.sportName, url: cardUrl(p.sport) }))
+    .filter((c): c is { sport: Sport; sportName: string; url: string } => c.url !== null);
+  const poll = composeDailyPoll(entries);
+  let posted = 0;
+
+  // Bluesky thread: digest root, then one reply per sport carrying its card.
+  const bskyId = process.env.BLUESKY_IDENTIFIER ?? '';
+  const bskyPw = process.env.BLUESKY_APP_PASSWORD ?? '';
+  if (bskyId && bskyPw) {
+    try {
+      const creds = { identifier: bskyId, appPassword: bskyPw };
+      const c = composeDailyDigest({ entries, siteUrl: SITE.url, channel: 'bluesky', maxChars: 290 });
+      const root = await postToBluesky(creds, {
+        text: c.text,
+        linkDisplay: c.linkDisplay,
+        linkTarget: c.boardUrl,
+      });
+      let parent: BlueskyRef = root;
+      for (const card of cards) {
+        const png = await fetchCardPng(card.url);
+        if (!png) continue;
+        parent = await postToBluesky(creds, {
+          text: `${card.sportName} — today's top leans`,
+          image: { data: png, alt: c.imageAlt, width: 1200, height: 630 },
+          reply: { root, parent },
+        });
+      }
+      posted++;
+      console.log('[social] digest: posted Bluesky thread');
+    } catch (e) {
+      console.warn('[social] digest: Bluesky thread failed —', e instanceof Error ? e.message : e);
+    }
+  }
+
+  // Discord: one message — digest text, an embed per sport, and a native poll.
+  const discordUrl = process.env.DISCORD_WEBHOOK_URL ?? '';
+  if (discordUrl) {
+    try {
+      const c = composeDailyDigest({ entries, siteUrl: SITE.url, channel: 'discord', maxChars: 1500 });
+      await postToDiscordWebhook(discordUrl, {
+        content: c.text,
+        embeds: cards.map((card) => ({
+          title: `${card.sportName} — today's top leans`,
+          url: `${SITE.url}/${card.sport}/board?utm_source=discord&utm_medium=social&utm_campaign=daily-digest`,
+          imageUrl: card.url,
+          color: SPORTS[card.sport].accent,
+        })),
+        ...(poll ? { poll } : {}),
+      });
+      posted++;
+      console.log('[social] digest: posted Discord slate message');
+    } catch (e) {
+      console.warn('[social] digest: Discord failed —', e instanceof Error ? e.message : e);
+    }
+  }
+
+  // Telegram: album of all cards (caption on the first), plus a poll.
+  const tgToken = process.env.TELEGRAM_BOT_TOKEN ?? '';
+  const tgChat = process.env.TELEGRAM_CHAT_ID ?? '';
+  if (tgToken && tgChat) {
+    const target = { botToken: tgToken, chatId: tgChat };
+    if (cards.length >= 2) {
+      try {
+        const c = composeDailyDigest({ entries, siteUrl: SITE.url, channel: 'telegram', maxChars: 900 });
+        await postTelegramAlbum(target, {
+          photoUrls: cards.map((card) => card.url),
+          caption: c.text.replace(c.linkDisplay, c.boardUrl),
+        });
+        posted++;
+        console.log('[social] digest: posted Telegram album');
+      } catch (e) {
+        console.warn('[social] digest: Telegram album failed —', e instanceof Error ? e.message : e);
+      }
+    }
+    if (poll) {
+      try {
+        await postTelegramPoll(target, poll);
+        posted++;
+        console.log('[social] digest: posted Telegram poll');
+      } catch (e) {
+        console.warn('[social] digest: Telegram poll failed —', e instanceof Error ? e.message : e);
+      }
+    }
+  }
+
+  // Instagram carousel (JPEG variants; needs ≥2 public cards).
+  const igUser = process.env.IG_USER_ID ?? '';
+  const igToken = process.env.IG_ACCESS_TOKEN ?? '';
+  if (igUser && igToken && cards.length >= 2) {
+    try {
+      const c = composeDailyDigest({ entries, siteUrl: SITE.url, channel: 'instagram', maxChars: 1000 });
+      await postInstagramCarousel(
+        { userId: igUser, accessToken: igToken },
+        { imageUrls: cards.map((card) => `${card.url}/jpeg`), caption: c.text },
+      );
+      posted++;
+      console.log('[social] digest: posted Instagram carousel');
+    } catch (e) {
+      console.warn('[social] digest: Instagram carousel failed —', e instanceof Error ? e.message : e);
+    }
+  }
+
+  // Threads carousel (PNG cards fine; links in text are clickable).
+  const thUser = process.env.THREADS_USER_ID ?? '';
+  const thToken = process.env.THREADS_ACCESS_TOKEN ?? '';
+  if (thUser && thToken && cards.length >= 2) {
+    try {
+      const c = composeDailyDigest({ entries, siteUrl: SITE.url, channel: 'threads', maxChars: 480 });
+      await postThreadsCarousel(
+        { userId: thUser, accessToken: thToken },
+        { imageUrls: cards.map((card) => card.url), text: c.text.replace(c.linkDisplay, c.boardUrl) },
+      );
+      posted++;
+      console.log('[social] digest: posted Threads carousel');
+    } catch (e) {
+      console.warn('[social] digest: Threads carousel failed —', e instanceof Error ? e.message : e);
+    }
+  }
+
   return posted;
 }
 
@@ -232,6 +443,33 @@ async function main(): Promise<number> {
     if (n > 0) {
       await writeMarker(`social:${post.sport}`, n);
       posted += n;
+    }
+  }
+
+  // Multi-sport digest bundle (carousels / album / thread / polls) — once per
+  // day at the fixed daily slot, only when 2+ sports have leans (a single-sport
+  // day is already covered by that sport's own post).
+  const digestDue =
+    FORCE || (isDailyTick(now) && !(await socialPostedToday('social:digest')));
+  if (posts.length >= 2 && (DRY_RUN || digestDue)) {
+    if (DRY_RUN) {
+      const entries: ContentPackEntry[] = posts.map((p) => ({
+        sport: p.sport,
+        sportName: p.sportName,
+        leans: p.leans,
+      }));
+      const c = composeDailyDigest({ entries, siteUrl: SITE.url, channel: 'bluesky', maxChars: 290 });
+      const poll = composeDailyPoll(entries);
+      console.log(
+        `\n[social] DRY RUN — digest (due now: ${digestDue})\n${c.text}\n→ ${c.boardUrl}` +
+          (poll ? `\npoll: ${poll.question}\n${poll.options.map((o) => `  - ${o}`).join('\n')}` : ''),
+      );
+    } else {
+      const n = await publishDigest(posts);
+      if (n > 0) {
+        await writeMarker('social:digest', n);
+        posted += n;
+      }
     }
   }
 
