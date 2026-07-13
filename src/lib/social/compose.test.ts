@@ -33,7 +33,7 @@ const THREE_LEANS: DailyLean[] = [
 ];
 
 describe('composeDailyPost', () => {
-  it('includes the leans, tier labels, tracked URL, and responsible-gaming line', () => {
+  it('includes the leans, flame tiers, tracked URL, and responsible-gaming line', () => {
     const c = composeDailyPost({
       sport: 'nba',
       sportName: 'NBA',
@@ -41,9 +41,9 @@ describe('composeDailyPost', () => {
       siteUrl: SITE_URL,
       channel: 'bluesky',
     });
-    expect(c.text).toContain('L. Dončić Over 32.5 PTS');
-    expect(c.text).toContain('J. Brunson Under 6.5 AST');
-    expect(c.text).toContain('Strong lean');
+    expect(c.text).toContain('hottest NBA props');
+    expect(c.text).toContain('L. Dončić Over 32.5 PTS 🔥🔥'); // Strong lean = 🔥🔥
+    expect(c.text).toContain('J. Brunson Under 6.5 AST 🔥'); // Lean = 🔥
     expect(c.text).toContain('1-800-GAMBLER');
     expect(c.text).toContain(c.linkDisplay);
     expect(c.boardUrl).toBe(
