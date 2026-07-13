@@ -143,7 +143,7 @@ async function publishSport(post: SportPost): Promise<number> {
       });
       await postToDiscordWebhook(discordUrl, {
         embed: {
-          title: `Today's top ${sportName} leans 🔥`,
+          title: `Today's hottest ${sportName} props 🔥`,
           description: c.text,
           url: c.boardUrl,
           ...(card ? { imageUrl: card } : {}),
@@ -293,7 +293,7 @@ async function publishDigest(posts: SportPost[]): Promise<number> {
         const png = await fetchCardPng(card.url);
         if (!png) continue;
         parent = await postToBluesky(creds, {
-          text: `${card.sportName} — today's top leans`,
+          text: `${card.sportName} — today's hottest props`,
           image: { data: png, alt: c.imageAlt, width: 1200, height: 630 },
           reply: { root, parent },
         });
@@ -313,7 +313,7 @@ async function publishDigest(posts: SportPost[]): Promise<number> {
       await postToDiscordWebhook(discordUrl, {
         content: c.text,
         embeds: cards.map((card) => ({
-          title: `${card.sportName} — today's top leans`,
+          title: `${card.sportName} — today's hottest props`,
           url: `${SITE.url}/${card.sport}/board?utm_source=discord&utm_medium=social&utm_campaign=daily-digest`,
           imageUrl: card.url,
           color: SPORTS[card.sport].accent,

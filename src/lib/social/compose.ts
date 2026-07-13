@@ -65,6 +65,15 @@ function leanLine(l: DailyLean): string {
   return `${l.firstName.charAt(0)}. ${l.lastName} ${capSide(l.side)} ${l.line} ${l.statShort}`;
 }
 
+/**
+ * FireFactor tier in the audience's visual language: 🔥🔥 = Strong lean,
+ * 🔥 = Lean. The card image still carries the labeled tier badges, and the
+ * site explains the tiers — captions speak flame.
+ */
+function tierFlames(tier: DailyLean['tier']): string {
+  return tier === 'Strong lean' ? '🔥🔥' : '🔥';
+}
+
 /** Tracked board URL for a channel (Umami splits sessions by utm_source). */
 export function trackedBoardUrl(siteUrl: string, sport: string, channel: SocialChannel): string {
   return `${siteUrl}/${sport}/board?utm_source=${channel}&utm_medium=social&utm_campaign=daily-leans`;
@@ -88,19 +97,24 @@ export function composeDailyPost(opts: {
 
   const boardUrl = trackedBoardUrl(siteUrl, sport, channel);
   const linkDisplay = `${siteUrl.replace(/^https?:\/\//, '')}/${sport}/board`;
-  const header = `🔥 Today's top ${sportName} leans — hit-rate reads from game logs, not picks:`;
+  // Audience-native, still descriptive: "hottest" = the FireFactor heat the
+  // numbers show, never a promise. The RG line and the site carry the fuller
+  // framing — captions don't need a defensive disclaimer.
+  const header = `Today's hottest ${sportName} props 🔥`;
   const footer = `Full board → ${linkDisplay}\n${RG_LINE}`;
 
   let leans = [...opts.leans];
   let text = '';
   for (;;) {
-    text = [header, ...leans.map((l) => `• ${leanLine(l)} (${l.tier})`), footer].join('\n');
+    text = [header, ...leans.map((l) => `• ${leanLine(l)} ${tierFlames(l.tier)}`), footer].join(
+      '\n',
+    );
     if ([...text].length <= maxChars || leans.length <= 1) break;
     leans = leans.slice(0, -1);
   }
 
   const imageAlt =
-    `Today's top ${sportName} leans on FantasyFire: ` +
+    `Today's hottest ${sportName} props on FantasyFire: ` +
     `${leans.map(leanLine).join('; ')}. ` +
     'Historical hit rates with sample-size confidence intervals — past performance, not betting advice.';
 
@@ -151,10 +165,12 @@ export function composeDailyDigest(opts: {
   let entries = [...withLeans];
   let text = '';
   for (;;) {
-    const header = `🔥 Today's slate — top leans across ${entries.length} leagues (hit-rate reads, not picks):`;
+    const header = `Today's slate — the hottest props across ${entries.length} leagues 🔥`;
     text = [
       header,
-      ...entries.map((e) => `• ${e.sportName}: ${leanLine(e.leans[0])} (${e.leans[0].tier})`),
+      ...entries.map(
+        (e) => `• ${e.sportName}: ${leanLine(e.leans[0])} ${tierFlames(e.leans[0].tier)}`,
+      ),
       footer,
     ].join('\n');
     if ([...text].length <= maxChars || entries.length <= 2) break;
@@ -162,7 +178,7 @@ export function composeDailyDigest(opts: {
   }
 
   const imageAlt =
-    `Today's top leans across ${entries.length} leagues on FantasyFire: ` +
+    `Today's hottest props across ${entries.length} leagues on FantasyFire: ` +
     `${entries.map((e) => `${e.sportName} — ${leanLine(e.leans[0])}`).join('; ')}. ` +
     'Historical hit rates with sample-size confidence intervals — past performance, not betting advice.';
 
@@ -194,7 +210,7 @@ export function composeDailyPoll(entries: ContentPackEntry[], maxOptions = 4): P
     );
   });
   const poll: PollContent = {
-    question: "Which of today's top leans hits? 🔥 (hit-rate reads — research, not advice)",
+    question: 'Which prop hits tonight? 🔥',
     options,
   };
   assertDescriptive(poll.question);
@@ -237,8 +253,8 @@ export function composeContentPack(opts: {
         `Social voice:\n\`\`\`\n${social.text}\n\`\`\``,
         `Community voice (answer a real "is this number good?" — link, don't pitch):\n` +
           `\`\`\`\n${top.firstName} ${top.lastName} ${capSide(top.side).toLowerCase()} ${top.line} ` +
-          `${top.statShort} grades "${top.tier}" today — full game-by-game log with ` +
-          `confidence intervals (free, no login): ${playerUrl}\n\`\`\``,
+          `${top.statShort} is one of the hottest props on our board today — full game-by-game ` +
+          `log with confidence intervals (free, no login): ${playerUrl}\n\`\`\``,
         `Embed (offer it to bloggers/roundups):\n` +
           `\`\`\`\n<iframe src="${siteUrl}/embed/${e.sport}/${top.slug}" width="420" height="280" frameborder="0"></iframe>\n\`\`\``,
       ].join('\n'),
