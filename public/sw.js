@@ -80,6 +80,9 @@ self.addEventListener('push', (event) => {
     tag: data.tag || 'ff-digest',
     data: { url: data.url || '/' },
   };
+  // Rich "big picture" card image (supported on Android/desktop Chrome;
+  // platforms that can't render it just show the plain notification).
+  if (data.image) options.image = data.image;
   event.waitUntil(self.registration.showNotification(title, options));
 });
 

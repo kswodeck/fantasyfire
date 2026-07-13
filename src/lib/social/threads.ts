@@ -40,13 +40,17 @@ export async function postToThreads(
     access_token: target.accessToken,
   });
 
-  // Meta recommends allowing the container a moment to process before publish.
+  return publishContainer(target, container.id);
+}
+
+/** Publish a container with a brief retry while it finishes processing. */
+async function publishContainer(target: ThreadsTarget, creationId: string): Promise<string> {
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt > 0) await sleep(5_000);
     try {
       const published = await graphPost(`${target.userId}/threads_publish`, {
-        creation_id: container.id,
+        creation_id: creationId,
         access_token: target.accessToken,
       });
       return published.id;
@@ -55,4 +59,33 @@ export async function postToThreads(
     }
   }
   throw lastError instanceof Error ? lastError : new Error('threads publish failed');
+}
+
+/**
+ * Create + publish a carousel post of 2-20 images (the multi-sport digest):
+ * one child container per image, then a CAROUSEL parent with the text.
+ */
+export async function postThreadsCarousel(
+  target: ThreadsTarget,
+  post: { imageUrls: string[]; text: string },
+): Promise<string> {
+  const urls = post.imageUrls.slice(0, 20);
+  if (urls.length < 2) throw new Error('threads carousel needs 2-20 images');
+  const children: string[] = [];
+  for (const imageUrl of urls) {
+    const child = await graphPost(`${target.userId}/threads`, {
+      media_type: 'IMAGE',
+      image_url: imageUrl,
+      is_carousel_item: 'true',
+      access_token: target.accessToken,
+    });
+    children.push(child.id);
+  }
+  const parent = await graphPost(`${target.userId}/threads`, {
+    media_type: 'CAROUSEL',
+    children: children.join(','),
+    text: post.text,
+    access_token: target.accessToken,
+  });
+  return publishContainer(target, parent.id);
 }

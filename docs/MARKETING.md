@@ -110,6 +110,14 @@ Once per day, **per in-season sport** (a sport qualifies if it has ≥1 game tod
 Weekly bonus post (Sunday): "This week's longest active streaks" from the
 streaks board — same pipeline, different query.
 
+**The daily multi-format digest** (fixed daily slot, when ≥2 sports have
+leans): an Instagram **carousel** + per-sport **story**, a Threads
+**carousel**, a Telegram **album + poll**, a Discord **multi-embed message +
+native poll**, and a Bluesky **thread** (digest root, one card per reply).
+The push digest attaches the lead sport's card as a rich notification image.
+Polls are engagement framed as a question to the audience ("which lean
+hits?"), never a prediction from us — same banned-token enforcement.
+
 ### 3.2 How it runs
 
 ```

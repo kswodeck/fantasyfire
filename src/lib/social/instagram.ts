@@ -30,6 +30,24 @@ async function graphPost(path: string, params: Record<string, string>): Promise<
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Publish a container with a brief retry while it finishes processing. */
+async function publishContainer(target: InstagramTarget, creationId: string): Promise<string> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await sleep(5_000);
+    try {
+      const published = await graphPost(`${target.userId}/media_publish`, {
+        creation_id: creationId,
+        access_token: target.accessToken,
+      });
+      return published.id;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('instagram publish failed');
+}
+
 /**
  * Create + publish a single image; returns the published media id.
  * kind 'story' publishes to Stories (vertical 1080x1920 image, no caption —
@@ -49,20 +67,33 @@ export async function postToInstagram(
     access_token: target.accessToken,
   });
 
-  // Images are usually ready immediately; retry publish briefly in case the
-  // container is still processing.
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt > 0) await sleep(5_000);
-    try {
-      const published = await graphPost(`${target.userId}/media_publish`, {
-        creation_id: container.id,
-        access_token: target.accessToken,
-      });
-      return published.id;
-    } catch (e) {
-      lastError = e;
-    }
+  return publishContainer(target, container.id);
+}
+
+/**
+ * Create + publish a carousel post of 2-10 images (the multi-sport digest):
+ * one child container per image, then a CAROUSEL parent, then publish.
+ */
+export async function postInstagramCarousel(
+  target: InstagramTarget,
+  post: { imageUrls: string[]; caption: string },
+): Promise<string> {
+  const urls = post.imageUrls.slice(0, 10);
+  if (urls.length < 2) throw new Error('instagram carousel needs 2-10 images');
+  const children: string[] = [];
+  for (const imageUrl of urls) {
+    const child = await graphPost(`${target.userId}/media`, {
+      image_url: imageUrl,
+      is_carousel_item: 'true',
+      access_token: target.accessToken,
+    });
+    children.push(child.id);
   }
-  throw lastError instanceof Error ? lastError : new Error('instagram publish failed');
+  const parent = await graphPost(`${target.userId}/media`, {
+    media_type: 'CAROUSEL',
+    children: children.join(','),
+    caption: post.caption,
+    access_token: target.accessToken,
+  });
+  return publishContainer(target, parent.id);
 }

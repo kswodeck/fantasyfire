@@ -115,6 +115,93 @@ export interface ContentPackEntry {
   leans: DailyLean[];
 }
 
+export interface DailyDigestContent {
+  /** Digest text with a bare display link (no protocol). */
+  text: string;
+  /** The display-link substring inside `text`. */
+  linkDisplay: string;
+  /** Full tracked all-sports board URL. */
+  boardUrl: string;
+  /** Alt text for attached card images. */
+  imageAlt: string;
+}
+
+/**
+ * The multi-sport "today's slate" digest caption — one line per sport (its top
+ * lean), linking the all-sports board. Used by the daily-slot bundle formats
+ * (carousels, albums, threads). Needs ≥2 sports; trims trailing sports to fit
+ * `maxChars` but never below 2.
+ */
+export function composeDailyDigest(opts: {
+  entries: ContentPackEntry[];
+  siteUrl: string;
+  channel: SocialChannel;
+  maxChars?: number;
+}): DailyDigestContent {
+  const { siteUrl, channel, maxChars = 800 } = opts;
+  const withLeans = opts.entries.filter((e) => e.leans.length > 0);
+  if (withLeans.length < 2) {
+    throw new Error('composeDailyDigest needs at least two sports with leans');
+  }
+
+  const boardUrl = `${siteUrl}/board?utm_source=${channel}&utm_medium=social&utm_campaign=daily-digest`;
+  const linkDisplay = `${siteUrl.replace(/^https?:\/\//, '')}/board`;
+  const footer = `All boards → ${linkDisplay}\n${RG_LINE}`;
+
+  let entries = [...withLeans];
+  let text = '';
+  for (;;) {
+    const header = `🔥 Today's slate — top leans across ${entries.length} leagues (hit-rate reads, not picks):`;
+    text = [
+      header,
+      ...entries.map((e) => `• ${e.sportName}: ${leanLine(e.leans[0])} (${e.leans[0].tier})`),
+      footer,
+    ].join('\n');
+    if ([...text].length <= maxChars || entries.length <= 2) break;
+    entries = entries.slice(0, -1);
+  }
+
+  const imageAlt =
+    `Today's top leans across ${entries.length} leagues on FantasyFire: ` +
+    `${entries.map((e) => `${e.sportName} — ${leanLine(e.leans[0])}`).join('; ')}. ` +
+    'Historical hit rates with sample-size confidence intervals — past performance, not betting advice.';
+
+  assertDescriptive(text);
+  assertDescriptive(imageAlt);
+  return { text, linkDisplay, boardUrl, imageAlt };
+}
+
+export interface PollContent {
+  question: string;
+  /** 2-4 options, each ≤55 chars (Discord's poll-answer limit, the tightest). */
+  options: string[];
+}
+
+/**
+ * The daily engagement poll — one option per sport (its top lean). Null when
+ * fewer than two sports have leans (a one-option poll isn't a poll). Framed as
+ * a question to the audience, never a prediction from us.
+ */
+export function composeDailyPoll(entries: ContentPackEntry[], maxOptions = 4): PollContent | null {
+  const withLeans = entries.filter((e) => e.leans.length > 0);
+  if (withLeans.length < 2) return null;
+  const options = withLeans.slice(0, maxOptions).map((e) => {
+    const l = e.leans[0];
+    const side = l.side === 'over' ? 'Over' : 'Under';
+    return `${e.sportName} · ${l.firstName.charAt(0)}. ${l.lastName} ${side} ${l.line} ${l.statShort}`.slice(
+      0,
+      55,
+    );
+  });
+  const poll: PollContent = {
+    question: "Which of today's top leans hits? 🔥 (hit-rate reads — research, not advice)",
+    options,
+  };
+  assertDescriptive(poll.question);
+  for (const o of poll.options) assertDescriptive(o);
+  return poll;
+}
+
 /**
  * The private owner briefing (docs/MARKETING.md §5.1): ready-to-paste snippets in
  * a community voice and a social voice, per in-season sport, posted to an

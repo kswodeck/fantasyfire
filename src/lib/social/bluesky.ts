@@ -38,12 +38,20 @@ export function buildLinkFacet(text: string, display: string, uri: string): Link
   };
 }
 
+/** A created record's address — pass back as reply refs to build threads. */
+export interface BlueskyRef {
+  uri: string;
+  cid: string;
+}
+
 export interface BlueskyPostInput {
   text: string;
   /** Display substring of `text` to hyperlink (with `linkTarget`). */
   linkDisplay?: string;
   linkTarget?: string;
   image?: { data: ArrayBuffer; alt: string; width?: number; height?: number };
+  /** Thread this post under root/parent (both from earlier postToBluesky returns). */
+  reply?: { root: BlueskyRef; parent: BlueskyRef };
 }
 
 async function xrpc<T>(
@@ -60,11 +68,11 @@ async function xrpc<T>(
   return (await res.json()) as T;
 }
 
-/** Create the post; returns the record URI. Throws on any failure (caller catches). */
+/** Create the post; returns its ref (for threading). Throws on any failure (caller catches). */
 export async function postToBluesky(
   creds: BlueskyCredentials,
   post: BlueskyPostInput,
-): Promise<string> {
+): Promise<BlueskyRef> {
   const service = creds.service ?? DEFAULT_SERVICE;
 
   const session = await xrpc<{ accessJwt: string; did: string }>(
@@ -102,7 +110,7 @@ export async function postToBluesky(
       ? buildLinkFacet(post.text, post.linkDisplay, post.linkTarget)
       : null;
 
-  const created = await xrpc<{ uri: string }>(
+  const created = await xrpc<{ uri: string; cid: string }>(
     service,
     'com.atproto.repo.createRecord',
     JSON.stringify({
@@ -114,9 +122,10 @@ export async function postToBluesky(
         createdAt: new Date().toISOString(),
         ...(facet ? { facets: [facet] } : {}),
         ...(embed ? { embed } : {}),
+        ...(post.reply ? { reply: post.reply } : {}),
       },
     }),
     { ...auth, 'content-type': 'application/json' },
   );
-  return created.uri;
+  return { uri: created.uri, cid: created.cid };
 }

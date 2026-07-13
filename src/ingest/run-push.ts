@@ -13,6 +13,7 @@ import webpush from 'web-push';
 import { db } from '../lib/db';
 import { recordIngestRun } from './ingestRun';
 import { getBoard } from '../lib/server/players';
+import { SITE, absoluteUrl } from '../lib/site';
 import { SPORT_LIST } from '../lib/sports';
 
 const VAPID_PUBLIC = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';
@@ -85,11 +86,18 @@ async function main(): Promise<number> {
     const body = picks
       .map((p) => `${p.firstName.charAt(0)}. ${p.lastName} ${p.side} ${p.line} ${p.statShort}`)
       .join('  ·  ');
+    // Rich notification image: the lead sport's daily card (public URL only —
+    // the browser fetches it, so localhost would render a broken image).
+    const cardImage =
+      SITE.url && !new URL(SITE.url).host.startsWith('localhost')
+        ? absoluteUrl(`/api/og/daily/${picks[0].sport}`)
+        : undefined;
     const payload = JSON.stringify({
       title: "Today's hottest reads 🔥",
       body,
       url: `/${picks[0].sport}`,
       tag: 'ff-daily',
+      ...(cardImage ? { image: cardImage } : {}),
     });
 
     try {
