@@ -86,14 +86,12 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
           </div>
         </div>
 
-        <div style={{ display: 'flex', fontSize: 44, fontWeight: 800, marginTop: 28 }}>
-          {leans.length > 0 ? "Today's Hottest Props" : 'No slate today'}
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 22, flexGrow: 1 }}>
+        {/* No headline — the post caption already says "Today's hottest props";
+            duplicating it here crowded 5 rows into overlap. The rows ARE the card. */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 28, flexGrow: 1 }}>
           {leans.length === 0 ? (
             <div style={{ display: 'flex', fontSize: 30, color: '#a8a29e' }}>
-              Check back on the next {cfg.name} slate — boards recompute nightly.
+              No slate today — check back on the next {cfg.name} slate.
             </div>
           ) : (
             leans.map((l, i) => {
@@ -107,7 +105,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
                     justifyContent: 'space-between',
                     background: 'rgba(255,255,255,0.06)',
                     borderRadius: 14,
-                    padding: '14px 24px',
+                    padding: '18px 26px',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>

@@ -3,7 +3,8 @@
 // (src/ingest/run-social.ts), the card image route (/api/og/daily/[sport]),
 // and the /api/v1/social/due pre-check can never disagree.
 import { db } from '@/lib/db';
-import { getBoard, getTonightSlate } from '@/lib/server/players';
+import { getBoard, getSourcedBoards, getTonightSlate } from '@/lib/server/players';
+import { getAvailableSources } from '@/lib/server/providedLines';
 import { isDueNow, pickRelevantStart } from '@/lib/social/schedule';
 import type { Sport } from '@/lib/sports';
 import type { BoardRow } from '@/lib/types';
@@ -22,6 +23,28 @@ export interface DailyLean {
 }
 
 const PUBLISHABLE_TIERS: ReadonlySet<string> = new Set(['Strong lean', 'Lean']);
+
+/**
+ * The board rows the social pipeline publishes from — the SAME preference the
+ * site's board page uses: a real book's lines when the provided-lines feature
+ * is on and a book has today's slate (first available source, PrizePicks-
+ * ordered; override with SOCIAL_LINES_SOURCE), else the computed median board.
+ * Real book lines are the familiar *.5 numbers; the computed fallback can land
+ * on whole numbers.
+ */
+async function getSocialBoardRows(sport: Sport): Promise<BoardRow[]> {
+  const sources = await getAvailableSources(sport).catch(() => [] as string[]);
+  const preferred = process.env.SOCIAL_LINES_SOURCE?.trim().toLowerCase();
+  const source = preferred && sources.includes(preferred) ? preferred : sources[0];
+  if (source) {
+    const boards = await getSourcedBoards(sport, [source], { limit: 40 }).catch(
+      () => ({}) as Record<string, BoardRow[]>,
+    );
+    const rows = boards[source] ?? [];
+    if (rows.length > 0) return rows;
+  }
+  return getBoard(sport, { limit: 40 }).catch(() => [] as BoardRow[]);
+}
 
 /**
  * Today's strongest publishable leans for a sport, or [] when the sport has no
@@ -43,7 +66,7 @@ export async function getDailyLeans(sport: Sport, limit = 5): Promise<DailyLean[
       .filter((a): a is string => !!a),
   );
 
-  const rows = await getBoard(sport, { limit: 40 }).catch(() => [] as BoardRow[]);
+  const rows = await getSocialBoardRows(sport);
   const seen = new Set<string>();
   const leans: DailyLean[] = [];
   for (const r of rows) {
