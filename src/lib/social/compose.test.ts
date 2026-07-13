@@ -51,7 +51,7 @@ describe('composeDailyPost', () => {
   });
 
   it('never emits banned predictive/tout tokens', () => {
-    for (const channel of ['bluesky', 'discord', 'telegram', 'x'] as const) {
+    for (const channel of ['bluesky', 'discord', 'telegram', 'instagram', 'threads', 'x'] as const) {
       const c = composeDailyPost({
         sport: 'nba',
         sportName: 'NBA',

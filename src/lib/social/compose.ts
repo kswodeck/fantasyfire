@@ -35,7 +35,14 @@ export function assertDescriptive(text: string): void {
   }
 }
 
-export type SocialChannel = 'bluesky' | 'discord' | 'telegram' | 'community' | 'x';
+export type SocialChannel =
+  | 'bluesky'
+  | 'discord'
+  | 'telegram'
+  | 'instagram'
+  | 'threads'
+  | 'community'
+  | 'x';
 
 export interface DailyPostContent {
   /** Post text. Contains `linkDisplay` (a bare host/path) rather than the full URL. */

@@ -37,7 +37,9 @@ import {
 } from '../lib/social/compose';
 import { postToBluesky } from '../lib/social/bluesky';
 import { postToDiscordWebhook } from '../lib/social/discord';
+import { postToInstagram } from '../lib/social/instagram';
 import { postToTelegram } from '../lib/social/telegram';
+import { postToThreads } from '../lib/social/threads';
 import { isDailyTick } from '../lib/social/schedule';
 import { SITE, absoluteUrl } from '../lib/site';
 import { SPORT_LIST, SPORTS, type Sport } from '../lib/sports';
@@ -176,6 +178,61 @@ async function publishSport(post: SportPost): Promise<number> {
       console.log(`[social] ${sport}: posted to Telegram`);
     } catch (e) {
       console.warn(`[social] ${sport}: Telegram failed —`, e instanceof Error ? e.message : e);
+    }
+  }
+
+  // Instagram — image required (JPEG variant of the card), caption links are
+  // not clickable so the caption points at the bio link instead of a URL swap.
+  const igUser = process.env.IG_USER_ID ?? '';
+  const igToken = process.env.IG_ACCESS_TOKEN ?? '';
+  if (igUser && igToken) {
+    if (!card) {
+      console.log(`[social] ${sport}: Instagram skipped — needs a public card URL.`);
+    } else {
+      try {
+        const c = composeDailyPost({
+          sport,
+          sportName,
+          leans: post.leans.slice(0, CAPTION_LEANS),
+          siteUrl: SITE.url,
+          channel: 'instagram',
+          maxChars: 1000,
+        });
+        await postToInstagram(
+          { userId: igUser, accessToken: igToken },
+          { imageUrl: `${card}/jpeg`, caption: c.text },
+        );
+        posted++;
+        console.log(`[social] ${sport}: posted to Instagram`);
+      } catch (e) {
+        console.warn(`[social] ${sport}: Instagram failed —`, e instanceof Error ? e.message : e);
+      }
+    }
+  }
+
+  // Threads — image when available, text-only otherwise; links in Threads
+  // text are clickable, so swap in the tracked URL like Telegram.
+  const thUser = process.env.THREADS_USER_ID ?? '';
+  const thToken = process.env.THREADS_ACCESS_TOKEN ?? '';
+  if (thUser && thToken) {
+    try {
+      const c = composeDailyPost({
+        sport,
+        sportName,
+        leans: post.leans.slice(0, CAPTION_LEANS),
+        siteUrl: SITE.url,
+        channel: 'threads',
+        maxChars: 480,
+      });
+      const text = c.text.replace(c.linkDisplay, c.boardUrl);
+      await postToThreads(
+        { userId: thUser, accessToken: thToken },
+        { text, ...(card ? { imageUrl: card } : {}) },
+      );
+      posted++;
+      console.log(`[social] ${sport}: posted to Threads`);
+    } catch (e) {
+      console.warn(`[social] ${sport}: Threads failed —`, e instanceof Error ? e.message : e);
     }
   }
 

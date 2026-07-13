@@ -26,6 +26,9 @@ name: Game-aware social publish + push digest
 #   DISCORD_CONTENT_PACK_WEBHOOK_URL  — PRIVATE owner-only channel webhook
 #   TELEGRAM_BOT_TOKEN                — from @BotFather
 #   TELEGRAM_CHAT_ID                  — channel id or @handle
+#   IG_USER_ID / IG_ACCESS_TOKEN      — Instagram professional account (Meta dev app,
+#                                       own-account tester — no App Review; 60-day token)
+#   THREADS_USER_ID / THREADS_ACCESS_TOKEN — Threads profile (same pattern)
 #   VAPID_PRIVATE_KEY                 — web push (with the public-key variable)
 # Variables:
 #   SOCIAL_PUBLISH_ENABLED            — "true" to arm the poster
@@ -67,18 +70,21 @@ jobs:
         id: due
         env:
           SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL || 'https://fantasyfire.app' }}
+        # -L follows the host-canonicalization redirect (the apex 308s on
+        # Vercel — without it curl returns the literal body "Redirecting...").
+        # EVERY failure mode here fails open: bad status, empty body, or a
+        # body jq can't parse all end in due=true.
         run: |
           set +e
-          resp=$(curl -fsS --max-time 20 "$SITE_URL/api/v1/social/due")
+          resp=$(curl -fsSL --max-time 20 "$SITE_URL/api/v1/social/due")
           status=$?
+          anyDue=$(echo "$resp" | jq -r '.anyDue' 2>/dev/null)
           set -e
-          if [ $status -ne 0 ] || [ -z "$resp" ]; then
-            echo "due check unreachable — failing open (the publish job has its own guards)."
-            echo "due=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
           echo "$resp"
-          anyDue=$(echo "$resp" | jq -r '.anyDue // "true"')
+          if [ $status -ne 0 ] || { [ "$anyDue" != "true" ] && [ "$anyDue" != "false" ]; }; then
+            echo "due check unreachable/unparseable — failing open (the publish job has its own guards)."
+            anyDue=true
+          fi
           echo "due=$anyDue" >> "$GITHUB_OUTPUT"
 
   publish:
@@ -102,6 +108,10 @@ jobs:
       DISCORD_CONTENT_PACK_WEBHOOK_URL: ${{ secrets.DISCORD_CONTENT_PACK_WEBHOOK_URL || '' }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || '' }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID || '' }}
+      IG_USER_ID: ${{ secrets.IG_USER_ID || '' }}
+      IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN || '' }}
+      THREADS_USER_ID: ${{ secrets.THREADS_USER_ID || '' }}
+      THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN || '' }}
       NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ vars.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '' }}
       VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY || '' }}
     steps:

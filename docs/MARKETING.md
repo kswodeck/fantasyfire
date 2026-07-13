@@ -70,10 +70,11 @@ Researched July 2026. This determines everything below.
 | **Web Push** (owned) | ✅ Built into the product | ✅ `run-push.ts` exists; needs VAPID keys + cron | **Tier 1 — the retention channel** |
 | **RSS/Atom** (owned) | ✅ | ✅ Static routes off existing board queries | **Tier 1 — feeds power syndication + AI/reader discovery** |
 | **X / Twitter** | ❌ Free API tier **discontinued Feb 2026**; pay-per-use ($0.015/post, $0.20 with a link) | Manual posting is free | **Tier 2 — manual.** Keep the handle, post the content-pack text by hand where it matters (game-day moments). Revisit paid API only if X drives measurable traffic |
-| **Threads** | ✅ API free | ⚠️ Requires Meta app creation + App Review (weeks); 250 posts/day cap after | **Tier 2 — later.** Start the app review only after Tier 1 is live and posting |
+| **Threads** | ✅ API free | ✅ Own-account posting needs NO App Review (dev-mode app, self as tester); 250 posts/day cap | **Tier 1 — automated** (shipped; 60-day token refresh is the only upkeep) |
+| **Instagram** | ✅ API free | ✅ Same no-review own-account path; ~50 posts/day cap; JPEG-only public image URL; captions can't carry clickable links | **Tier 1 — automated** (shipped; brand reach, not click traffic — link in bio) |
 | **Reddit** | ✅ | ❌ **Do not automate.** Link-dropping bots get accounts and the domain banned | **Manual, high-value.** 1 genuinely useful answer/week from the content pack. Own subreddit only when there's a community to fill it |
 | **Mastodon** | ✅ Free API | ✅ Fully | Tier 3 — tiny US sports audience; add only because it's ~30 lines if ever desired |
-| **Instagram / TikTok / YouTube** | ✅ | ⚠️ APIs exist but content production (video/reels) is the real cost | **Skip for now** — revisit if the daily card images prove shareable |
+| **TikTok / YouTube** | ✅ | ⚠️ APIs exist but content production (video/reels) is the real cost | **Skip for now** — revisit if the daily card images prove shareable |
 | **Email digest** | — | — | **Rejected** (GROWTH-PLAN "explicitly NOT doing") — push covers it without the ESP/CAN-SPAM surface |
 
 Sources: [X API pricing 2026](https://www.socialcrawl.dev/blog/x-twitter-api-2026)
