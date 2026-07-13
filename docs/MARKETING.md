@@ -134,12 +134,13 @@ ingest.yml (nightly, exists) ──▶ new final job: social-publish
 
 Implementation notes:
 
-- **Timing is game-aware.** The workflow ticks hourly through the game-day
-  window (13:00–02:00 UTC) behind a ~15-second due-check
-  (`/api/v1/social/due`), and each sport posts at the first tick inside its
-  pre-game window — ~an hour before **its** first game today, which moves day
-  to day. Sports with no feed start time, the content pack, and the push
-  digest use the fixed daily slot (15:00 UTC ≈ 11am ET).
+- **Timing is game-aware.** The workflow ticks hourly through the posting
+  window (**noon–10pm ET**, DST-aware — never overnight) behind a ~15-second
+  due-check (`/api/v1/social/due`), and each sport posts at the first tick
+  where **its** first game is within 2 hours — which moves day to day. Slates
+  whose first game tips before noon ET catch up at the window-open tick.
+  Sports with no feed start time, the content pack, and the push digest use
+  the window-open slot (noon ET).
 - **Idempotency.** A tiny `SocialPost` table (channel, sport, date, postedAt)
   — or simpler, a per-day guard keyed on (channel, sport, date) — so a re-run
   or a retry never double-posts.

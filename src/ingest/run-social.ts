@@ -6,7 +6,7 @@
 // ~an hour before ITS first game (which moves day to day) — to Bluesky /
 // Discord / Telegram with the branded card image. The private owner-only
 // "content pack" briefing goes once per day at the fixed daily slot
-// (DAILY_TICK_UTC_HOUR), which is also the fallback for sports whose feed has
+// (noon ET, the window open), which is also the fallback for sports whose feed has
 // no start times.
 //
 // SAFE BY DEFAULT, three independent gates:
