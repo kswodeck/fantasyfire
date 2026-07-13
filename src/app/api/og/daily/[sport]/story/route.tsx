@@ -2,8 +2,10 @@
 // 1080x1920 JPEG for Instagram Stories (the API's STORIES containers, like
 // feed images, only accept JPEG URLs). Same selection (getDailyLeans) and
 // visual language as the landscape card — a portrait layout, not a crop.
+// JPEG conversion uses jimp (pure JS) — sharp's native binaries fail to load
+// in the Vercel serverless bundle under pnpm.
 import { ImageResponse } from 'next/og';
-import sharp from 'sharp';
+import { Jimp, JimpMime } from 'jimp';
 import { getDailyLeans, type DailyLean } from '@/lib/server/social';
 import { SITE } from '@/lib/site';
 import { isSport, SPORTS } from '@/lib/sports';
@@ -169,10 +171,8 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
     { ...SIZE },
   );
 
-  const jpeg = await sharp(Buffer.from(await png.arrayBuffer()))
-    .flatten({ background: '#0c0a09' })
-    .jpeg({ quality: 90 })
-    .toBuffer();
+  const image = await Jimp.fromBuffer(await png.arrayBuffer());
+  const jpeg = await image.getBuffer(JimpMime.jpeg, { quality: 90 });
   return new Response(new Uint8Array(jpeg), {
     headers: { 'content-type': 'image/jpeg' },
   });
