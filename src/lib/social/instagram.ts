@@ -30,14 +30,22 @@ async function graphPost(path: string, params: Record<string, string>): Promise<
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** Create + publish a single-image post; returns the published media id. */
+/**
+ * Create + publish a single image; returns the published media id.
+ * kind 'story' publishes to Stories (vertical 1080x1920 image, no caption —
+ * the API ignores captions on STORIES containers); default is a feed post.
+ */
 export async function postToInstagram(
   target: InstagramTarget,
-  post: { imageUrl: string; caption: string },
+  post: { imageUrl: string; caption?: string; kind?: 'feed' | 'story' },
 ): Promise<string> {
   const container = await graphPost(`${target.userId}/media`, {
     image_url: post.imageUrl,
-    caption: post.caption,
+    ...(post.kind === 'story'
+      ? { media_type: 'STORIES' }
+      : post.caption
+        ? { caption: post.caption }
+        : {}),
     access_token: target.accessToken,
   });
 

@@ -207,6 +207,21 @@ async function publishSport(post: SportPost): Promise<number> {
       } catch (e) {
         console.warn(`[social] ${sport}: Instagram failed —`, e instanceof Error ? e.message : e);
       }
+      // Story alongside the feed post — vertical card, no caption (the API
+      // ignores captions on stories). Independent best-effort.
+      try {
+        await postToInstagram(
+          { userId: igUser, accessToken: igToken },
+          { imageUrl: `${card}/story`, kind: 'story' },
+        );
+        posted++;
+        console.log(`[social] ${sport}: posted Instagram story`);
+      } catch (e) {
+        console.warn(
+          `[social] ${sport}: Instagram story failed —`,
+          e instanceof Error ? e.message : e,
+        );
+      }
     }
   }
 
