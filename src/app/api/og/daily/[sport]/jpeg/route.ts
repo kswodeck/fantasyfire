@@ -1,8 +1,10 @@
 // GET /api/og/daily/{sport}/jpeg — the daily-leans card as JPEG. Instagram's
 // Content Publishing API only accepts JPEG image URLs (it rejects the PNG that
 // next/og produces), so this wraps the sibling PNG route and converts. Same
-// image, same selection — one render path.
-import sharp from 'sharp';
+// image, same selection — one render path. Conversion uses jimp (pure JS):
+// sharp's native binaries fail to load in the Vercel serverless bundle under
+// pnpm (500s in production), and a ~200KB card doesn't need native speed.
+import { Jimp, JimpMime } from 'jimp';
 import { isSport } from '@/lib/sports';
 import { GET as renderPngCard } from '../route';
 
@@ -15,11 +17,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ sport: stri
   const pngResponse = await renderPngCard(request, ctx);
   if (!pngResponse.ok) return pngResponse;
 
-  const png = Buffer.from(await pngResponse.arrayBuffer());
-  const jpeg = await sharp(png)
-    .flatten({ background: '#0c0a09' })
-    .jpeg({ quality: 90 })
-    .toBuffer();
+  const image = await Jimp.fromBuffer(await pngResponse.arrayBuffer());
+  const jpeg = await image.getBuffer(JimpMime.jpeg, { quality: 90 });
   return new Response(new Uint8Array(jpeg), {
     headers: { 'content-type': 'image/jpeg' },
   });

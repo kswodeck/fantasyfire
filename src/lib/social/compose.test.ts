@@ -42,8 +42,8 @@ describe('composeDailyPost', () => {
       channel: 'bluesky',
     });
     expect(c.text).toContain('hottest NBA props');
-    expect(c.text).toContain('L. Dončić Over 32.5 PTS 🔥🔥'); // Strong lean = 🔥🔥
-    expect(c.text).toContain('J. Brunson Under 6.5 AST 🔥'); // Lean = 🔥
+    expect(c.text).toContain('L. Dončić Over 32.5 PTS 🔥🔥'); // over + Strong lean = Blazing
+    expect(c.text).toContain('J. Brunson Under 6.5 AST ❄️'); // under + Lean = Cold (cool side)
     expect(c.text).toContain('1-800-GAMBLER');
     expect(c.text).toContain(c.linkDisplay);
     expect(c.boardUrl).toBe(

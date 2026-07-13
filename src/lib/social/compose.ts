@@ -66,12 +66,13 @@ function leanLine(l: DailyLean): string {
 }
 
 /**
- * FireFactor tier in the audience's visual language: 🔥🔥 = Strong lean,
- * 🔥 = Lean. The card image still carries the labeled tier badges, and the
- * site explains the tiers — captions speak flame.
+ * FireFactor tier in the site's heat-read iconography (src/lib/tierStyle.ts):
+ * overs run warm (🔥🔥 = Blazing, 🔥 = Hot), unders run cool (❄️❄️ = Frozen,
+ * ❄️ = Cold). The card badges carry the matching heat words.
  */
-function tierFlames(tier: DailyLean['tier']): string {
-  return tier === 'Strong lean' ? '🔥🔥' : '🔥';
+function tierFlames(l: DailyLean): string {
+  const glyph = l.side === 'over' ? '🔥' : '❄️';
+  return l.tier === 'Strong lean' ? glyph + glyph : glyph;
 }
 
 /** Tracked board URL for a channel (Umami splits sessions by utm_source). */
@@ -106,7 +107,7 @@ export function composeDailyPost(opts: {
   let leans = [...opts.leans];
   let text = '';
   for (;;) {
-    text = [header, ...leans.map((l) => `• ${leanLine(l)} ${tierFlames(l.tier)}`), footer].join(
+    text = [header, ...leans.map((l) => `• ${leanLine(l)} ${tierFlames(l)}`), footer].join(
       '\n',
     );
     if ([...text].length <= maxChars || leans.length <= 1) break;
@@ -169,7 +170,7 @@ export function composeDailyDigest(opts: {
     text = [
       header,
       ...entries.map(
-        (e) => `• ${e.sportName}: ${leanLine(e.leans[0])} ${tierFlames(e.leans[0].tier)}`,
+        (e) => `• ${e.sportName}: ${leanLine(e.leans[0])} ${tierFlames(e.leans[0])}`,
       ),
       footer,
     ].join('\n');
@@ -232,7 +233,7 @@ export function composeContentPack(opts: {
   const { entries, siteUrl, dateIso } = opts;
   const blocks: string[] = [
     `**FantasyFire content pack — ${dateIso}**`,
-    '_For manual posting (X, Reddit answers, community Discords). Paste, adapt, keep it descriptive — stats, never picks._',
+    '_For manual posting (X, Reddit answers, community Discords). Paste, adapt, let the numbers do the talking._',
   ];
 
   for (const e of entries) {
