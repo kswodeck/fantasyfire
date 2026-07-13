@@ -51,7 +51,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const label = STAT_DEFS[stat].label;
   const season = currentSeason(sport);
   const title = `${cfg.name} ${label} Leaders ${season} — Per Game`;
-  const description = `${cfg.name} season per-game leaders in ${label.toLowerCase()} (${season}), computed from public box scores — research, not picks.`;
+  const description = `${cfg.name} season per-game leaders in ${label.toLowerCase()} (${season}), computed from public box scores, updated nightly.`;
   return {
     title,
     description,

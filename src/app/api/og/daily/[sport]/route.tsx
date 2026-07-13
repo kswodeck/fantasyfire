@@ -1,4 +1,4 @@
-// GET /api/og/daily/{sport} — the branded "Today's Top Leans" card the social
+// GET /api/og/daily/{sport} — the branded "Today's Hottest Props" card the social
 // auto-publish pipeline attaches to its posts (docs/MARKETING.md §3). Reads the
 // SAME selection as the poster job (getDailyLeans) so the image can never
 // disagree with the caption. Renders a low-key "no slate today" card when the
@@ -7,16 +7,20 @@ import { ImageResponse } from 'next/og';
 import { getDailyLeans, type DailyLean } from '@/lib/server/social';
 import { SITE } from '@/lib/site';
 import { isSport, SPORTS } from '@/lib/sports';
+import { heatLabel } from '@/lib/tierStyle';
 
 export const dynamic = 'force-dynamic';
 
 const SIZE = { width: 1200, height: 630 };
 const RG_LINE = 'Past performance, not betting advice · 21+ · Gambling problem? 1-800-GAMBLER';
 
-function tierBadge(tier: DailyLean['tier']): { label: string; bg: string } {
-  return tier === 'Strong lean'
-    ? { label: 'Strong lean', bg: '#ea580c' }
-    : { label: 'Lean', bg: '#a16207' };
+/** The site's heat-read badge (tierStyle.ts): overs warm (Hot/Blazing, orange →
+ *  red), unders cool (Cold/Frozen, blue → indigo). */
+function heatBadge(l: DailyLean): { label: string; bg: string } {
+  const strong = l.tier === 'Strong lean';
+  return l.side === 'over'
+    ? { label: heatLabel(l.tier, l.side), bg: strong ? '#dc2626' : '#ea580c' }
+    : { label: heatLabel(l.tier, l.side), bg: strong ? '#4338ca' : '#2563eb' };
 }
 
 export async function GET(_request: Request, ctx: { params: Promise<{ sport: string }> }) {
@@ -83,7 +87,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
         </div>
 
         <div style={{ display: 'flex', fontSize: 44, fontWeight: 800, marginTop: 28 }}>
-          {leans.length > 0 ? "Today's Top Leans" : 'No slate today'}
+          {leans.length > 0 ? "Today's Hottest Props" : 'No slate today'}
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 22, flexGrow: 1 }}>
@@ -93,7 +97,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
             </div>
           ) : (
             leans.map((l, i) => {
-              const badge = tierBadge(l.tier);
+              const badge = heatBadge(l);
               return (
                 <div
                   key={`${l.slug}-${i}`}

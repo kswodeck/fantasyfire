@@ -78,7 +78,7 @@ export function PlayerTopReads({
         })}
       </ul>
       <p className="mt-2 text-[11px] text-muted">
-        Ranked by FireFactor for the next matchup — descriptive research, not picks.
+        Ranked by FireFactor for the next matchup, straight from the game logs.
       </p>
     </section>
   );

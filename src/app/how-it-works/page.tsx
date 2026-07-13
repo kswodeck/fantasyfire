@@ -268,7 +268,7 @@ export default function HowItWorksPage() {
           <strong>Normal</strong> lean, and only a near-certain (~90%+) read approaches{' '}
           <strong>100</strong> — rare by design, because there&rsquo;s no such thing as a sure bet.
           A thin sample pulls the number back toward a coin flip until the games back it up. It is a{' '}
-          <strong>research signal, not a pick, prediction, or guarantee</strong>. Three things
+          <strong>research signal, not a prediction or guarantee</strong>. Three things
           keep it honest:
         </p>
         <ul>
@@ -320,7 +320,7 @@ export default function HowItWorksPage() {
 
         <p>
           In short: these are <strong>transparent projections priced against the market</strong>,
-          every number shown with its uncertainty — research, not a pick, advice, or a guarantee. New
+          every number shown with its uncertainty — research, not advice or a guarantee. New
           here? Start by <Link href="/players">browsing players</Link>, read more{' '}
           <Link href="/about">about {SITE.name}</Link>, or look up a term in the{' '}
           <Link href="/faq">FAQ &amp; glossary</Link>. And see{' '}

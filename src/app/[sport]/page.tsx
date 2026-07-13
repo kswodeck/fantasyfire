@@ -33,7 +33,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!isSport(sport)) return { title: 'Not found' };
   const cfg = SPORTS[sport];
   const title = `${cfg.name} Heat Check — Today's Slate & Player Props`;
-  const description = `The strongest recent-form ${cfg.name} player-prop reads, ranked by a sample-size-adjusted FireFactor from public game logs. Filter to today's slate or a single matchup, switch books, and open any player for the full read. Research, not picks.`;
+  const description = `The strongest recent-form ${cfg.name} player-prop reads, ranked by a sample-size-adjusted FireFactor from public game logs. Filter to today's slate or a single matchup, switch books, and open any player for the full read. Free, no login.`;
   return {
     title,
     description,

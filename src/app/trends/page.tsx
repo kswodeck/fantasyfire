@@ -12,7 +12,7 @@ export const revalidate = 21600; // 6h — matches the per-sport Trends cadence 
 export const metadata: Metadata = {
   title: 'Player Trends — Form Swings & Streaks',
   description:
-    'Players across every in-season league whose last-10 over/under rate has swung hardest from their season baseline — merged into one board and ranked by a 95% Wilson lower bound, with each streak shown alongside. Research, not picks.',
+    'Players across every in-season league whose last-10 over/under rate has swung hardest from their season baseline — merged into one board and ranked by a 95% Wilson lower bound, with each streak shown alongside. Free, no login.',
   alternates: { canonical: '/trends' },
   openGraph: { type: 'website', title: 'Player Trends', url: '/trends' },
 };

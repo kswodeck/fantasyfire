@@ -9,16 +9,20 @@ import { Jimp, JimpMime } from 'jimp';
 import { getDailyLeans, type DailyLean } from '@/lib/server/social';
 import { SITE } from '@/lib/site';
 import { isSport, SPORTS } from '@/lib/sports';
+import { heatLabel } from '@/lib/tierStyle';
 
 export const dynamic = 'force-dynamic';
 
 const SIZE = { width: 1080, height: 1920 };
 const RG_LINE = 'Past performance, not betting advice · 21+ · Gambling problem? 1-800-GAMBLER';
 
-function tierBadge(tier: DailyLean['tier']): { label: string; bg: string } {
-  return tier === 'Strong lean'
-    ? { label: 'Strong lean', bg: '#ea580c' }
-    : { label: 'Lean', bg: '#a16207' };
+/** The site's heat-read badge (tierStyle.ts): overs warm (Hot/Blazing, orange →
+ *  red), unders cool (Cold/Frozen, blue → indigo). */
+function heatBadge(l: DailyLean): { label: string; bg: string } {
+  const strong = l.tier === 'Strong lean';
+  return l.side === 'over'
+    ? { label: heatLabel(l.tier, l.side), bg: strong ? '#dc2626' : '#ea580c' }
+    : { label: heatLabel(l.tier, l.side), bg: strong ? '#4338ca' : '#2563eb' };
 }
 
 export async function GET(_request: Request, ctx: { params: Promise<{ sport: string }> }) {
@@ -80,7 +84,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
         </div>
 
         <div style={{ display: 'flex', fontSize: 64, fontWeight: 800, marginTop: 24 }}>
-          {leans.length > 0 ? "Today's Top Leans" : 'No slate today'}
+          {leans.length > 0 ? "Today's Hottest Props" : 'No slate today'}
         </div>
 
         <div
@@ -92,7 +96,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
             </div>
           ) : (
             leans.map((l, i) => {
-              const badge = tierBadge(l.tier);
+              const badge = heatBadge(l);
               return (
                 <div
                   key={`${l.slug}-${i}`}

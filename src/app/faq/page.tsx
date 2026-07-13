@@ -88,7 +88,7 @@ const TERMS: { term: string; def: string }[] = [
   },
   {
     term: 'FireFactor',
-    def: 'Our 0–100 read of the model’s estimated chance the side hits, shown as a heat read: an over runs warm — Warm, Hot, or Blazing (a flame, amber → red) — and an under runs cool — Cool, Cold, or Frozen (a snowflake, sky → indigo); a balanced line is No read. A coin flip sits near 0 (a Pass), a clear edge reads Slight or Normal, and only a near-certain (~90%+) read nears 100 (rare — there’s no sure bet). It blends the hit rate, the projection’s probability vs the line, consistency, and matchup, discounted for small samples — the pure directional signal, identical on the board and a player’s page for the same line. (Price reads like +EV live in their own panel.) It is research, never a pick.',
+    def: 'Our 0–100 read of the model’s estimated chance the side hits, shown as a heat read: an over runs warm — Warm, Hot, or Blazing (a flame, amber → red) — and an under runs cool — Cool, Cold, or Frozen (a snowflake, sky → indigo); a balanced line is No read. A coin flip sits near 0 (a Pass), a clear edge reads Slight or Normal, and only a near-certain (~90%+) read nears 100 (rare — there’s no sure bet). It blends the hit rate, the projection’s probability vs the line, consistency, and matchup, discounted for small samples — the pure directional signal, identical on the board and a player’s page for the same line. (Price reads like +EV live in their own panel.) It is a read on what the numbers show — see it as research.',
   },
   {
     term: 'No-vig consensus / +EV',

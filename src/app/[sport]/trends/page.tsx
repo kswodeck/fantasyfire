@@ -36,7 +36,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!isSport(sport)) return { title: 'Not found' };
   const cfg = SPORTS[sport];
   const title = `${cfg.name} Player Trends — Form Swings & Streaks`;
-  const description = `${cfg.name} players whose recent (last 10) over/under rate has swung hardest from their season baseline — ranked by a 95% Wilson lower bound, with each player's current streak shown alongside. Research, not picks.`;
+  const description = `${cfg.name} players whose recent (last 10) over/under rate has swung hardest from their season baseline — ranked by a 95% Wilson lower bound, with each player's current streak shown alongside. Free, no login.`;
   return {
     title,
     description,

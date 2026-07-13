@@ -51,7 +51,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const matchup = game ? matchupLabel(game) : 'Game';
   const title = `${matchup} — ${cfg.name} Player Prop Reads`;
   const description = game
-    ? `The strongest FireFactor player-prop reads for ${game.away.name ?? game.away.abbr} at ${game.home.name ?? game.home.abbr}, split by team and ranked from public game logs. Research, not picks.`
+    ? `The strongest FireFactor player-prop reads for ${game.away.name ?? game.away.abbr} at ${game.home.name ?? game.home.abbr}, split by team and ranked from public game logs. Free, no login.`
     : `${cfg.name} game reads.`;
   return {
     title,
