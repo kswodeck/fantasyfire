@@ -61,7 +61,12 @@ function capSide(side: 'over' | 'under'): string {
 }
 
 function leanLine(l: DailyLean): string {
-  return `${l.firstName.charAt(0)}. ${l.lastName} ${capSide(l.side)} ${l.line} ${l.statShort}`;
+  // The rung's payout multiplier rides along whenever the book posts a
+  // meaningful one (Sleeper standard/alt, Underdog alternates) — a plain 1×
+  // adds nothing. Trailing zeros trimmed: 1.5 → "1.5×", 2 → "2×".
+  const mult =
+    l.multiplier != null && l.multiplier !== 1 ? ` (${parseFloat(l.multiplier.toFixed(2))}×)` : '';
+  return `${l.firstName.charAt(0)}. ${l.lastName} ${capSide(l.side)} ${l.line} ${l.statShort}${mult}`;
 }
 
 /**

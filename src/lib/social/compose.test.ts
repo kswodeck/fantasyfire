@@ -52,6 +52,21 @@ describe('composeDailyPost', () => {
     expect(c.imageAlt).toContain('not betting advice');
   });
 
+  it('carries the payout multiplier when the book posts a meaningful one', () => {
+    const c = composeDailyPost({
+      sport: 'wnba',
+      sportName: 'WNBA',
+      leans: [
+        lean({ multiplier: 1.82, linesSource: 'sleeper' }), // Sleeper standard rung
+        lean({ slug: 'b', lastName: 'Balanced', multiplier: 1, linesSource: 'underdog' }), // plain 1× stays silent
+      ],
+      siteUrl: SITE_URL,
+      channel: 'bluesky',
+    });
+    expect(c.text).toContain('Over 32.5 PTS (1.82×)');
+    expect(c.text).not.toContain('(1×)');
+  });
+
   it('never emits banned predictive/tout tokens', () => {
     for (const channel of ['bluesky', 'discord', 'telegram', 'instagram', 'threads', 'x'] as const) {
       const c = composeDailyPost({
