@@ -1,9 +1,9 @@
-// GET /api/og/daily/{sport}/story — the daily-leans card as a VERTICAL
-// 1080x1920 JPEG for Instagram Stories (the API's STORIES containers, like
-// feed images, only accept JPEG URLs). Layout shared with the 4:5 feed
-// variant via cardParts.VerticalCard. JPEG conversion uses jimp (pure JS) —
-// sharp's native binaries fail to load in the Vercel serverless bundle under
-// pnpm.
+// GET /api/og/daily/{sport}/feed — the daily-leans card as a 4:5 PORTRAIT
+// 1080x1350 JPEG for Instagram FEED posts and carousels. Instagram letterboxes
+// the 1.91:1 landscape card into its portrait frame (big black bars); 4:5 is
+// the tallest feed-native ratio and fills it edge to edge. Layout shared with
+// the story via cardParts.VerticalCard; JPEG via jimp (pure JS — sharp's
+// native binaries fail in the Vercel serverless bundle under pnpm).
 import { ImageResponse } from 'next/og';
 import { Jimp, JimpMime } from 'jimp';
 import { getDailyLeans, type DailyLean } from '@/lib/server/social';
@@ -12,7 +12,7 @@ import { cardDateLabel, leanImages, VerticalCard } from '../cardParts';
 
 export const dynamic = 'force-dynamic';
 
-const SIZE = { width: 1080, height: 1920 };
+const SIZE = { width: 1080, height: 1350 };
 
 export async function GET(request: Request, ctx: { params: Promise<{ sport: string }> }) {
   const { sport } = await ctx.params;
@@ -29,7 +29,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ sport: stri
         sport={sport}
         sportName={cfg.name}
         accent={cfg.accent}
-        variant="story"
+        variant="feed"
         leans={leans}
         headshots={headshots}
         teamLogos={teamLogos}
