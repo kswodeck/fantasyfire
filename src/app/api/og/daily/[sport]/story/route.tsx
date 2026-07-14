@@ -8,7 +8,6 @@ import { ImageResponse } from 'next/og';
 import { Jimp, JimpMime } from 'jimp';
 import { sourceBrand, sourceLabel } from '@/lib/providedSources';
 import { getDailyLeans, type DailyLean } from '@/lib/server/social';
-import { SITE } from '@/lib/site';
 import { isSport, SPORTS } from '@/lib/sports';
 import { heatLabel } from '@/lib/tierStyle';
 
@@ -192,20 +191,8 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
           )}
         </div>
 
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 14,
-            marginTop: 32,
-            paddingTop: 28,
-            borderTop: '1px solid rgba(255,255,255,0.12)',
-          }}
-        >
-          <div style={{ display: 'flex', fontSize: 34, fontWeight: 700, color: '#fb923c' }}>
-            {SITE.url.replace(/^https?:\/\//, '')}/{sport}/board
-          </div>
-        </div>
+        {/* No footer — the caption/board carries the link; the card is
+            brand + attribution + the rows. */}
       </div>
     ),
     { ...SIZE },
