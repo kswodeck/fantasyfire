@@ -75,6 +75,16 @@ export function sourceLogoUrl(id: string): string | null {
 }
 
 /**
+ * PNG variant of the book's favicon (Google's s2 service re-encodes to PNG).
+ * The card image renderer (satori) can't decode .ico, so the browser-facing
+ * DuckDuckGo URL above doesn't work there. Null for unknown domains.
+ */
+export function sourceLogoPngUrl(id: string, px = 64): string | null {
+  const domain = PROVIDED_SOURCE_DOMAINS[id];
+  return domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=${px}` : null;
+}
+
+/**
  * Lightweight brand mark per source: a short monogram + colors for a logo badge.
  * These are placeholders (best-effort brand colors) so the UI can show a logo
  * next to a source without bundling copyrighted artwork. To swap in a real logo,

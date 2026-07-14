@@ -18,9 +18,16 @@ export interface DailyLean {
    *  headshot on the card images; optional so composed-text fixtures skip it. */
   playerExternalId?: number;
   teamAbbreviation: string | null;
+  /** League team id — drives the team logo on the card images (some sports'
+   *  logo CDNs key by id rather than abbreviation). */
+  teamExternalId?: number | null;
   statShort: string;
   line: number;
   side: 'over' | 'under';
+  /** Payout tag of the shown rung (goblin/demon/alternate); null = plain line. */
+  oddsType?: string | null;
+  /** Exact payout multiplier of the shown rung (e.g. Underdog); null when none. */
+  multiplier?: number | null;
   /** Only lean tiers are publishable — never "Slight lean" or below. */
   tier: 'Strong lean' | 'Lean';
   /** Book source id the line came from (providedSources.ts), null = our computed median. */
@@ -86,9 +93,26 @@ export async function getDailyLeans(
       line: r.line,
       side: r.fireScore.side,
       tier: r.fireScore.tier as DailyLean['tier'],
+      oddsType: r.oddsType ?? null,
+      multiplier: r.multiplier ?? null,
       linesSource: source,
     });
     if (leans.length >= limit) break;
+  }
+
+  // League team ids for the card's team logos (one batch query, best-effort).
+  const abbrs = [...new Set(leans.map((l) => l.teamAbbreviation).filter((a): a is string => !!a))];
+  if (abbrs.length > 0) {
+    const teamRows = await db.team
+      .findMany({
+        where: { sport, abbreviation: { in: abbrs } },
+        select: { abbreviation: true, externalId: true },
+      })
+      .catch(() => []);
+    const idByAbbr = new Map(teamRows.map((t) => [t.abbreviation, t.externalId]));
+    for (const l of leans) {
+      l.teamExternalId = l.teamAbbreviation ? (idByAbbr.get(l.teamAbbreviation) ?? null) : null;
+    }
   }
   return leans;
 }

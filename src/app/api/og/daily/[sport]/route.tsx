@@ -6,7 +6,16 @@
 import { ImageResponse } from 'next/og';
 import { getDailyLeans, type DailyLean } from '@/lib/server/social';
 import { isSport, SPORTS } from '@/lib/sports';
-import { cardDateLabel, heatBadge, LeanAvatar, leanHeadshots, SourceChip } from './cardParts';
+import {
+  cardDateLabel,
+  heatBadge,
+  LeanAvatar,
+  leanImages,
+  payoutTag,
+  SIDE_COLOR,
+  SourceChip,
+  teamStyle,
+} from './cardParts';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +26,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
   if (!isSport(sport)) return new Response('Unknown sport', { status: 404 });
 
   const leans = await getDailyLeans(sport, 5).catch(() => [] as DailyLean[]);
-  const headshots = await leanHeadshots(sport, leans);
+  const { headshots, teamLogos, sourceLogo } = await leanImages(sport, leans);
   const dateLabel = cardDateLabel();
   const cfg = SPORTS[sport];
 
@@ -55,7 +64,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
             <div style={{ display: 'flex', fontSize: 28, color: '#a8a29e' }}>{dateLabel}</div>
           </div>
           {leans.length > 0 ? (
-            <SourceChip leans={leans} badgeSize={34} fontSize={16} labelSize={26} />
+            <SourceChip leans={leans} logo={sourceLogo} badgeSize={34} fontSize={16} labelSize={26} />
           ) : null}
         </div>
 
@@ -72,6 +81,9 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
           ) : (
             leans.map((l, i) => {
               const badge = heatBadge(l);
+              const team = teamStyle(sport, l);
+              const logo = l.teamAbbreviation ? teamLogos[l.teamAbbreviation] : undefined;
+              const payout = payoutTag(l);
               return (
                 <div
                   key={`${l.slug}-${i}`}
@@ -90,14 +102,50 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
                       {l.firstName.charAt(0)}. {l.lastName}
                     </div>
                     {l.teamAbbreviation ? (
-                      <div style={{ display: 'flex', fontSize: 24, color: '#a8a29e' }}>
-                        {l.teamAbbreviation}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {logo ? (
+                          // eslint-disable-next-line @next/next/no-img-element -- satori JSX
+                          <img
+                            alt=""
+                            src={logo}
+                            width={26}
+                            height={26}
+                            style={{ width: 26, height: 26, objectFit: 'contain' }}
+                          />
+                        ) : null}
+                        <div
+                          style={{
+                            display: 'flex',
+                            fontSize: 24,
+                            fontWeight: 700,
+                            color: team.color,
+                          }}
+                        >
+                          {l.teamAbbreviation}
+                        </div>
                       </div>
                     ) : null}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-                    <div style={{ display: 'flex', fontSize: 30, fontWeight: 700 }}>
-                      {l.side === 'over' ? 'Over' : 'Under'} {l.line} {l.statShort}
+                    {payout ? (
+                      <div
+                        style={{
+                          display: 'flex',
+                          fontSize: 22,
+                          fontWeight: 700,
+                          color: payout.color,
+                        }}
+                      >
+                        {payout.text}
+                      </div>
+                    ) : null}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 30, fontWeight: 700 }}>
+                      <div style={{ display: 'flex', color: SIDE_COLOR[l.side] }}>
+                        {l.side === 'over' ? 'Over' : 'Under'}
+                      </div>
+                      <div style={{ display: 'flex' }}>
+                        {l.line} {l.statShort}
+                      </div>
                     </div>
                     <div
                       style={{

@@ -8,7 +8,16 @@ import { ImageResponse } from 'next/og';
 import { Jimp, JimpMime } from 'jimp';
 import { getDailyLeans, type DailyLean } from '@/lib/server/social';
 import { isSport, SPORTS } from '@/lib/sports';
-import { cardDateLabel, heatBadge, LeanAvatar, leanHeadshots, SourceChip } from '../cardParts';
+import {
+  cardDateLabel,
+  heatBadge,
+  LeanAvatar,
+  leanImages,
+  payoutTag,
+  SIDE_COLOR,
+  SourceChip,
+  teamStyle,
+} from '../cardParts';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +29,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
   if (!isSport(sport)) return new Response('Unknown sport', { status: 404 });
 
   const leans = await getDailyLeans(sport, 5).catch(() => [] as DailyLean[]);
-  const headshots = await leanHeadshots(sport, leans);
+  const { headshots, teamLogos, sourceLogo } = await leanImages(sport, leans);
   const dateLabel = cardDateLabel();
   const cfg = SPORTS[sport];
 
@@ -61,7 +70,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
             Instead: where the lines come from, in the site's source-badge treatment. */}
         {leans.length > 0 ? (
           <div style={{ display: 'flex', marginTop: 28 }}>
-            <SourceChip leans={leans} badgeSize={40} fontSize={19} labelSize={32} />
+            <SourceChip leans={leans} logo={sourceLogo} badgeSize={40} fontSize={19} labelSize={32} />
           </div>
         ) : null}
 
@@ -75,6 +84,9 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
           ) : (
             leans.map((l, i) => {
               const badge = heatBadge(l);
+              const team = teamStyle(sport, l);
+              const logo = l.teamAbbreviation ? teamLogos[l.teamAbbreviation] : undefined;
+              const payout = payoutTag(l);
               return (
                 <div
                   key={`${l.slug}-${i}`}
@@ -101,8 +113,27 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
                       </div>
                     </div>
                     {l.teamAbbreviation ? (
-                      <div style={{ display: 'flex', fontSize: 32, color: '#a8a29e' }}>
-                        {l.teamAbbreviation}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        {logo ? (
+                          // eslint-disable-next-line @next/next/no-img-element -- satori JSX
+                          <img
+                            alt=""
+                            src={logo}
+                            width={34}
+                            height={34}
+                            style={{ width: 34, height: 34, objectFit: 'contain' }}
+                          />
+                        ) : null}
+                        <div
+                          style={{
+                            display: 'flex',
+                            fontSize: 32,
+                            fontWeight: 700,
+                            color: team.color,
+                          }}
+                        >
+                          {l.teamAbbreviation}
+                        </div>
                       </div>
                     ) : null}
                   </div>
@@ -113,8 +144,25 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
                       justifyContent: 'space-between',
                     }}
                   >
-                    <div style={{ display: 'flex', fontSize: 40, fontWeight: 700 }}>
-                      {l.side === 'over' ? 'Over' : 'Under'} {l.line} {l.statShort}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 40, fontWeight: 700 }}>
+                      <div style={{ display: 'flex', color: SIDE_COLOR[l.side] }}>
+                        {l.side === 'over' ? 'Over' : 'Under'}
+                      </div>
+                      <div style={{ display: 'flex' }}>
+                        {l.line} {l.statShort}
+                      </div>
+                      {payout ? (
+                        <div
+                          style={{
+                            display: 'flex',
+                            fontSize: 30,
+                            fontWeight: 700,
+                            color: payout.color,
+                          }}
+                        >
+                          {payout.text}
+                        </div>
+                      ) : null}
                     </div>
                     <div
                       style={{
