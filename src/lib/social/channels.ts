@@ -11,6 +11,7 @@ import { postToDiscordWebhook } from './discord';
 import { postToInstagram, postInstagramCarousel } from './instagram';
 import { postToTelegram, postTelegramAlbum, postTelegramPoll } from './telegram';
 import { postToThreads, postThreadsCarousel } from './threads';
+import { socialDayIso } from './schedule';
 import type { DailyLean } from '@/lib/server/social';
 import { SITE, absoluteUrl } from '@/lib/site';
 import { SPORTS, type Sport } from '@/lib/sports';
@@ -42,10 +43,17 @@ export interface Channel {
   postText?(text: string, link?: { display: string; target: string }): Promise<number>;
 }
 
-/** Public card URL (null on localhost — nothing external can fetch it there). */
-export function cardUrl(sport: Sport): string | null {
+/**
+ * Public card URL (null on localhost — nothing external can fetch it there).
+ * Cache-busted with the social day: platforms cache embed images by EXACT URL
+ * (Discord's proxy essentially forever), so a bare, never-changing URL kept
+ * re-serving the very first render — stale date, stale leans, pre-redesign
+ * layout. A new day makes a new URL, forcing a fresh fetch.
+ */
+export function cardUrl(sport: Sport, variant?: 'jpeg' | 'story'): string | null {
   if (!SITE.url || new URL(SITE.url).host.startsWith('localhost')) return null;
-  return absoluteUrl(`/api/og/daily/${sport}`);
+  const path = `/api/og/daily/${sport}${variant ? `/${variant}` : ''}`;
+  return absoluteUrl(`${path}?d=${socialDayIso(new Date())}`);
 }
 
 async function fetchCardPng(url: string): Promise<ArrayBuffer | null> {
@@ -313,7 +321,7 @@ const instagram: Channel = {
         channel: 'instagram',
         maxChars: 1000,
       });
-      await postToInstagram(target, { imageUrl: `${card}/jpeg`, caption: c.text });
+      await postToInstagram(target, { imageUrl: cardUrl(post.sport, 'jpeg')!, caption: c.text });
       posted++;
       console.log(`[social] ${post.sport}: posted to Instagram`);
     } catch (e) {
@@ -321,7 +329,7 @@ const instagram: Channel = {
     }
     // Story alongside — vertical card, no caption (the API ignores them).
     try {
-      await postToInstagram(target, { imageUrl: `${card}/story`, kind: 'story' });
+      await postToInstagram(target, { imageUrl: cardUrl(post.sport, 'story')!, kind: 'story' });
       posted++;
       console.log(`[social] ${post.sport}: posted Instagram story`);
     } catch (e) {
@@ -340,7 +348,12 @@ const instagram: Channel = {
       });
       await postInstagramCarousel(
         { userId: process.env.IG_USER_ID!, accessToken: process.env.IG_ACCESS_TOKEN! },
-        { imageUrls: digest.cards.map((card) => `${card.url}/jpeg`), caption: c.text },
+        {
+          imageUrls: digest.cards
+            .map((card) => cardUrl(card.sport, 'jpeg'))
+            .filter((u): u is string => u !== null),
+          caption: c.text,
+        },
       );
       console.log('[social] digest: posted Instagram carousel');
       return 1;

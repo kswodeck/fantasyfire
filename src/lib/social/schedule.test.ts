@@ -73,6 +73,25 @@ describe('pickRelevantStart', () => {
     expect(pickRelevantStart([lastNight, tonight], now)).toEqual(tonight);
   });
 
+  // The 2026-07-14 WNBA bug: an 11am ET matinee (15:00Z) put the sport
+  // "in grace" at the 1pm ET tick, publishing the day's post at 10am PT —
+  // six hours before the evening game the post was actually about.
+  it('anchors on the evening game, not a started matinee', () => {
+    const matinee = new Date('2026-07-14T15:00:00Z'); // 11am ET tip
+    const evening = new Date('2026-07-14T23:00:00Z'); // 7pm ET / 4pm PT
+    const early = new Date('2026-07-14T17:00:00Z'); // 1pm ET — matinee in progress
+    expect(pickRelevantStart([matinee, evening], early)).toEqual(evening);
+    expect(isDueNow(early, evening)).toBe(false); // not due until 5pm ET
+    expect(isDueNow(new Date('2026-07-14T21:00:00Z'), evening)).toBe(true); // 5pm ET / 2pm PT
+  });
+
+  it('still catches up when the started game is the whole slate', () => {
+    const matinee = new Date('2026-07-14T15:00:00Z'); // 11am ET tip, nothing later
+    const now = new Date('2026-07-14T17:00:00Z'); // 1pm ET, +120 min
+    expect(pickRelevantStart([matinee], now)).toEqual(matinee);
+    expect(isDueNow(now, matinee)).toBe(true);
+  });
+
   it('returns null when every start is long past (slate over)', () => {
     const now = new Date('2026-07-14T05:00:00Z');
     expect(pickRelevantStart([lastNight, tonight], now)).toBeNull();
