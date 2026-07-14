@@ -98,7 +98,23 @@ export function PushOptIn() {
           'Enabling…'
         ) : (
           <>
-            <span aria-hidden="true">🔔</span> Enable heat alerts
+            {/* Inline SVG, not the 🔔 emoji: emoji carry their own colors (amber
+                bell ≈ the brand-orange button — no contrast); currentColor
+                inherits the button's white foreground. */}
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+              aria-hidden="true"
+            >
+              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+            </svg>
+            Enable heat alerts
           </>
         )}
       </button>

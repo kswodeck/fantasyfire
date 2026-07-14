@@ -406,7 +406,7 @@ async function main(): Promise<number> {
   const posts: (SportPost & { due: boolean; firstStart: Date | null })[] = [];
   for (const sport of SPORT_LIST) {
     if (EXCLUDED.has(sport)) continue;
-    const leans = await getDailyLeans(sport, CARD_LEANS);
+    const leans = await getDailyLeans(sport, CARD_LEANS, now);
     if (leans.length === 0) continue;
     const { firstStart } = await getTodaySlateTiming(sport, now);
     const due = FORCE || (await isSportDue(sport, now));
@@ -450,7 +450,7 @@ async function main(): Promise<number> {
   // day at the fixed daily slot, only when 2+ sports have leans (a single-sport
   // day is already covered by that sport's own post).
   const digestDue =
-    FORCE || (isDailyTick(now) && !(await socialPostedToday('social:digest')));
+    FORCE || (isDailyTick(now) && !(await socialPostedToday('social:digest', now)));
   if (posts.length >= 2 && (DRY_RUN || digestDue)) {
     if (DRY_RUN) {
       const entries: ContentPackEntry[] = posts.map((p) => ({
@@ -477,7 +477,7 @@ async function main(): Promise<number> {
   // once per day at the fixed daily slot, covering ALL of today's sports at once
   // regardless of their individual posting windows.
   const packDue =
-    FORCE || (isDailyTick(now) && !(await socialPostedToday('social:pack')));
+    FORCE || (isDailyTick(now) && !(await socialPostedToday('social:pack', now)));
   const packUrl = process.env.DISCORD_CONTENT_PACK_WEBHOOK_URL ?? '';
   if (DRY_RUN || packDue) {
     const entries: ContentPackEntry[] = posts.map((p) => ({

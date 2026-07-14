@@ -5,6 +5,8 @@ import {
   isDueNow,
   isWithinPostingWindow,
   pickRelevantStart,
+  socialDayStart,
+  socialDayWindow,
 } from './schedule';
 
 // July dates = EDT (UTC-4): noon ET = 16:00 UTC, 10pm ET = 02:00 UTC next day.
@@ -76,6 +78,38 @@ describe('pickRelevantStart', () => {
 
   it('returns null for an empty list', () => {
     expect(pickRelevantStart([], new Date('2026-07-13T21:00:00Z'))).toBeNull();
+  });
+});
+
+describe('socialDayStart / socialDayWindow', () => {
+  // The social day rolls at 11pm ET: "today" = 11pm ET yesterday → 11pm ET today.
+  it('anchors to the most recent 11pm ET (EDT)', () => {
+    // 8pm ET Jul 13 (00:00Z Jul 14 — exactly where the old UTC day rolled)
+    const evening = new Date('2026-07-14T00:00:00Z');
+    expect(socialDayStart(evening).toISOString()).toBe('2026-07-13T03:00:00.000Z'); // 11pm ET Jul 12
+    // 11:30pm ET Jul 13 → the NEW day that began at 11pm ET Jul 13
+    const late = new Date('2026-07-14T03:30:00Z');
+    expect(socialDayStart(late).toISOString()).toBe('2026-07-14T03:00:00.000Z');
+  });
+
+  it('anchors correctly in winter (EST)', () => {
+    const eveningEst = new Date('2026-01-14T01:00:00Z'); // 8pm ET Jan 13
+    expect(socialDayStart(eveningEst).toISOString()).toBe('2026-01-13T04:00:00.000Z'); // 11pm ET Jan 12
+  });
+
+  it('keeps a 10:30pm ET West Coast tip inside the same day as the noon tick', () => {
+    const noonTick = new Date('2026-07-13T16:00:00Z'); // noon ET Jul 13
+    const lateTip = new Date('2026-07-14T02:30:00Z'); // 10:30pm ET Jul 13
+    const { start, end } = socialDayWindow(noonTick);
+    expect(lateTip.getTime()).toBeGreaterThanOrEqual(start.getTime());
+    expect(lateTip.getTime()).toBeLessThan(end.getTime());
+  });
+
+  it("excludes last night's evening game from today's window", () => {
+    const noonTick = new Date('2026-07-13T16:00:00Z'); // noon ET Jul 13
+    const lastNight = new Date('2026-07-13T01:00:00Z'); // 9pm ET Jul 12 (the WNBA bug game)
+    const { start } = socialDayWindow(noonTick);
+    expect(lastNight.getTime()).toBeLessThan(start.getTime());
   });
 });
 

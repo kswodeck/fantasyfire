@@ -5,7 +5,7 @@
 import { db } from '@/lib/db';
 import { getBoard, getSourcedBoards, getTonightSlate } from '@/lib/server/players';
 import { getAvailableSources } from '@/lib/server/providedLines';
-import { isDueNow, pickRelevantStart } from '@/lib/social/schedule';
+import { isDueNow, pickRelevantStart, socialDayStart, socialDayWindow } from '@/lib/social/schedule';
 import type { Sport } from '@/lib/sports';
 import type { BoardRow } from '@/lib/types';
 
@@ -56,19 +56,13 @@ async function getSocialBoardRows(
  * page). Filtered to players whose team is actually on today's slate, capped to
  * one lean per player for variety, ranked by the board's FireFactor order.
  */
-export async function getDailyLeans(sport: Sport, limit = 5): Promise<DailyLean[]> {
-  const slate = await getTonightSlate(sport).catch(() => ({
-    date: null as string | null,
-    games: [],
-  }));
-  const todayIso = new Date().toISOString().slice(0, 10);
-  if (slate.date !== todayIso || slate.games.length === 0) return [];
-
-  const teams = new Set(
-    slate.games
-      .flatMap((g) => [g.home.abbr, g.away.abbr])
-      .filter((a): a is string => !!a),
-  );
+export async function getDailyLeans(
+  sport: Sport,
+  limit = 5,
+  now = new Date(),
+): Promise<DailyLean[]> {
+  const { hasSlate, teams } = await getSocialSlate(sport, now);
+  if (!hasSlate) return [];
 
   const { rows, source } = await getSocialBoardRows(sport);
   const seen = new Set<string>();
@@ -96,45 +90,85 @@ export async function getDailyLeans(sport: Sport, limit = 5): Promise<DailyLean[
 }
 
 /**
- * TODAY's slate timing for a sport: whether a slate exists today, whether the
- * feed carries any start times at all, and the start the due window should
- * anchor on — the earliest UPCOMING (or just-started) game, not the bucket's
- * raw minimum: the feed buckets days by UTC, so "today" can include last
- * night's US-evening games. Drives the pre-game posting window
- * (src/lib/social/schedule.ts).
+ * The sport's slate for the SOCIAL day containing `now` — the 11pm-ET-to-11pm-ET
+ * window (schedule.ts), NOT the feed's UTC-day buckets (those roll at 8pm ET
+ * and split US evenings across two "days"). Primary path: games whose actual
+ * startTime falls inside the window. Fallback for feeds that omit start times:
+ * the legacy UTC bucket via getTonightSlate.
+ */
+async function getSocialSlate(
+  sport: Sport,
+  now: Date,
+): Promise<{ hasSlate: boolean; hasKnownStarts: boolean; starts: Date[]; teams: Set<string> }> {
+  const { start, end } = socialDayWindow(now);
+  const rows = await db.scheduledGame
+    .findMany({
+      where: { sport, startTime: { gte: start, lt: end } },
+      include: {
+        homeTeam: { select: { abbreviation: true } },
+        awayTeam: { select: { abbreviation: true } },
+      },
+    })
+    .catch(() => []);
+  if (rows.length > 0) {
+    const teams = new Set(
+      rows
+        .flatMap((r) => [r.homeTeam.abbreviation, r.awayTeam.abbreviation])
+        .filter((a): a is string => !!a),
+    );
+    return {
+      hasSlate: true,
+      hasKnownStarts: true,
+      starts: rows.map((r) => r.startTime as Date),
+      teams,
+    };
+  }
+
+  // No timed games in the window — a feed without start times still deserves
+  // the daily-slot fallback. Legacy UTC-bucket check, untimed games only.
+  const slate = await getTonightSlate(sport).catch(() => ({
+    date: null as string | null,
+    games: [] as { startTime: string | null; home: { abbr: string | null }; away: { abbr: string | null } }[],
+  }));
+  const todayIso = now.toISOString().slice(0, 10);
+  const untimed = slate.games.filter((g) => !g.startTime);
+  if (slate.date !== todayIso || untimed.length === 0) {
+    return { hasSlate: false, hasKnownStarts: false, starts: [], teams: new Set() };
+  }
+  const teams = new Set(
+    untimed.flatMap((g) => [g.home.abbr, g.away.abbr]).filter((a): a is string => !!a),
+  );
+  return { hasSlate: true, hasKnownStarts: false, starts: [], teams };
+}
+
+/**
+ * TODAY's slate timing for a sport (11pm-ET day): whether a slate exists,
+ * whether the feed carries start times at all, and the start the due window
+ * should anchor on — the earliest UPCOMING (or just-started) game. Drives the
+ * pre-game posting window (src/lib/social/schedule.ts).
  */
 export async function getTodaySlateTiming(
   sport: Sport,
   now = new Date(),
 ): Promise<{ hasSlateToday: boolean; hasKnownStarts: boolean; firstStart: Date | null }> {
-  const slate = await getTonightSlate(sport).catch(() => ({
-    date: null as string | null,
-    games: [] as { startTime: string | null }[],
-  }));
-  const todayIso = now.toISOString().slice(0, 10);
-  if (slate.date !== todayIso || slate.games.length === 0) {
-    return { hasSlateToday: false, hasKnownStarts: false, firstStart: null };
-  }
-  const starts = slate.games
-    .map((g) => (g.startTime ? new Date(g.startTime) : null))
-    .filter((d): d is Date => d !== null && Number.isFinite(d.getTime()));
+  const { hasSlate, hasKnownStarts, starts } = await getSocialSlate(sport, now);
   return {
-    hasSlateToday: true,
-    hasKnownStarts: starts.length > 0,
+    hasSlateToday: hasSlate,
+    hasKnownStarts,
     firstStart: pickRelevantStart(starts, now),
   };
 }
 
 /**
- * Has a successful social publish already been recorded today (UTC)? Markers
- * live in the existing IngestRun audit table under `social:{sport}` (and
- * `social:pack` for the owner briefing) — no new schema.
+ * Has a successful social publish already been recorded this SOCIAL day (the
+ * 11pm-ET-to-11pm-ET window — matching the slate definition, so the marker
+ * can't reset mid-evening like the old UTC-midnight check, which rolled at
+ * 8pm ET)? Markers live in the existing IngestRun audit table under
+ * `social:{sport}` (and `social:pack` / `social:digest`) — no new schema.
  */
-export async function socialPostedToday(job: string): Promise<boolean> {
-  const dayStart = new Date();
-  dayStart.setUTCHours(0, 0, 0, 0);
+export async function socialPostedToday(job: string, now = new Date()): Promise<boolean> {
   const row = await db.ingestRun.findFirst({
-    where: { job, status: 'success', startedAt: { gte: dayStart } },
+    where: { job, status: 'success', startedAt: { gte: socialDayStart(now) } },
     select: { id: true },
   });
   return row !== null;
@@ -148,7 +182,7 @@ export async function socialPostedToday(job: string): Promise<boolean> {
  * slate/timing/already-posted check.
  */
 export async function isSportDue(sport: Sport, now = new Date()): Promise<boolean> {
-  if (await socialPostedToday(`social:${sport}`)) return false;
+  if (await socialPostedToday(`social:${sport}`, now)) return false;
   const { hasSlateToday, hasKnownStarts, firstStart } = await getTodaySlateTiming(sport, now);
   if (!hasSlateToday) return false;
   // Start times exist but every game is long past → the slate is over; don't
