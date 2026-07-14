@@ -2,6 +2,15 @@
 // Used for the public #daily-leans channel (single embeds, the multi-sport
 // digest with one embed per sport, and native polls) and the private
 // owner-only content-pack channel (plain content messages).
+//
+// Every message overrides the webhook's display identity (username +
+// avatar_url) so posts show the FantasyFire name and flame avatar instead of
+// the default Discord webhook look. Override per env if ever needed:
+// DISCORD_WEBHOOK_NAME / DISCORD_WEBHOOK_AVATAR_URL.
+
+const WEBHOOK_NAME = () => process.env.DISCORD_WEBHOOK_NAME || 'FantasyFire 🔥';
+const WEBHOOK_AVATAR = () =>
+  process.env.DISCORD_WEBHOOK_AVATAR_URL || 'https://fantasyfire.app/brand/avatar-1024.png';
 
 export interface DiscordEmbed {
   title: string;
@@ -28,6 +37,7 @@ function embedJson(e: DiscordEmbed) {
     ...(e.url ? { url: e.url } : {}),
     ...(e.imageUrl ? { image: { url: e.imageUrl } } : {}),
     ...(e.color ? { color: parseInt(e.color.replace('#', ''), 16) } : {}),
+    footer: { text: 'fantasyfire.app', icon_url: WEBHOOK_AVATAR() },
   };
 }
 
@@ -44,6 +54,8 @@ export async function postToDiscordWebhook(
   const { content, embed, embeds, poll } = message;
   const allEmbeds = [...(embed ? [embed] : []), ...(embeds ?? [])].slice(0, 10);
   const body = {
+    username: WEBHOOK_NAME(),
+    avatar_url: WEBHOOK_AVATAR(),
     ...(content ? { content } : {}),
     ...(allEmbeds.length > 0 ? { embeds: allEmbeds.map(embedJson) } : {}),
     ...(poll

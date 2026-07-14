@@ -44,6 +44,187 @@ export function teamStyle(sport: Sport, l: DailyLean): { color: string } {
   return { color: getTeam(sport, l.teamAbbreviation).primary };
 }
 
+/**
+ * The VERTICAL card layout, shared by the story (1080x1920, 9:16) and the
+ * Instagram feed/carousel (1080x1350, 4:5) so the two can't drift. Same visual
+ * language as the landscape card: sport badge + date, source chip, then
+ * two-line lean rows (avatar + name + team logo/abbr, then side + line +
+ * payout + heat badge). The feed variant exists because Instagram letterboxes
+ * a 1.91:1 landscape card into its portrait frame — the 4:5 render fills it.
+ */
+export function VerticalCard({
+  sport,
+  sportName,
+  accent,
+  variant,
+  leans,
+  headshots,
+  teamLogos,
+  sourceLogo,
+  dateLabel,
+}: {
+  sport: Sport;
+  sportName: string;
+  accent: string;
+  variant: 'story' | 'feed';
+  leans: DailyLean[];
+  headshots: Record<string, string>;
+  teamLogos: Record<string, string>;
+  sourceLogo: string | null;
+  dateLabel: string;
+}) {
+  const story = variant === 'story';
+  return (
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        background: 'linear-gradient(160deg, #0c0a09 0%, #1c1917 100%)',
+        // Feed top padding is tuned so the header sits BELOW the 1:1 grid-crop
+        // line (a 1080x1350 card's square thumbnail shows y 135–1215): with
+        // 140px the badge, chip, and all five rows land inside the thumbnail.
+        padding: story ? '120px 64px 100px' : '140px 64px 56px',
+        color: '#f5f5f4',
+        fontFamily: 'sans-serif',
+      }}
+    >
+      {/* No brand row — the posting profile already shows the FantasyFire
+          name + avatar; the card leads with the sport + date instead. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+        <div
+          style={{
+            display: 'flex',
+            fontSize: 36,
+            fontWeight: 800,
+            color: '#fff',
+            background: accent,
+            borderRadius: 12,
+            padding: '8px 24px',
+          }}
+        >
+          {sportName}
+        </div>
+        <div style={{ display: 'flex', fontSize: 34, color: '#a8a29e' }}>{dateLabel}</div>
+      </div>
+
+      {leans.length > 0 ? (
+        <div style={{ display: 'flex', marginTop: story ? 28 : 22 }}>
+          <SourceChip leans={leans} logo={sourceLogo} badgeSize={40} fontSize={19} labelSize={32} />
+        </div>
+      ) : null}
+
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: story ? 22 : 18,
+          marginTop: story ? 40 : 30,
+          flexGrow: 1,
+        }}
+      >
+        {leans.length === 0 ? (
+          <div style={{ display: 'flex', fontSize: 38, color: '#a8a29e' }}>
+            No slate today — check back on the next {sportName} slate.
+          </div>
+        ) : (
+          leans.map((l, i) => {
+            const badge = heatBadge(l);
+            const team = teamStyle(sport, l);
+            const logo = l.teamAbbreviation ? teamLogos[l.teamAbbreviation] : undefined;
+            const payout = payoutTag(l);
+            return (
+              <div
+                key={`${l.slug}-${i}`}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: story ? 10 : 8,
+                  background: 'rgba(255,255,255,0.06)',
+                  borderRadius: 20,
+                  padding: story ? '26px 32px' : '20px 30px',
+                }}
+              >
+                <div
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                    <LeanAvatar lean={l} src={headshots[l.slug]} size={story ? 72 : 64} />
+                    <div style={{ display: 'flex', fontSize: 40, fontWeight: 700 }}>
+                      {l.firstName.charAt(0)}. {l.lastName}
+                    </div>
+                  </div>
+                  {l.teamAbbreviation ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      {logo ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- satori JSX
+                        <img
+                          alt=""
+                          src={logo}
+                          width={34}
+                          height={34}
+                          style={{ width: 34, height: 34, objectFit: 'contain' }}
+                        />
+                      ) : null}
+                      <div
+                        style={{ display: 'flex', fontSize: 32, fontWeight: 700, color: team.color }}
+                      >
+                        {l.teamAbbreviation}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+                <div
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      fontSize: 40,
+                      fontWeight: 700,
+                    }}
+                  >
+                    <div style={{ display: 'flex', color: SIDE_COLOR[l.side] }}>
+                      {l.side === 'over' ? 'Over' : 'Under'}
+                    </div>
+                    <div style={{ display: 'flex' }}>
+                      {l.line} {l.statShort}
+                    </div>
+                    {l.bestLine ? <BestLineTag fontSize={24} /> : null}
+                    {payout ? (
+                      <div
+                        style={{ display: 'flex', fontSize: 30, fontWeight: 700, color: payout.color }}
+                      >
+                        {payout.text}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      fontSize: 28,
+                      fontWeight: 700,
+                      color: '#fff',
+                      background: badge.bg,
+                      borderRadius: 999,
+                      padding: '6px 22px',
+                    }}
+                  >
+                    {badge.label}
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** "best line" marker (multi-source cards): this book posts the most favorable
  *  number across books for the player+stat. Amber like the site's heat-1. */
 export function BestLineTag({ fontSize }: { fontSize: number }) {

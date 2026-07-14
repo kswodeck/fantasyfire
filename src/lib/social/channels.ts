@@ -68,7 +68,7 @@ export interface Channel {
  */
 export function cardUrl(
   sport: Sport,
-  variant?: 'jpeg' | 'story' | null,
+  variant?: 'jpeg' | 'story' | 'feed' | null,
   source?: string,
 ): string | null {
   if (!SITE.url || new URL(SITE.url).host.startsWith('localhost')) return null;
@@ -447,7 +447,7 @@ const instagram: Channel = {
         });
         await postInstagramCarousel(target, {
           imageUrls: blocks
-            .map((b) => cardUrl(post.sport, 'jpeg', b.source))
+            .map((b) => cardUrl(post.sport, 'feed', b.source))
             .filter((u): u is string => u !== null),
           caption: c.text,
         });
@@ -462,7 +462,7 @@ const instagram: Channel = {
           channel: 'instagram',
           maxChars: 1000,
         });
-        await postToInstagram(target, { imageUrl: cardUrl(post.sport, 'jpeg')!, caption: c.text });
+        await postToInstagram(target, { imageUrl: cardUrl(post.sport, 'feed')!, caption: c.text });
         posted++;
         console.log(`[social] ${post.sport}: posted to Instagram`);
       }
@@ -492,7 +492,7 @@ const instagram: Channel = {
         { userId: process.env.IG_USER_ID!, accessToken: process.env.IG_ACCESS_TOKEN! },
         {
           imageUrls: digest.cards
-            .map((card) => cardUrl(card.sport, 'jpeg'))
+            .map((card) => cardUrl(card.sport, 'feed'))
             .filter((u): u is string => u !== null),
           caption: c.text,
         },
