@@ -23,17 +23,19 @@ export function formatMultiplier(m: number): string {
 
 /** The multiplier/payout tag for a lean's rung, or null for a plain line:
  *  the exact multiplier when the book posts one (skipping a plain 1×), else
- *  the demon/goblin kind. Colored like the site's payout badges. */
+ *  the demon/goblin kind. Colored like the site's payout badges.
+ *  Demon/goblin is PRIZEPICKS vocabulary — other books never get those words
+ *  or colors here, even if a feed ever mislabels an oddsType. */
 export function payoutTag(l: DailyLean): { text: string; color: string } | null {
+  const kind =
+    l.linesSource === 'prizepicks' && l.oddsType && PAYOUT_COLOR[l.oddsType] ? l.oddsType : null;
   if (l.multiplier != null && l.multiplier !== 1) {
     return {
       text: formatMultiplier(l.multiplier),
-      color: PAYOUT_COLOR[l.oddsType ?? ''] ?? '#a8a29e',
+      color: kind ? PAYOUT_COLOR[kind] : '#a8a29e',
     };
   }
-  if (l.oddsType && PAYOUT_COLOR[l.oddsType]) {
-    return { text: l.oddsType, color: PAYOUT_COLOR[l.oddsType] };
-  }
+  if (kind) return { text: kind, color: PAYOUT_COLOR[kind] };
   return null;
 }
 
