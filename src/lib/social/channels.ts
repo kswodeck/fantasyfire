@@ -5,7 +5,15 @@
 // Contract: every method is BEST-EFFORT — it logs its own failures and returns
 // how many posts actually went out (never throws). isConfigured() reads the
 // channel's env at call time so a missing secret simply skips it.
-import { composeDailyPost, composeDailyDigest, type ContentPackEntry, type PollContent } from './compose';
+import {
+  composeDailyPost,
+  composeDailyDigest,
+  composeMultiSourcePost,
+  type ContentPackEntry,
+  type PollContent,
+  type SourceBlock,
+} from './compose';
+import { sourceLabel } from '@/lib/providedSources';
 import { postToBluesky, type BlueskyRef } from './bluesky';
 import { postToDiscordWebhook } from './discord';
 import { postToInstagram, postInstagramCarousel } from './instagram';
@@ -23,6 +31,14 @@ export interface SportPostInput {
   sport: Sport;
   sportName: string;
   leans: DailyLean[];
+  /** Per-book blocks for the multi-card post (one card per book). Channels use
+   *  multi-image mode at 2+ blocks, else the single default card above. */
+  sourceBlocks?: SourceBlock[];
+}
+
+/** The blocks a multi-image post should use, or null for single-card mode. */
+function multiBlocks(post: SportPostInput): SourceBlock[] | null {
+  return post.sourceBlocks && post.sourceBlocks.length >= 2 ? post.sourceBlocks : null;
 }
 
 export interface DigestInput {
@@ -50,10 +66,15 @@ export interface Channel {
  * re-serving the very first render — stale date, stale leans, pre-redesign
  * layout. A new day makes a new URL, forcing a fresh fetch.
  */
-export function cardUrl(sport: Sport, variant?: 'jpeg' | 'story'): string | null {
+export function cardUrl(
+  sport: Sport,
+  variant?: 'jpeg' | 'story' | null,
+  source?: string,
+): string | null {
   if (!SITE.url || new URL(SITE.url).host.startsWith('localhost')) return null;
   const path = `/api/og/daily/${sport}${variant ? `/${variant}` : ''}`;
-  return absoluteUrl(`${path}?d=${socialDayIso(new Date())}`);
+  const s = source ? `&s=${encodeURIComponent(source)}` : '';
+  return absoluteUrl(`${path}?d=${socialDayIso(new Date())}${s}`);
 }
 
 async function fetchCardPng(url: string): Promise<ArrayBuffer | null> {
@@ -79,6 +100,58 @@ const bluesky: Channel = {
       appPassword: process.env.BLUESKY_APP_PASSWORD!,
     };
     try {
+      const blocks = multiBlocks(post);
+      if (blocks) {
+        // 300-char posts can't hold four books of text: root = every book's
+        // card (Bluesky caps at exactly 4 images) + a tight caption, then one
+        // reply per book carrying that book's own lean lines.
+        const c = composeMultiSourcePost({
+          sport: post.sport,
+          sportName: post.sportName,
+          blocks: blocks.map((b) => ({ source: b.source, leans: b.leans.slice(0, 1) })),
+          siteUrl: SITE.url,
+          channel: 'bluesky',
+          maxChars: 290,
+        });
+        const pngs = await Promise.all(
+          blocks
+            .slice(0, 4)
+            .map((b) => fetchCardPng(cardUrl(post.sport, null, b.source) ?? '').then((png) => ({ b, png }))),
+        );
+        const images = pngs
+          .filter((p) => p.png)
+          .map((p) => ({
+            data: p.png!,
+            alt: `${sourceLabel(p.b.source)} — today's hottest ${post.sportName} props`,
+            width: 1200,
+            height: 630,
+          }));
+        const root = await postToBluesky(creds, {
+          text: c.text,
+          linkDisplay: c.linkDisplay,
+          linkTarget: c.boardUrl,
+          ...(images.length > 0 ? { images } : {}),
+        });
+        let parent = root;
+        for (const b of blocks) {
+          const rc = composeMultiSourcePost({
+            sport: post.sport,
+            sportName: post.sportName,
+            blocks: [{ source: b.source, leans: b.leans.slice(0, CAPTION_LEANS) }],
+            siteUrl: SITE.url,
+            channel: 'bluesky',
+            maxChars: 290,
+          });
+          parent = await postToBluesky(creds, {
+            text: rc.text,
+            linkDisplay: rc.linkDisplay,
+            linkTarget: rc.boardUrl,
+            reply: { root, parent },
+          });
+        }
+        console.log(`[social] ${post.sport}: posted Bluesky multi-source thread`);
+        return 1;
+      }
       const c = composeDailyPost({
         sport: post.sport,
         sportName: post.sportName,
@@ -157,6 +230,31 @@ const discord: Channel = {
   isConfigured: () => !!process.env.DISCORD_WEBHOOK_URL,
   async postSport(post) {
     try {
+      const blocks = multiBlocks(post);
+      if (blocks) {
+        const c = composeMultiSourcePost({
+          sport: post.sport,
+          sportName: post.sportName,
+          blocks: blocks.map((b) => ({ source: b.source, leans: b.leans.slice(0, CAPTION_LEANS) })),
+          siteUrl: SITE.url,
+          channel: 'discord',
+          maxChars: 1800,
+        });
+        await postToDiscordWebhook(process.env.DISCORD_WEBHOOK_URL!, {
+          content: c.text,
+          embeds: blocks
+            .map((b) => ({ b, url: cardUrl(post.sport, null, b.source) }))
+            .filter((e): e is { b: SourceBlock; url: string } => e.url !== null)
+            .map((e) => ({
+              title: `${sourceLabel(e.b.source)} — ${post.sportName}`,
+              url: c.boardUrl,
+              imageUrl: e.url,
+              color: SPORTS[post.sport].accent,
+            })),
+        });
+        console.log(`[social] ${post.sport}: posted Discord multi-source message`);
+        return 1;
+      }
       const c = composeDailyPost({
         sport: post.sport,
         sportName: post.sportName,
@@ -229,6 +327,29 @@ const telegram: Channel = {
       chatId: process.env.TELEGRAM_CHAT_ID!,
     };
     try {
+      const blocks = multiBlocks(post);
+      if (blocks) {
+        const c = composeMultiSourcePost({
+          sport: post.sport,
+          sportName: post.sportName,
+          blocks: blocks.map((b) => ({ source: b.source, leans: b.leans.slice(0, CAPTION_LEANS) })),
+          siteUrl: SITE.url,
+          channel: 'telegram',
+          maxChars: 900, // album captions cap at 1024
+        });
+        const photoUrls = blocks
+          .map((b) => cardUrl(post.sport, null, b.source))
+          .filter((u): u is string => u !== null);
+        if (photoUrls.length >= 2) {
+          await postTelegramAlbum(target, {
+            photoUrls,
+            caption: c.text.replace(c.linkDisplay, c.boardUrl),
+          });
+          console.log(`[social] ${post.sport}: posted Telegram multi-source album`);
+          return 1;
+        }
+        // No public card URLs (localhost) — fall through to the plain text post.
+      }
       const c = composeDailyPost({
         sport: post.sport,
         sportName: post.sportName,
@@ -312,18 +433,39 @@ const instagram: Channel = {
     }
     let posted = 0;
     // Feed post — caption links aren't clickable on IG; traffic goes via bio.
+    // Multi-source mode: a swipeable carousel, one card per book.
     try {
-      const c = composeDailyPost({
-        sport: post.sport,
-        sportName: post.sportName,
-        leans: post.leans.slice(0, CAPTION_LEANS),
-        siteUrl: SITE.url,
-        channel: 'instagram',
-        maxChars: 1000,
-      });
-      await postToInstagram(target, { imageUrl: cardUrl(post.sport, 'jpeg')!, caption: c.text });
-      posted++;
-      console.log(`[social] ${post.sport}: posted to Instagram`);
+      const blocks = multiBlocks(post);
+      if (blocks) {
+        const c = composeMultiSourcePost({
+          sport: post.sport,
+          sportName: post.sportName,
+          blocks: blocks.map((b) => ({ source: b.source, leans: b.leans.slice(0, CAPTION_LEANS) })),
+          siteUrl: SITE.url,
+          channel: 'instagram',
+          maxChars: 1800,
+        });
+        await postInstagramCarousel(target, {
+          imageUrls: blocks
+            .map((b) => cardUrl(post.sport, 'jpeg', b.source))
+            .filter((u): u is string => u !== null),
+          caption: c.text,
+        });
+        posted++;
+        console.log(`[social] ${post.sport}: posted Instagram multi-source carousel`);
+      } else {
+        const c = composeDailyPost({
+          sport: post.sport,
+          sportName: post.sportName,
+          leans: post.leans.slice(0, CAPTION_LEANS),
+          siteUrl: SITE.url,
+          channel: 'instagram',
+          maxChars: 1000,
+        });
+        await postToInstagram(target, { imageUrl: cardUrl(post.sport, 'jpeg')!, caption: c.text });
+        posted++;
+        console.log(`[social] ${post.sport}: posted to Instagram`);
+      }
     } catch (e) {
       warn('instagram', post.sport, e);
     }
@@ -368,7 +510,33 @@ const threads: Channel = {
   key: 'threads',
   isConfigured: () => !!(process.env.THREADS_USER_ID && process.env.THREADS_ACCESS_TOKEN),
   async postSport(post) {
+    const target = {
+      userId: process.env.THREADS_USER_ID!,
+      accessToken: process.env.THREADS_ACCESS_TOKEN!,
+    };
     try {
+      const blocks = multiBlocks(post);
+      if (blocks) {
+        const c = composeMultiSourcePost({
+          sport: post.sport,
+          sportName: post.sportName,
+          blocks: blocks.map((b) => ({ source: b.source, leans: b.leans.slice(0, CAPTION_LEANS) })),
+          siteUrl: SITE.url,
+          channel: 'threads',
+          maxChars: 480,
+        });
+        const imageUrls = blocks
+          .map((b) => cardUrl(post.sport, null, b.source))
+          .filter((u): u is string => u !== null);
+        if (imageUrls.length >= 2) {
+          await postThreadsCarousel(target, {
+            imageUrls,
+            text: c.text.replace(c.linkDisplay, c.boardUrl),
+          });
+          console.log(`[social] ${post.sport}: posted Threads multi-source carousel`);
+          return 1;
+        }
+      }
       const c = composeDailyPost({
         sport: post.sport,
         sportName: post.sportName,
@@ -380,10 +548,7 @@ const threads: Channel = {
       // Links in Threads text are clickable — swap in the tracked URL.
       const text = c.text.replace(c.linkDisplay, c.boardUrl);
       const card = cardUrl(post.sport);
-      await postToThreads(
-        { userId: process.env.THREADS_USER_ID!, accessToken: process.env.THREADS_ACCESS_TOKEN! },
-        { text, ...(card ? { imageUrl: card } : {}) },
-      );
+      await postToThreads(target, { text, ...(card ? { imageUrl: card } : {}) });
       console.log(`[social] ${post.sport}: posted to Threads`);
       return 1;
     } catch (e) {

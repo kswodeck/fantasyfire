@@ -25,6 +25,7 @@ import { db } from '../lib/db';
 import { recordIngestRun } from './ingestRun';
 import {
   getDailyLeans,
+  getDailySourceLeans,
   getTodaySlateTiming,
   getWeeklyStreaks,
   isSportDue,
@@ -36,8 +37,10 @@ import {
   composeDailyDigest,
   composeDailyPoll,
   composeDailyPost,
+  composeMultiSourcePost,
   composeWeeklyStreaks,
   type ContentPackEntry,
+  type SourceBlock,
 } from '../lib/social/compose';
 import { CHANNELS, CAPTION_LEANS, cardUrl, type DigestInput } from '../lib/social/channels';
 import { postToDiscordWebhook } from '../lib/social/discord';
@@ -49,9 +52,11 @@ const DRY_RUN = process.argv.includes('--dry-run');
 const FORCE = process.argv.includes('--force');
 
 const ENABLED = process.env.SOCIAL_PUBLISH_ENABLED === 'true';
-/** College props are state-restricted — excluded from auto-posting by default. */
+/** College props are state-restricted — excluded from auto-posting by default.
+ *  `||` not `??`: the workflow passes '' when the repo variable is unset, and
+ *  an empty string must mean "use the default", not "exclude nothing". */
 const EXCLUDED = new Set(
-  (process.env.SOCIAL_SPORTS_EXCLUDE ?? 'cfb,cbb')
+  (process.env.SOCIAL_SPORTS_EXCLUDE || 'cfb,cbb')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean),
@@ -75,6 +80,9 @@ interface SportPost {
   sport: Sport;
   sportName: string;
   leans: DailyLean[];
+  /** Per-book blocks (PrizePicks/Underdog/Sleeper/Pick6) — 2+ turns the sport
+   *  post into a multi-card carousel/album/thread on every channel. */
+  sourceBlocks: SourceBlock[];
   due: boolean;
   firstStart: Date | null;
 }
@@ -96,12 +104,19 @@ async function main(): Promise<number> {
     if (EXCLUDED.has(sport)) continue;
     const leans = await getDailyLeans(sport, CARD_LEANS, now);
     if (leans.length === 0) continue;
+    const sourceBlocks = await getDailySourceLeans(sport, CARD_LEANS, now).catch(
+      () => [] as SourceBlock[],
+    );
     const { firstStart } = await getTodaySlateTiming(sport, now);
     const due = FORCE || (await isSportDue(sport, now));
-    posts.push({ sport, sportName: SPORTS[sport].name, leans, due, firstStart });
+    posts.push({ sport, sportName: SPORTS[sport].name, leans, sourceBlocks, due, firstStart });
   }
 
   let posted = 0;
+  // Configured channels whose post attempt failed (bad token, bot not in the
+  // channel, API outage) — surfaced to the private owner channel at the end,
+  // because a best-effort warn() in the Actions log is otherwise invisible.
+  const channelFailures: string[] = [];
 
   // Per-sport posts at their game-aware windows.
   for (const post of posts) {
@@ -109,15 +124,31 @@ async function main(): Promise<number> {
       ? `next start ${post.firstStart.toISOString()}`
       : 'no start time (daily-slot fallback)';
     if (DRY_RUN) {
-      const c = composeDailyPost({
-        sport: post.sport,
-        sportName: post.sportName,
-        leans: post.leans.slice(0, CAPTION_LEANS),
-        siteUrl: SITE.url,
-        channel: 'bluesky',
-      });
+      const multi = post.sourceBlocks.length >= 2;
+      const c = multi
+        ? composeMultiSourcePost({
+            sport: post.sport,
+            sportName: post.sportName,
+            blocks: post.sourceBlocks.map((b) => ({
+              source: b.source,
+              leans: b.leans.slice(0, CAPTION_LEANS),
+            })),
+            siteUrl: SITE.url,
+            channel: 'discord',
+            maxChars: 1800,
+          })
+        : composeDailyPost({
+            sport: post.sport,
+            sportName: post.sportName,
+            leans: post.leans.slice(0, CAPTION_LEANS),
+            siteUrl: SITE.url,
+            channel: 'bluesky',
+          });
+      const cards = multi
+        ? post.sourceBlocks.map((b) => cardUrl(post.sport, null, b.source)).join('\n      ')
+        : cardUrl(post.sport);
       console.log(
-        `\n[social] DRY RUN — ${post.sport} (${startLabel}; due now: ${post.due})\n${c.text}\n→ ${c.boardUrl}\ncard: ${cardUrl(post.sport) ?? '(no public site URL)'}`,
+        `\n[social] DRY RUN — ${post.sport} (${startLabel}; due now: ${post.due}; sources: ${post.sourceBlocks.map((b) => b.source).join(',') || '(single)'})\n${c.text}\n→ ${c.boardUrl}\ncard: ${cards ?? '(no public site URL)'}`,
       );
       continue;
     }
@@ -126,7 +157,11 @@ async function main(): Promise<number> {
       continue;
     }
     let n = 0;
-    for (const channel of configured()) n += await channel.postSport(post);
+    for (const channel of configured()) {
+      const made = await channel.postSport(post);
+      if (made === 0) channelFailures.push(`${post.sport} → ${channel.key}`);
+      n += made;
+    }
     if (n > 0) {
       await writeMarker(`social:${post.sport}`, n);
       posted += n;
@@ -223,6 +258,23 @@ async function main(): Promise<number> {
       } catch (e) {
         console.warn('[social] content pack failed —', e instanceof Error ? e.message : e);
       }
+    }
+  }
+
+  // Channel-health alert to the private owner channel: a configured channel
+  // that fails (expired token, bot missing from the chat) only warns in the
+  // Actions log, which nobody reads until posts are visibly missing.
+  if (!DRY_RUN && channelFailures.length > 0 && packUrl) {
+    try {
+      await postToDiscordWebhook(packUrl, {
+        content:
+          `⚠️ **Channel failures this tick:** ${channelFailures.join(', ')}\n` +
+          `The exact API error is in the workflow log (Actions → Game-aware social publish). ` +
+          `Common causes: expired/invalid token (Bluesky app password, Meta 60-day tokens), ` +
+          `or the Telegram bot not added as a channel admin.`,
+      });
+    } catch {
+      /* the alert itself is best-effort */
     }
   }
 

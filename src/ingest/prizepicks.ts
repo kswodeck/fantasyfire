@@ -230,16 +230,40 @@ function parsePpBody(body: PpResponse, out: ProvidedLineRow[]): void {
   }
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * One league fetch with patient 429 handling. PP's rate window is stricter
+ * than a 1.5s gap — production runs showed the first ~2 leagues passing and
+ * every later one 429ing, which zeroed the whole source. On 429 we honor
+ * Retry-After when sent, else back off 20s/40s; anything other than 429/5xx
+ * fails immediately (403 = blocked; retrying won't help and wastes minutes).
+ */
+async function fetchLeague(leagueId: number): Promise<PpResponse> {
+  const url = `${BASE}?league_id=${leagueId}&per_page=25000`;
+  for (let attempt = 1; ; attempt++) {
+    const res = await scrapeFetch(url, { headers: HEADERS });
+    if (res.ok) return (await res.json()) as PpResponse;
+    if (attempt >= 3 || (res.status !== 429 && res.status < 500)) {
+      throw new Error(`PrizePicks HTTP ${res.status} (league ${leagueId})`);
+    }
+    const retryAfter = Number(res.headers.get('retry-after'));
+    const waitMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : attempt * 20_000;
+    console.warn(
+      `[prizepicks] league ${leagueId} got ${res.status} — retrying in ${Math.round(waitMs / 1000)}s (attempt ${attempt}/3)`,
+    );
+    await sleep(waitMs);
+  }
+}
+
 export async function fetchPrizePicksLines(): Promise<ProvidedLineRow[]> {
   const out: ProvidedLineRow[] = [];
   const leagueIds = Object.values(PP_LEAGUE_IDS);
   for (let i = 0; i < leagueIds.length; i++) {
-    if (i > 0) await new Promise((r) => setTimeout(r, 1500)); // space requests — PP rate-limits bursts
+    if (i > 0) await sleep(6000); // space requests WELL apart — PP rate-limits more than bursts
     const leagueId = leagueIds[i];
     try {
-      const res = await scrapeFetch(`${BASE}?league_id=${leagueId}&per_page=25000`, { headers: HEADERS });
-      if (!res.ok) throw new Error(`PrizePicks HTTP ${res.status} (league ${leagueId})`);
-      parsePpBody((await res.json()) as PpResponse, out);
+      parsePpBody(await fetchLeague(leagueId), out);
     } catch (e) {
       console.warn(`[prizepicks] league ${leagueId} fetch failed: ${(e as Error).message}`);
     }

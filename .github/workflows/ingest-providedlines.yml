@@ -56,7 +56,9 @@ jobs:
       # revalidate ONLY the player/stat pages whose line actually moved. All inert
       # if unset — the run just skips the ping. See .env.example.
       REVALIDATE_SECRET: ${{ secrets.REVALIDATE_SECRET }}
-      NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
+      # Fallback matches social.yml — without it the var resolves empty here and
+      # every post-ingest revalidation ping is skipped ("bad-site-url").
+      NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL || 'https://fantasyfire.app' }}
       PROVIDED_LINES_ENABLED: ${{ vars.PROVIDED_LINES_ENABLED }}
     steps:
       - uses: actions/checkout@v4

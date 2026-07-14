@@ -18,7 +18,10 @@ import { scrapeFetch } from './scrapeFetch';
 
 const BASE = 'https://api.underdogfantasy.com/beta/v5/over_under_lines';
 // One filtered request per sport (vs the full ~10 MB feed) — cheaper proxy bandwidth.
-const UD_SPORT_IDS = ['NBA', 'MLB', 'NFL'] as const;
+// Every sport we can map (UD_SPORT + the stat tables below) — WNBA was missing
+// here for weeks, so Underdog silently never had WNBA lines despite full stat
+// mappings. Off-season ids just return empty payloads (one cheap request each).
+const UD_SPORT_IDS = ['NBA', 'MLB', 'NFL', 'WNBA', 'NHL'] as const;
 const HEADERS = {
   'User-Agent':
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
