@@ -105,6 +105,8 @@ jobs:
       NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL || 'https://fantasyfire.app' }}
       SOCIAL_PUBLISH_ENABLED: ${{ vars.SOCIAL_PUBLISH_ENABLED || '' }}
       SOCIAL_SPORTS_EXCLUDE: ${{ vars.SOCIAL_SPORTS_EXCLUDE || '' }}
+      SOCIAL_LINES_SOURCE: ${{ vars.SOCIAL_LINES_SOURCE || '' }}
+      PROVIDED_LINES_ENABLED: ${{ vars.PROVIDED_LINES_ENABLED || '' }}
       BLUESKY_IDENTIFIER: ${{ secrets.BLUESKY_IDENTIFIER || '' }}
       BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD || '' }}
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL || '' }}

@@ -6,15 +6,14 @@
 // in the Vercel serverless bundle under pnpm.
 import { ImageResponse } from 'next/og';
 import { Jimp, JimpMime } from 'jimp';
+import { sourceBrand, sourceLabel } from '@/lib/providedSources';
 import { getDailyLeans, type DailyLean } from '@/lib/server/social';
-import { SITE } from '@/lib/site';
 import { isSport, SPORTS } from '@/lib/sports';
 import { heatLabel } from '@/lib/tierStyle';
 
 export const dynamic = 'force-dynamic';
 
 const SIZE = { width: 1080, height: 1920 };
-const RG_LINE = 'Past performance, not betting advice · 21+ · Gambling problem? 1-800-GAMBLER';
 
 /** The site's heat-read badge (tierStyle.ts): overs warm (Hot/Blazing, orange →
  *  red), unders cool (Cold/Frozen, blue → indigo). */
@@ -23,6 +22,21 @@ function heatBadge(l: DailyLean): { label: string; bg: string } {
   return l.side === 'over'
     ? { label: heatLabel(l.tier, l.side), bg: strong ? '#dc2626' : '#ea580c' }
     : { label: heatLabel(l.tier, l.side), bg: strong ? '#4338ca' : '#2563eb' };
+}
+
+/** Where the lines came from — the book's brand badge (providedSources.ts, the
+ *  same monogram treatment the site's source dropdown uses) or our own mark
+ *  for the computed median fallback. */
+function linesBrand(leans: DailyLean[]): {
+  monogram: string;
+  bg: string;
+  fg: string;
+  label: string;
+} {
+  const source = leans[0]?.linesSource ?? null;
+  if (!source) return { monogram: 'FF', bg: '#ea580c', fg: '#ffffff', label: 'FantasyFire lines' };
+  const brand = sourceBrand(source);
+  return { ...brand, label: `${sourceLabel(source)} lines` };
 }
 
 export async function GET(_request: Request, ctx: { params: Promise<{ sport: string }> }) {
@@ -83,16 +97,38 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
           <div style={{ display: 'flex', fontSize: 34, color: '#a8a29e' }}>{dateLabel}</div>
         </div>
 
-        <div style={{ display: 'flex', fontSize: 64, fontWeight: 800, marginTop: 24 }}>
-          {leans.length > 0 ? "Today's Hottest Props" : 'No slate today'}
-        </div>
+        {/* No headline — the caption/board carries the words; the rows are the card.
+            Instead: where the lines come from, in the site's source-badge treatment. */}
+        {leans.length > 0 ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 28 }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 40,
+                height: 40,
+                borderRadius: 10,
+                fontSize: 19,
+                fontWeight: 800,
+                background: linesBrand(leans).bg,
+                color: linesBrand(leans).fg,
+              }}
+            >
+              {linesBrand(leans).monogram}
+            </div>
+            <div style={{ display: 'flex', fontSize: 32, color: '#a8a29e' }}>
+              {linesBrand(leans).label}
+            </div>
+          </div>
+        ) : null}
 
         <div
           style={{ display: 'flex', flexDirection: 'column', gap: 22, marginTop: 40, flexGrow: 1 }}
         >
           {leans.length === 0 ? (
             <div style={{ display: 'flex', fontSize: 38, color: '#a8a29e' }}>
-              Check back on the next {cfg.name} slate — boards recompute nightly.
+              No slate today — check back on the next {cfg.name} slate.
             </div>
           ) : (
             leans.map((l, i) => {
@@ -155,21 +191,8 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
           )}
         </div>
 
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 14,
-            marginTop: 32,
-            paddingTop: 28,
-            borderTop: '1px solid rgba(255,255,255,0.12)',
-          }}
-        >
-          <div style={{ display: 'flex', fontSize: 34, fontWeight: 700, color: '#fb923c' }}>
-            {SITE.url.replace(/^https?:\/\//, '')}/{sport}/board
-          </div>
-          <div style={{ display: 'flex', fontSize: 26, color: '#a8a29e' }}>{RG_LINE}</div>
-        </div>
+        {/* No footer — the caption/board carries the link; the card is
+            brand + attribution + the rows. */}
       </div>
     ),
     { ...SIZE },
