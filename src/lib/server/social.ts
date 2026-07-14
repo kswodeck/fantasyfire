@@ -111,8 +111,15 @@ async function getSocialSlate(
     })
     .catch(() => []);
   if (rows.length > 0) {
+    // Content covers games still UPCOMING — once a game tips its props are
+    // dead, so an in-progress matinee's players don't belong on a card posted
+    // ahead of the evening tip. A started game's teams only count when nothing
+    // is still upcoming (the morning-only-slate catch-up), mirroring
+    // pickRelevantStart's anchor preference.
+    const upcoming = rows.filter((r) => (r.startTime as Date).getTime() >= now.getTime());
+    const relevant = upcoming.length > 0 ? upcoming : rows;
     const teams = new Set(
-      rows
+      relevant
         .flatMap((r) => [r.homeTeam.abbreviation, r.awayTeam.abbreviation])
         .filter((a): a is string => !!a),
     );
