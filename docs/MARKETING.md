@@ -355,20 +355,24 @@ Ordered so each phase is independently shippable and nothing waits on traffic:
 
 **Phase 2 — retention activation**
 4. ✅ `pnpm push` scheduled in `social.yml` (inert until owner supplies VAPID keys).
-5. PWA install nudge + "save this player" nudge (small).
+5. ✅ PWA install nudge (`InstallNudge`, 2nd visit + `beforeinstallprompt`) and
+   "save this player" nudge (`SaveNudge`, empty-Playbook visitors only).
 
 **Phase 3 — visibility edges**
-6. RSS/Atom feeds per sport + site-wide.
+6. ✅ RSS feeds: `/feed.xml` (site-wide) + `/{sport}/feed.xml`, advertised via
+   `<link rel=alternate>`; one item per sport per social day.
 7. ✅ `llms.txt` (`src/app/llms.txt/route.ts`).
 8. `SITE.socials` fill (5 min, when handles exist).
    _Also shipped: 1024px social avatars in `public/brand/` (rounded + full-bleed
    square for circle-cropping platforms), generated from the FlameMark._
 
 **Phase 4 — expansion (only if metrics justify)**
-9. Weekly "streaks of the week" recap post variant.
-10. Threads via Meta App Review; Mastodon poster (~30 lines) if wanted.
-11. A weekly automated metrics digest (Umami API → content-pack channel) so the
-    owner's "glance at analytics" is also pushed to them.
+9. ✅ Weekly "longest active streaks" recap — Sundays at the noon-ET slot
+   (text post via every configured channel's `postText`).
+10. Mastodon poster (~30 lines, one `channels.ts` entry) if ever wanted.
+11. ✅ Weekly Umami metrics digest (`pnpm metrics`, Sundays in `weekly.yml` →
+    content-pack channel). `weekly.yml` also auto-refreshes the Meta tokens
+    (needs a `GH_PAT` fine-grained secret with Secrets read/write).
 
 ---
 

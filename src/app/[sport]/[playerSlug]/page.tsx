@@ -9,6 +9,7 @@ import { getTeam } from '@/lib/teams';
 import { currentSeason } from '@/lib/season';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
 import { PlayerResearchClient } from '@/components/PlayerResearchClient';
+import { SaveNudge } from '@/components/SaveNudge';
 import { PlayerAvatar } from '@/components/PlayerAvatar';
 import { TeamLogo } from '@/components/TeamLogo';
 import { PlayerBioBar } from '@/components/PlayerBioBar';
@@ -255,6 +256,8 @@ export default async function PlayerPage({ params }: PageProps) {
       </header>
 
       <PlayerBioBar bio={research.bio} experience={experience} sport={sport} />
+
+      <SaveNudge />
 
       <PlayerResearchClient
         slug={player.slug}

@@ -1,0 +1,96 @@
+name: Weekly maintenance (token refresh + metrics digest)
+
+# Two Sunday/Monday chores that keep the social pipeline self-sufficient:
+#
+# 1. REFRESH the Instagram + Threads long-lived tokens (they expire after 60
+#    days; refreshable any time after 24h old). The refreshed token is written
+#    back to the repo's Production-environment secrets with `gh secret set`,
+#    so the ~8-week manual regeneration chore disappears. Requires a
+#    fine-grained PAT (GH_PAT secret) with Secrets read/write on this repo —
+#    without it the refresh steps skip with a notice.
+# 2. SEND the weekly Umami metrics digest to the owner's private Discord
+#    channel (pnpm metrics — inert until UMAMI_API_KEY / UMAMI_WEBSITE_ID are
+#    set; create an API key at https://cloud.umami.is/settings/api).
+#
+# Secrets (Production environment), all optional — steps skip when missing:
+#   GH_PAT                            — fine-grained PAT, Secrets: read/write on this repo
+#   IG_ACCESS_TOKEN / THREADS_ACCESS_TOKEN — refreshed in place
+#   UMAMI_API_KEY                     — Umami Cloud API key
+#   DISCORD_CONTENT_PACK_WEBHOOK_URL  — where the digest lands
+#   DATABASE_URL                      — audit rows for the metrics job
+# Variables:
+#   UMAMI_WEBSITE_ID                  — the site's Umami id
+
+on:
+  schedule:
+    # Sunday 17:00 UTC (≈ noon–1pm ET) — after the weekly streaks post.
+    - cron: '0 17 * * 0'
+  workflow_dispatch: {}
+
+concurrency:
+  group: weekly
+  cancel-in-progress: false
+
+jobs:
+  refresh-tokens:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: Production
+    env:
+      GH_TOKEN: ${{ secrets.GH_PAT || '' }}
+      IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN || '' }}
+      THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN || '' }}
+    steps:
+      - name: Refresh Instagram token
+        run: |
+          if [ -z "$GH_TOKEN" ] || [ -z "$IG_ACCESS_TOKEN" ]; then
+            echo "GH_PAT or IG_ACCESS_TOKEN missing — skipping Instagram refresh."
+            exit 0
+          fi
+          resp=$(curl -fsS "https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=$IG_ACCESS_TOKEN" || true)
+          tok=$(echo "$resp" | jq -r '.access_token // empty')
+          if [ -z "$tok" ]; then
+            echo "::warning::Instagram token refresh failed (token may be <24h old or already expired): $(echo "$resp" | jq -r '.error.message // "no response"')"
+            exit 0
+          fi
+          echo "::add-mask::$tok"
+          echo "$tok" | gh secret set IG_ACCESS_TOKEN --env Production --repo "$GITHUB_REPOSITORY"
+          echo "Instagram token refreshed (expires in $(echo "$resp" | jq -r '.expires_in')s)."
+
+      - name: Refresh Threads token
+        if: ${{ success() || failure() }}
+        run: |
+          if [ -z "$GH_TOKEN" ] || [ -z "$THREADS_ACCESS_TOKEN" ]; then
+            echo "GH_PAT or THREADS_ACCESS_TOKEN missing — skipping Threads refresh."
+            exit 0
+          fi
+          resp=$(curl -fsS "https://graph.threads.net/refresh_access_token?grant_type=th_refresh_token&access_token=$THREADS_ACCESS_TOKEN" || true)
+          tok=$(echo "$resp" | jq -r '.access_token // empty')
+          if [ -z "$tok" ]; then
+            echo "::warning::Threads token refresh failed (token may be <24h old or already expired): $(echo "$resp" | jq -r '.error.message // "no response"')"
+            exit 0
+          fi
+          echo "::add-mask::$tok"
+          echo "$tok" | gh secret set THREADS_ACCESS_TOKEN --env Production --repo "$GITHUB_REPOSITORY"
+          echo "Threads token refreshed (expires in $(echo "$resp" | jq -r '.expires_in')s)."
+
+  metrics-digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: Production
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL || '' }}
+      UMAMI_API_KEY: ${{ secrets.UMAMI_API_KEY || '' }}
+      UMAMI_WEBSITE_ID: ${{ vars.UMAMI_WEBSITE_ID || '' }}
+      DISCORD_CONTENT_PACK_WEBHOOK_URL: ${{ secrets.DISCORD_CONTENT_PACK_WEBHOOK_URL || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Send weekly metrics digest
+        run: pnpm metrics

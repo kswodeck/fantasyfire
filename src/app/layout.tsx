@@ -6,6 +6,7 @@ import { SiteFooter } from '@/components/SiteFooter';
 import { Providers } from './providers';
 import { Analytics } from '@/components/Analytics';
 import { SpeedInsights } from '@/components/SpeedInsights';
+import { InstallNudge } from '@/components/InstallNudge';
 import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister';
 import { SITE, absoluteUrl, activeSocials, twitterHandle } from '@/lib/site';
 
@@ -35,7 +36,10 @@ export const metadata: Metadata = {
   },
   description: SITE.description,
   applicationName: SITE.name,
-  alternates: { canonical: '/' },
+  alternates: {
+    canonical: '/',
+    types: { 'application/rss+xml': [{ url: '/feed.xml', title: 'FantasyFire — Daily Hottest Props' }] },
+  },
   openGraph: {
     type: 'website',
     siteName: SITE.name,
@@ -141,6 +145,7 @@ export default function RootLayout({
             {children}
           </main>
           <SiteFooter />
+          <InstallNudge />
         </Providers>
         <ServiceWorkerRegister />
         <Analytics />

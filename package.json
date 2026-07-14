@@ -49,6 +49,8 @@
     "push:prod": "dotenv -e .env.prod.local -- tsx src/ingest/run-push.ts",
     "social": "tsx src/ingest/run-social.ts",
     "social:prod": "dotenv -e .env.prod.local -- tsx src/ingest/run-social.ts",
+    "metrics": "tsx src/ingest/run-metrics.ts",
+    "metrics:prod": "dotenv -e .env.prod.local -- tsx src/ingest/run-metrics.ts",
     "db:prune": "tsx src/ingest/run-prune.ts",
     "db:prune:prod": "dotenv -e .env.prod.local -- tsx src/ingest/run-prune.ts",
     "db:generate": "prisma generate",

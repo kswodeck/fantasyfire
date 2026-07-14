@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     ).filter((s): s is (typeof SPORT_LIST)[number] => s !== null);
     // The fixed daily slot also wakes the job for the owner content pack (and
     // the no-start-time fallback), once per day.
-    const dailyTick = isDailyTick(now) && !(await socialPostedToday('social:pack'));
+    const dailyTick = isDailyTick(now) && !(await socialPostedToday('social:pack', now));
     return jsonResponse({ anyDue: due.length > 0 || dailyTick, due, dailyTick }, { request });
   } catch {
     // Fail open — the workflow treats an error as "run the full job".
