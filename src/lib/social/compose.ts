@@ -56,8 +56,6 @@ export interface DailyPostContent {
   imageAlt: string;
 }
 
-const RG_LINE = '21+ · Gambling problem? 1-800-GAMBLER';
-
 function capSide(side: 'over' | 'under'): string {
   return side === 'over' ? 'Over' : 'Under';
 }
@@ -117,9 +115,7 @@ export function composeDailyPost(opts: {
   // framing — captions don't need a defensive disclaimer.
   const header = `Today's hottest ${sportName} props 🔥`;
   const attribution = linesAttribution(opts.leans);
-  const footer =
-    `Full board → ${linkDisplay}\n` +
-    `${attribution ? `${attribution} lines · ` : ''}${RG_LINE}`;
+  const footer = `Full board → ${linkDisplay}${attribution ? ` · ${attribution} lines` : ''}`;
 
   let leans = [...opts.leans];
   let text = '';
@@ -179,9 +175,7 @@ export function composeDailyDigest(opts: {
   const boardUrl = `${siteUrl}/board?utm_source=${channel}&utm_medium=social&utm_campaign=daily-digest`;
   const linkDisplay = `${siteUrl.replace(/^https?:\/\//, '')}/board`;
   const attribution = linesAttribution(withLeans.map((e) => e.leans[0]));
-  const footer =
-    `All boards → ${linkDisplay}\n` +
-    `${attribution ? `${attribution} lines · ` : ''}${RG_LINE}`;
+  const footer = `All boards → ${linkDisplay}${attribution ? ` · ${attribution} lines` : ''}`;
 
   let entries = [...withLeans];
   let text = '';

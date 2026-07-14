@@ -33,7 +33,7 @@ const THREE_LEANS: DailyLean[] = [
 ];
 
 describe('composeDailyPost', () => {
-  it('includes the leans, flame tiers, tracked URL, and responsible-gaming line', () => {
+  it('includes the leans, flame tiers, and tracked URL — and no RG boilerplate', () => {
     const c = composeDailyPost({
       sport: 'nba',
       sportName: 'NBA',
@@ -44,7 +44,7 @@ describe('composeDailyPost', () => {
     expect(c.text).toContain('hottest NBA props');
     expect(c.text).toContain('L. Dončić Over 32.5 PTS 🔥🔥'); // over + Strong lean = Blazing
     expect(c.text).toContain('J. Brunson Under 6.5 AST ❄️'); // under + Lean = Cold (cool side)
-    expect(c.text).toContain('1-800-GAMBLER');
+    expect(c.text).not.toContain('1-800-GAMBLER'); // RG disclosure lives on the site/bios, not posts
     expect(c.text).toContain(c.linkDisplay);
     expect(c.boardUrl).toBe(
       'https://fantasyfire.app/nba/board?utm_source=bluesky&utm_medium=social&utm_campaign=daily-leans',
@@ -68,7 +68,7 @@ describe('composeDailyPost', () => {
     }
   });
 
-  it('fits the Bluesky budget by dropping trailing leans, never the RG line', () => {
+  it('fits the Bluesky budget by dropping trailing leans, never the footer', () => {
     const many = Array.from({ length: 8 }, (_, i) =>
       lean({ slug: `p${i}`, lastName: `Verylonglastname${i}` }),
     );
@@ -81,7 +81,6 @@ describe('composeDailyPost', () => {
       maxChars: 290,
     });
     expect([...c.text].length).toBeLessThanOrEqual(290);
-    expect(c.text).toContain('1-800-GAMBLER');
     expect(c.text).toContain(c.linkDisplay);
   });
 
@@ -93,7 +92,7 @@ describe('composeDailyPost', () => {
       siteUrl: SITE_URL,
       channel: 'bluesky',
     });
-    expect(withBook.text).toContain('PrizePicks lines · 21+');
+    expect(withBook.text).toContain('board · PrizePicks lines');
 
     const computed = composeDailyPost({
       sport: 'nba',
@@ -102,7 +101,7 @@ describe('composeDailyPost', () => {
       siteUrl: SITE_URL,
       channel: 'bluesky',
     });
-    expect(computed.text).toContain('FantasyFire lines · 21+');
+    expect(computed.text).toContain('board · FantasyFire lines');
   });
 
   it('throws on an empty lean list', () => {
@@ -146,7 +145,7 @@ describe('composeDailyDigest', () => {
     expect(c.text).toContain('NBA: L. Dončić Over 32.5 PTS');
     expect(c.text).toContain('MLB: A. Judge Over 0.5 HR');
     expect(c.text).not.toContain('WNBA'); // no leans → dropped
-    expect(c.text).toContain('1-800-GAMBLER');
+    expect(c.text).not.toContain('1-800-GAMBLER');
     expect(c.boardUrl).toContain('/board?utm_source=discord');
     for (const token of BANNED_TOKENS) expect(c.text.toLowerCase()).not.toContain(token);
   });

@@ -15,7 +15,6 @@ import { heatLabel } from '@/lib/tierStyle';
 export const dynamic = 'force-dynamic';
 
 const SIZE = { width: 1080, height: 1920 };
-const RG_LINE = 'Past performance, not betting advice · 21+ · Gambling problem? 1-800-GAMBLER';
 
 /** The site's heat-read badge (tierStyle.ts): overs warm (Hot/Blazing, orange →
  *  red), unders cool (Cold/Frozen, blue → indigo). */
@@ -206,7 +205,6 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
           <div style={{ display: 'flex', fontSize: 34, fontWeight: 700, color: '#fb923c' }}>
             {SITE.url.replace(/^https?:\/\//, '')}/{sport}/board
           </div>
-          <div style={{ display: 'flex', fontSize: 26, color: '#a8a29e' }}>{RG_LINE}</div>
         </div>
       </div>
     ),
