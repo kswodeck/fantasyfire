@@ -14,6 +14,9 @@ export interface DailyLean {
   slug: string;
   firstName: string;
   lastName: string;
+  /** League person id (PlayerSummary.externalId) — drives the official
+   *  headshot on the card images; optional so composed-text fixtures skip it. */
+  playerExternalId?: number;
   teamAbbreviation: string | null;
   statShort: string;
   line: number;
@@ -77,6 +80,7 @@ export async function getDailyLeans(
       slug: r.player.slug,
       firstName: r.player.firstName,
       lastName: r.player.lastName,
+      playerExternalId: r.player.externalId,
       teamAbbreviation: abbr,
       statShort: r.statShort,
       line: r.line,

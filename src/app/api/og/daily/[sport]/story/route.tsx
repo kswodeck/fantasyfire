@@ -8,7 +8,7 @@ import { ImageResponse } from 'next/og';
 import { Jimp, JimpMime } from 'jimp';
 import { getDailyLeans, type DailyLean } from '@/lib/server/social';
 import { isSport, SPORTS } from '@/lib/sports';
-import { heatBadge, SourceChip } from '../cardParts';
+import { cardDateLabel, heatBadge, LeanAvatar, leanHeadshots, SourceChip } from '../cardParts';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,12 +20,8 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
   if (!isSport(sport)) return new Response('Unknown sport', { status: 404 });
 
   const leans = await getDailyLeans(sport, 5).catch(() => [] as DailyLean[]);
-  const dateLabel = new Date().toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
+  const headshots = await leanHeadshots(sport, leans);
+  const dateLabel = cardDateLabel();
   const cfg = SPORTS[sport];
 
   const png = new ImageResponse(
@@ -42,21 +38,9 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
           fontFamily: 'sans-serif',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-          <div
-            style={{
-              width: 64,
-              height: 64,
-              borderRadius: 16,
-              background: 'linear-gradient(135deg, #fb923c, #ea580c)',
-            }}
-          />
-          <div style={{ display: 'flex', fontSize: 56, fontWeight: 800 }}>
-            Fantasy<span style={{ color: '#fb923c' }}>Fire</span>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginTop: 48 }}>
+        {/* No brand row — the posting profile already shows the FantasyFire
+            name + avatar; the story leads with the sport + date instead. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
           <div
             style={{
               display: 'flex',
@@ -110,8 +94,11 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
                       justifyContent: 'space-between',
                     }}
                   >
-                    <div style={{ display: 'flex', fontSize: 40, fontWeight: 700 }}>
-                      {l.firstName.charAt(0)}. {l.lastName}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                      <LeanAvatar lean={l} src={headshots[l.slug]} size={72} />
+                      <div style={{ display: 'flex', fontSize: 40, fontWeight: 700 }}>
+                        {l.firstName.charAt(0)}. {l.lastName}
+                      </div>
                     </div>
                     {l.teamAbbreviation ? (
                       <div style={{ display: 'flex', fontSize: 32, color: '#a8a29e' }}>

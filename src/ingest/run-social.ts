@@ -49,9 +49,11 @@ const DRY_RUN = process.argv.includes('--dry-run');
 const FORCE = process.argv.includes('--force');
 
 const ENABLED = process.env.SOCIAL_PUBLISH_ENABLED === 'true';
-/** College props are state-restricted — excluded from auto-posting by default. */
+/** College props are state-restricted — excluded from auto-posting by default.
+ *  `||` not `??`: the workflow passes '' when the repo variable is unset, and
+ *  an empty string must mean "use the default", not "exclude nothing". */
 const EXCLUDED = new Set(
-  (process.env.SOCIAL_SPORTS_EXCLUDE ?? 'cfb,cbb')
+  (process.env.SOCIAL_SPORTS_EXCLUDE || 'cfb,cbb')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean),
@@ -102,6 +104,10 @@ async function main(): Promise<number> {
   }
 
   let posted = 0;
+  // Configured channels whose post attempt failed (bad token, bot not in the
+  // channel, API outage) — surfaced to the private owner channel at the end,
+  // because a best-effort warn() in the Actions log is otherwise invisible.
+  const channelFailures: string[] = [];
 
   // Per-sport posts at their game-aware windows.
   for (const post of posts) {
@@ -126,7 +132,11 @@ async function main(): Promise<number> {
       continue;
     }
     let n = 0;
-    for (const channel of configured()) n += await channel.postSport(post);
+    for (const channel of configured()) {
+      const made = await channel.postSport(post);
+      if (made === 0) channelFailures.push(`${post.sport} → ${channel.key}`);
+      n += made;
+    }
     if (n > 0) {
       await writeMarker(`social:${post.sport}`, n);
       posted += n;
@@ -223,6 +233,23 @@ async function main(): Promise<number> {
       } catch (e) {
         console.warn('[social] content pack failed —', e instanceof Error ? e.message : e);
       }
+    }
+  }
+
+  // Channel-health alert to the private owner channel: a configured channel
+  // that fails (expired token, bot missing from the chat) only warns in the
+  // Actions log, which nobody reads until posts are visibly missing.
+  if (!DRY_RUN && channelFailures.length > 0 && packUrl) {
+    try {
+      await postToDiscordWebhook(packUrl, {
+        content:
+          `⚠️ **Channel failures this tick:** ${channelFailures.join(', ')}\n` +
+          `The exact API error is in the workflow log (Actions → Game-aware social publish). ` +
+          `Common causes: expired/invalid token (Bluesky app password, Meta 60-day tokens), ` +
+          `or the Telegram bot not added as a channel admin.`,
+      });
+    } catch {
+      /* the alert itself is best-effort */
     }
   }
 
