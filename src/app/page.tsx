@@ -5,6 +5,7 @@ import { getBoard, getSourcedBoards, getTonightSlate, hasUpcomingGames } from '@
 import { getAvailableSources } from '@/lib/server/providedLines';
 import { SITE } from '@/lib/site';
 import { SPORT_LIST, SPORTS, type Sport } from '@/lib/sports';
+import { socialDayIso } from '@/lib/social/schedule';
 import type { BoardRow, TonightGame } from '@/lib/types';
 
 export const revalidate = 900; // 15 min — matches the lines ingest cadence, bounding board↔player-page score skew to one cycle
@@ -37,8 +38,9 @@ async function loadSport(sport: Sport): Promise<{
   // getTonightSlate anchors on the SOONEST slate on/after today — which can be days
   // out (a weekend-only league midweek). No games today → skip the card AND the
   // heavy board scan; the sport is one nav tap away, and an empty teaser sells
-  // nothing. Dates compare in UTC, the schedule feed's day convention.
-  const todayIso = new Date().toISOString().slice(0, 10);
+  // nothing. "Today" is the SOCIAL DAY (11pm-ET rollover — schedule.ts), the
+  // same convention getTonightSlate labels with.
+  const todayIso = socialDayIso(new Date());
   const hasGamesToday = slate.games.length > 0 && slate.date === todayIso;
   if (!hasGamesToday) return { boardsBySource: {}, medianLeans: [], hasGamesToday };
   const teams = slateTeams(slate.games);

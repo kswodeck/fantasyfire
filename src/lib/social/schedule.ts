@@ -73,6 +73,25 @@ export function socialDayWindow(now: Date): { start: Date; end: Date } {
   return { start, end: new Date(start.getTime() + 24 * 3_600_000) };
 }
 
+/** The ET calendar date (YYYY-MM-DD) of a moment. */
+export function etDateIso(d: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
+}
+
+/**
+ * The social day's LABEL (YYYY-MM-DD): the ET calendar date the 11pm-ET-rolled
+ * day belongs to — an 11:30pm ET Jul 13 moment labels as "Jul 14" (the next
+ * day starts at 11pm). Mid-day of the window keeps the label DST-safe.
+ */
+export function socialDayIso(d: Date): string {
+  return etDateIso(new Date(socialDayStart(d).getTime() + 12 * 3_600_000));
+}
+
 /** True inside the ET posting window (noon–10pm inclusive of both tick hours). */
 export function isWithinPostingWindow(now: Date): boolean {
   const h = etHour(now);
