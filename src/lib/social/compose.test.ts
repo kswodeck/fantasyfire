@@ -85,6 +85,26 @@ describe('composeDailyPost', () => {
     expect(c.text).toContain(c.linkDisplay);
   });
 
+  it('attributes the line source in the footer', () => {
+    const withBook = composeDailyPost({
+      sport: 'nba',
+      sportName: 'NBA',
+      leans: THREE_LEANS.map((l) => ({ ...l, linesSource: 'prizepicks' })),
+      siteUrl: SITE_URL,
+      channel: 'bluesky',
+    });
+    expect(withBook.text).toContain('PrizePicks lines · 21+');
+
+    const computed = composeDailyPost({
+      sport: 'nba',
+      sportName: 'NBA',
+      leans: THREE_LEANS,
+      siteUrl: SITE_URL,
+      channel: 'bluesky',
+    });
+    expect(computed.text).toContain('FantasyFire lines · 21+');
+  });
+
   it('throws on an empty lean list', () => {
     expect(() =>
       composeDailyPost({ sport: 'nba', sportName: 'NBA', leans: [], siteUrl: SITE_URL, channel: 'bluesky' }),

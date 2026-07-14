@@ -2,6 +2,7 @@
 // (docs/MARKETING.md §3). No React/Next/DB imports — unit-testable, and the
 // banned-token test below locks in the descriptive-never-predictive brand the
 // same way buildWhyText's does.
+import { sourceLabel } from '@/lib/providedSources';
 import type { DailyLean } from '@/lib/server/social';
 
 /**
@@ -75,6 +76,19 @@ function tierFlames(l: DailyLean): string {
   return l.tier === 'Strong lean' ? glyph + glyph : glyph;
 }
 
+/**
+ * Where the lines came from, for the caption footer: the book's display name
+ * ("PrizePicks") or "FantasyFire" for our computed median lines. Null when the
+ * leans disagree (digest across sports with mixed sources) — omit rather than
+ * mislabel.
+ */
+function linesAttribution(leans: DailyLean[]): string | null {
+  const labels = new Set(
+    leans.map((l) => (l.linesSource ? sourceLabel(l.linesSource) : 'FantasyFire')),
+  );
+  return labels.size === 1 ? [...labels][0] : null;
+}
+
 /** Tracked board URL for a channel (Umami splits sessions by utm_source). */
 export function trackedBoardUrl(siteUrl: string, sport: string, channel: SocialChannel): string {
   return `${siteUrl}/${sport}/board?utm_source=${channel}&utm_medium=social&utm_campaign=daily-leans`;
@@ -102,7 +116,10 @@ export function composeDailyPost(opts: {
   // numbers show, never a promise. The RG line and the site carry the fuller
   // framing — captions don't need a defensive disclaimer.
   const header = `Today's hottest ${sportName} props 🔥`;
-  const footer = `Full board → ${linkDisplay}\n${RG_LINE}`;
+  const attribution = linesAttribution(opts.leans);
+  const footer =
+    `Full board → ${linkDisplay}\n` +
+    `${attribution ? `${attribution} lines · ` : ''}${RG_LINE}`;
 
   let leans = [...opts.leans];
   let text = '';
@@ -161,7 +178,10 @@ export function composeDailyDigest(opts: {
 
   const boardUrl = `${siteUrl}/board?utm_source=${channel}&utm_medium=social&utm_campaign=daily-digest`;
   const linkDisplay = `${siteUrl.replace(/^https?:\/\//, '')}/board`;
-  const footer = `All boards → ${linkDisplay}\n${RG_LINE}`;
+  const attribution = linesAttribution(withLeans.map((e) => e.leans[0]));
+  const footer =
+    `All boards → ${linkDisplay}\n` +
+    `${attribution ? `${attribution} lines · ` : ''}${RG_LINE}`;
 
   let entries = [...withLeans];
   let text = '';

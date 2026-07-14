@@ -20,6 +20,8 @@ export interface DailyLean {
   side: 'over' | 'under';
   /** Only lean tiers are publishable — never "Slight lean" or below. */
   tier: 'Strong lean' | 'Lean';
+  /** Book source id the line came from (providedSources.ts), null = our computed median. */
+  linesSource?: string | null;
 }
 
 const PUBLISHABLE_TIERS: ReadonlySet<string> = new Set(['Strong lean', 'Lean']);
@@ -32,7 +34,9 @@ const PUBLISHABLE_TIERS: ReadonlySet<string> = new Set(['Strong lean', 'Lean']);
  * Real book lines are the familiar *.5 numbers; the computed fallback can land
  * on whole numbers.
  */
-async function getSocialBoardRows(sport: Sport): Promise<BoardRow[]> {
+async function getSocialBoardRows(
+  sport: Sport,
+): Promise<{ rows: BoardRow[]; source: string | null }> {
   const sources = await getAvailableSources(sport).catch(() => [] as string[]);
   const preferred = process.env.SOCIAL_LINES_SOURCE?.trim().toLowerCase();
   const source = preferred && sources.includes(preferred) ? preferred : sources[0];
@@ -41,9 +45,9 @@ async function getSocialBoardRows(sport: Sport): Promise<BoardRow[]> {
       () => ({}) as Record<string, BoardRow[]>,
     );
     const rows = boards[source] ?? [];
-    if (rows.length > 0) return rows;
+    if (rows.length > 0) return { rows, source };
   }
-  return getBoard(sport, { limit: 40 }).catch(() => [] as BoardRow[]);
+  return { rows: await getBoard(sport, { limit: 40 }).catch(() => [] as BoardRow[]), source: null };
 }
 
 /**
@@ -66,7 +70,7 @@ export async function getDailyLeans(sport: Sport, limit = 5): Promise<DailyLean[
       .filter((a): a is string => !!a),
   );
 
-  const rows = await getSocialBoardRows(sport);
+  const { rows, source } = await getSocialBoardRows(sport);
   const seen = new Set<string>();
   const leans: DailyLean[] = [];
   for (const r of rows) {
@@ -84,6 +88,7 @@ export async function getDailyLeans(sport: Sport, limit = 5): Promise<DailyLean[
       line: r.line,
       side: r.fireScore.side,
       tier: r.fireScore.tier as DailyLean['tier'],
+      linesSource: source,
     });
     if (leans.length >= limit) break;
   }
