@@ -47,6 +47,7 @@ import { posBucketLabel } from '@/lib/filters';
 import { currentSeason, previousSeason } from '@/lib/season';
 import { getTeam } from '@/lib/teams';
 import type { Sport } from '@/lib/sports';
+import { etDateIso, socialDayIso, socialDayStart } from '@/lib/social/schedule';
 import type {
   PlayerSummary,
   PlayerBio,
@@ -3128,6 +3129,27 @@ function slateWindowDays(sport: Sport): number {
  */
 export const hasUpcomingGames = cache(async (sport: Sport): Promise<boolean> => {
   const now = new Date();
+  // TIMED path first: anchor on the soonest game at/after the CURRENT SOCIAL
+  // DAY's start (11pm ET — src/lib/social/schedule.ts). The feed's UTC date
+  // buckets roll at 8pm ET, which put last night's late games in "today";
+  // anchoring on real start times fixes that everywhere at once.
+  const anchor = await db.scheduledGame.findFirst({
+    where: { sport, startTime: { gte: socialDayStart(now) } },
+    orderBy: { startTime: 'asc' },
+    select: { startTime: true },
+  });
+  if (anchor?.startTime) {
+    const dayStart = socialDayStart(anchor.startTime);
+    const dayEnd = new Date(dayStart.getTime() + slateWindowDays(sport) * 86_400_000);
+    // No game exists between now and dayStart (the anchor was the soonest), so
+    // a plain (now, dayEnd) range counts exactly the slate's unstarted games.
+    const unstarted = await db.scheduledGame.count({
+      where: { sport, startTime: { gt: now, lt: dayEnd } },
+    });
+    return unstarted > 0;
+  }
+
+  // LEGACY untimed path (feeds without start times): UTC date buckets.
   const todayUtc = new Date();
   todayUtc.setUTCHours(0, 0, 0, 0);
   // Anchor on the soonest scheduled slate day (>= today), then ask whether that slate
@@ -3164,6 +3186,51 @@ export const hasUpcomingGames = cache(async (sport: Sport): Promise<boolean> => 
 export const getTonightSlate = cache(async (
   sport: Sport,
 ): Promise<{ date: string | null; games: TonightGame[] }> => {
+  const now = new Date();
+  // TIMED path first: the slate is the SOCIAL DAY (11pm-ET-to-11pm-ET) of the
+  // soonest upcoming game, selected by real start times — the feed's UTC date
+  // buckets roll at 8pm ET and were surfacing last night's finished late games
+  // as "today". Weekly leagues keep their multi-day window.
+  const anchor = await db.scheduledGame.findFirst({
+    where: { sport, startTime: { gte: socialDayStart(now) } },
+    orderBy: { startTime: 'asc' },
+    select: { startTime: true },
+  });
+  if (anchor?.startTime) {
+    const dayStart = socialDayStart(anchor.startTime);
+    const dayEnd = new Date(dayStart.getTime() + slateWindowDays(sport) * 86_400_000);
+    const rows = await db.scheduledGame.findMany({
+      where: { sport, startTime: { gte: dayStart, lt: dayEnd } },
+      include: {
+        homeTeam: { select: { abbreviation: true, name: true, externalId: true } },
+        awayTeam: { select: { abbreviation: true, name: true, externalId: true } },
+      },
+      orderBy: { startTime: 'asc' },
+    });
+    return {
+      date: socialDayIso(anchor.startTime),
+      games: rows.map((r) => ({
+        externalId: r.externalId,
+        date: etDateIso(r.startTime as Date),
+        startTime: (r.startTime as Date).toISOString(),
+        status: r.status,
+        home: {
+          abbr: r.homeTeam.abbreviation,
+          name: teamDisplayName(sport, r.homeTeam.abbreviation, r.homeTeam.name),
+          externalId: r.homeTeam.externalId,
+        },
+        away: {
+          abbr: r.awayTeam.abbreviation,
+          name: teamDisplayName(sport, r.awayTeam.abbreviation, r.awayTeam.name),
+          externalId: r.awayTeam.externalId,
+        },
+        homeProbablePitcher: r.homeProbablePitcher,
+        awayProbablePitcher: r.awayProbablePitcher,
+      })),
+    };
+  }
+
+  // LEGACY untimed path (feeds without start times): UTC date buckets.
   const todayUtc = new Date();
   todayUtc.setUTCHours(0, 0, 0, 0);
 

@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  etDateIso,
   etHour,
   isDailyTick,
   isDueNow,
   isWithinPostingWindow,
   pickRelevantStart,
+  socialDayIso,
   socialDayStart,
   socialDayWindow,
 } from './schedule';
@@ -110,6 +112,19 @@ describe('socialDayStart / socialDayWindow', () => {
     const lastNight = new Date('2026-07-13T01:00:00Z'); // 9pm ET Jul 12 (the WNBA bug game)
     const { start } = socialDayWindow(noonTick);
     expect(lastNight.getTime()).toBeLessThan(start.getTime());
+  });
+});
+
+describe('etDateIso / socialDayIso', () => {
+  it('labels by the ET calendar, not UTC', () => {
+    // 9pm ET Jul 13 = 01:00Z Jul 14 — UTC says the 14th, ET says the 13th.
+    expect(etDateIso(new Date('2026-07-14T01:00:00Z'))).toBe('2026-07-13');
+  });
+
+  it('rolls the social-day label at 11pm ET', () => {
+    expect(socialDayIso(new Date('2026-07-14T01:00:00Z'))).toBe('2026-07-13'); // 9pm ET Jul 13
+    expect(socialDayIso(new Date('2026-07-14T03:30:00Z'))).toBe('2026-07-14'); // 11:30pm ET Jul 13 → next day
+    expect(socialDayIso(new Date('2026-07-14T16:00:00Z'))).toBe('2026-07-14'); // noon ET Jul 14
   });
 });
 
