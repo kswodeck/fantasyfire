@@ -202,6 +202,54 @@ export function composeDailyDigest(opts: {
   return { text, linkDisplay, boardUrl, imageAlt };
 }
 
+/** One row of the Sunday streaks recap. */
+export interface StreakEntry {
+  sportName: string;
+  firstName: string;
+  lastName: string;
+  statShort: string;
+  line: number;
+  side: 'over' | 'under';
+  length: number;
+}
+
+/**
+ * The Sunday "longest active streaks" recap — descriptive by construction
+ * (streaks are historical facts). Null when fewer than 3 streaks qualify (a
+ * two-line recap reads thin). Links the all-sports trends board.
+ */
+export function composeWeeklyStreaks(opts: {
+  streaks: StreakEntry[];
+  siteUrl: string;
+  maxChars?: number;
+}): { text: string; linkDisplay: string; boardUrl: string } | null {
+  const { siteUrl, maxChars = 290 } = opts;
+  if (opts.streaks.length < 3) return null;
+
+  const boardUrl = `${siteUrl}/trends?utm_source=social&utm_medium=social&utm_campaign=weekly-streaks`;
+  const linkDisplay = `${siteUrl.replace(/^https?:\/\//, '')}/trends`;
+  const header = 'Longest active streaks on the board ⚡';
+  const footer = `All trends → ${linkDisplay}`;
+
+  let streaks = [...opts.streaks];
+  let text = '';
+  for (;;) {
+    text = [
+      header,
+      ...streaks.map(
+        (s) =>
+          `• ${s.sportName}: ${s.firstName.charAt(0)}. ${s.lastName} — ${s.length} straight ${s.side}s (${s.line} ${s.statShort})`,
+      ),
+      footer,
+    ].join('\n');
+    if ([...text].length <= maxChars || streaks.length <= 3) break;
+    streaks = streaks.slice(0, -1);
+  }
+
+  assertDescriptive(text);
+  return { text, linkDisplay, boardUrl };
+}
+
 export interface PollContent {
   question: string;
   /** 2-4 options, each ≤55 chars (Discord's poll-answer limit, the tightest). */

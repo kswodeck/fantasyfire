@@ -3,10 +3,10 @@
 // (src/ingest/run-social.ts), the card image route (/api/og/daily/[sport]),
 // and the /api/v1/social/due pre-check can never disagree.
 import { db } from '@/lib/db';
-import { getBoard, getSourcedBoards, getTonightSlate } from '@/lib/server/players';
+import { getBoard, getSourcedBoards, getTonightSlate, getTrendBoard } from '@/lib/server/players';
 import { getAvailableSources } from '@/lib/server/providedLines';
 import { isDueNow, pickRelevantStart, socialDayStart, socialDayWindow } from '@/lib/social/schedule';
-import type { Sport } from '@/lib/sports';
+import { SPORTS, type Sport } from '@/lib/sports';
 import type { BoardRow } from '@/lib/types';
 
 /** One publishable lean — the minimal, display-ready slice of a BoardRow. */
@@ -157,6 +157,47 @@ export async function getTodaySlateTiming(
     hasKnownStarts,
     firstStart: pickRelevantStart(starts, now),
   };
+}
+
+/**
+ * The longest active streaks across the given sports — the Sunday recap's
+ * data. Best streak per player from each sport's trend board, merged and
+ * ranked by length. Descriptive facts only (a streak is history).
+ */
+export async function getWeeklyStreaks(
+  sports: Sport[],
+  limit = 5,
+): Promise<
+  {
+    sportName: string;
+    firstName: string;
+    lastName: string;
+    statShort: string;
+    line: number;
+    side: 'over' | 'under';
+    length: number;
+  }[]
+> {
+  const all: Awaited<ReturnType<typeof getWeeklyStreaks>> = [];
+  for (const sport of sports) {
+    const rows = await getTrendBoard(sport, { limit: 40 }).catch(() => []);
+    const seen = new Set<string>();
+    for (const r of rows) {
+      if (!r.streak || r.streak.length < 4) continue;
+      if (seen.has(r.player.slug)) continue;
+      seen.add(r.player.slug);
+      all.push({
+        sportName: SPORTS[sport].name,
+        firstName: r.player.firstName,
+        lastName: r.player.lastName,
+        statShort: r.statShort,
+        line: r.line,
+        side: r.streak.side,
+        length: r.streak.length,
+      });
+    }
+  }
+  return all.sort((a, b) => b.length - a.length).slice(0, limit);
 }
 
 /**

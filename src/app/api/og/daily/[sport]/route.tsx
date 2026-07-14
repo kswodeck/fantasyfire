@@ -4,38 +4,13 @@
 // disagree with the caption. Renders a low-key "no slate today" card when the
 // sport has no games (the poster never attaches it, but the URL stays 200).
 import { ImageResponse } from 'next/og';
-import { sourceBrand, sourceLabel } from '@/lib/providedSources';
 import { getDailyLeans, type DailyLean } from '@/lib/server/social';
 import { isSport, SPORTS } from '@/lib/sports';
-import { heatLabel } from '@/lib/tierStyle';
+import { heatBadge, SourceChip } from './cardParts';
 
 export const dynamic = 'force-dynamic';
 
 const SIZE = { width: 1200, height: 630 };
-
-/** The site's heat-read badge (tierStyle.ts): overs warm (Hot/Blazing, orange →
- *  red), unders cool (Cold/Frozen, blue → indigo). */
-function heatBadge(l: DailyLean): { label: string; bg: string } {
-  const strong = l.tier === 'Strong lean';
-  return l.side === 'over'
-    ? { label: heatLabel(l.tier, l.side), bg: strong ? '#dc2626' : '#ea580c' }
-    : { label: heatLabel(l.tier, l.side), bg: strong ? '#4338ca' : '#2563eb' };
-}
-
-/** Where the lines came from — the book's brand badge (providedSources.ts, the
- *  same monogram treatment the site's source dropdown uses) or our own mark
- *  for the computed median fallback. */
-function linesBrand(leans: DailyLean[]): {
-  monogram: string;
-  bg: string;
-  fg: string;
-  label: string;
-} {
-  const source = leans[0]?.linesSource ?? null;
-  if (!source) return { monogram: 'FF', bg: '#ea580c', fg: '#ffffff', label: 'FantasyFire lines' };
-  const brand = sourceBrand(source);
-  return { ...brand, label: `${sourceLabel(source)} lines` };
-}
 
 export async function GET(_request: Request, ctx: { params: Promise<{ sport: string }> }) {
   const { sport } = await ctx.params;
@@ -84,27 +59,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             {leans.length > 0 ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: 30,
-                    height: 30,
-                    borderRadius: 8,
-                    fontSize: 14,
-                    fontWeight: 800,
-                    background: linesBrand(leans).bg,
-                    color: linesBrand(leans).fg,
-                  }}
-                >
-                  {linesBrand(leans).monogram}
-                </div>
-                <div style={{ display: 'flex', fontSize: 24, color: '#a8a29e' }}>
-                  {linesBrand(leans).label}
-                </div>
-              </div>
+              <SourceChip leans={leans} badgeSize={30} fontSize={14} labelSize={24} />
             ) : null}
             <div
               style={{

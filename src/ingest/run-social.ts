@@ -1,21 +1,21 @@
 // src/ingest/run-social.ts
 //
 // GAME-AWARE social auto-publish (docs/MARKETING.md §3): the workflow ticks
-// hourly through the game-day window, and each sport with games TODAY posts
-// its top FireFactor leans at the first tick inside its pre-game window —
-// ~an hour before ITS first game (which moves day to day) — to Bluesky /
-// Discord / Telegram with the branded card image. The private owner-only
-// "content pack" briefing goes once per day at the fixed daily slot
-// (noon ET, the window open), which is also the fallback for sports whose feed has
-// no start times.
+// hourly through the posting window (noon–10pm ET) and each sport with games
+// TODAY (the 11pm-ET-to-11pm-ET social day) posts its top FireFactor leans at
+// the first tick where its first game is within 2 hours — to every configured
+// channel in src/lib/social/channels.ts. The multi-sport digest bundle
+// (carousels/album/thread/polls), the private owner "content pack" briefing,
+// and — on Sundays — the weekly streaks recap all go at the daily slot
+// (noon ET), which is also the fallback for sports whose feed has no start times.
 //
 // SAFE BY DEFAULT, three independent gates:
 //   1. Inert until SOCIAL_PUBLISH_ENABLED=true (repo variable / env).
-//   2. Each channel is skipped unless its secrets are set; every post is
+//   2. Channels skip themselves when their secrets are missing; every post is
 //      best-effort (a failed channel never fails the job or the pipeline).
-//   3. Once-per-day-PER-SPORT markers on the IngestRun audit table
-//      (`social:{sport}`, `social:pack`) — later ticks and re-runs are no-ops
-//      unless --force.
+//   3. Once-per-social-day markers on the IngestRun audit table
+//      (`social:{sport}`, `social:digest`, `social:pack`, `social:weekly`) —
+//      later ticks and re-runs are no-ops unless --force.
 //
 //   pnpm social            # post whatever is due right now
 //   pnpm social --dry-run  # print every sport's due status + captions, post nothing
@@ -26,24 +26,23 @@ import { recordIngestRun } from './ingestRun';
 import {
   getDailyLeans,
   getTodaySlateTiming,
+  getWeeklyStreaks,
   isSportDue,
   socialPostedToday,
   type DailyLean,
 } from '../lib/server/social';
 import {
-  composeDailyPost,
   composeContentPack,
   composeDailyDigest,
   composeDailyPoll,
+  composeDailyPost,
+  composeWeeklyStreaks,
   type ContentPackEntry,
 } from '../lib/social/compose';
-import { postToBluesky, type BlueskyRef } from '../lib/social/bluesky';
+import { CHANNELS, CAPTION_LEANS, cardUrl, type DigestInput } from '../lib/social/channels';
 import { postToDiscordWebhook } from '../lib/social/discord';
-import { postToInstagram, postInstagramCarousel } from '../lib/social/instagram';
-import { postToTelegram, postTelegramAlbum, postTelegramPoll } from '../lib/social/telegram';
-import { postToThreads, postThreadsCarousel } from '../lib/social/threads';
-import { isDailyTick } from '../lib/social/schedule';
-import { SITE, absoluteUrl } from '../lib/site';
+import { isDailyTick, isWeeklySlot } from '../lib/social/schedule';
+import { SITE } from '../lib/site';
 import { SPORT_LIST, SPORTS, type Sport } from '../lib/sports';
 
 const DRY_RUN = process.argv.includes('--dry-run');
@@ -57,11 +56,10 @@ const EXCLUDED = new Set(
     .map((s) => s.trim())
     .filter(Boolean),
 );
-/** Leans on the card / in the caption. */
+/** Leans on the card (captions quote CAPTION_LEANS of them). */
 const CARD_LEANS = 5;
-const CAPTION_LEANS = 3;
 
-/** Write the once-per-day marker for a sport/pack publish (best-effort). */
+/** Write the once-per-day marker for a publish (best-effort). */
 async function writeMarker(job: string, rowsWritten: number): Promise<void> {
   try {
     const at = new Date();
@@ -73,325 +71,15 @@ async function writeMarker(job: string, rowsWritten: number): Promise<void> {
   }
 }
 
-/** Public card URL (null on localhost — nothing external can fetch it there). */
-function cardUrl(sport: Sport): string | null {
-  if (!SITE.url || new URL(SITE.url).host.startsWith('localhost')) return null;
-  return absoluteUrl(`/api/og/daily/${sport}`);
-}
-
-async function fetchCardPng(url: string): Promise<ArrayBuffer | null> {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    return await res.arrayBuffer();
-  } catch {
-    return null;
-  }
-}
-
 interface SportPost {
   sport: Sport;
   sportName: string;
   leans: DailyLean[];
+  due: boolean;
+  firstStart: Date | null;
 }
 
-async function publishSport(post: SportPost): Promise<number> {
-  const { sport, sportName } = post;
-  const card = cardUrl(sport);
-  let posted = 0;
-
-  // Bluesky — image is uploaded as a blob, link is a facet on the display text.
-  const bskyId = process.env.BLUESKY_IDENTIFIER ?? '';
-  const bskyPw = process.env.BLUESKY_APP_PASSWORD ?? '';
-  if (bskyId && bskyPw) {
-    try {
-      const c = composeDailyPost({
-        sport,
-        sportName,
-        leans: post.leans.slice(0, CAPTION_LEANS),
-        siteUrl: SITE.url,
-        channel: 'bluesky',
-      });
-      const png = card ? await fetchCardPng(card) : null;
-      await postToBluesky(
-        { identifier: bskyId, appPassword: bskyPw },
-        {
-          text: c.text,
-          linkDisplay: c.linkDisplay,
-          linkTarget: c.boardUrl,
-          ...(png ? { image: { data: png, alt: c.imageAlt, width: 1200, height: 630 } } : {}),
-        },
-      );
-      posted++;
-      console.log(`[social] ${sport}: posted to Bluesky`);
-    } catch (e) {
-      console.warn(`[social] ${sport}: Bluesky failed —`, e instanceof Error ? e.message : e);
-    }
-  }
-
-  // Discord (public #daily-leans) — embed references the card by URL.
-  const discordUrl = process.env.DISCORD_WEBHOOK_URL ?? '';
-  if (discordUrl) {
-    try {
-      const c = composeDailyPost({
-        sport,
-        sportName,
-        leans: post.leans.slice(0, CAPTION_LEANS),
-        siteUrl: SITE.url,
-        channel: 'discord',
-        maxChars: 1500,
-      });
-      await postToDiscordWebhook(discordUrl, {
-        embed: {
-          title: `Today's hottest ${sportName} props 🔥`,
-          description: c.text,
-          url: c.boardUrl,
-          ...(card ? { imageUrl: card } : {}),
-          color: SPORTS[sport].accent,
-        },
-      });
-      posted++;
-      console.log(`[social] ${sport}: posted to Discord`);
-    } catch (e) {
-      console.warn(`[social] ${sport}: Discord failed —`, e instanceof Error ? e.message : e);
-    }
-  }
-
-  // Telegram channel — sendPhoto fetches the card URL itself.
-  const tgToken = process.env.TELEGRAM_BOT_TOKEN ?? '';
-  const tgChat = process.env.TELEGRAM_CHAT_ID ?? '';
-  if (tgToken && tgChat) {
-    try {
-      const c = composeDailyPost({
-        sport,
-        sportName,
-        leans: post.leans.slice(0, CAPTION_LEANS),
-        siteUrl: SITE.url,
-        channel: 'telegram',
-        maxChars: 900,
-      });
-      // Telegram auto-links bare URLs — swap the display link for the tracked one.
-      const text = c.text.replace(c.linkDisplay, c.boardUrl);
-      await postToTelegram(
-        { botToken: tgToken, chatId: tgChat },
-        { text, ...(card ? { photoUrl: card } : {}) },
-      );
-      posted++;
-      console.log(`[social] ${sport}: posted to Telegram`);
-    } catch (e) {
-      console.warn(`[social] ${sport}: Telegram failed —`, e instanceof Error ? e.message : e);
-    }
-  }
-
-  // Instagram — image required (JPEG variant of the card), caption links are
-  // not clickable so the caption points at the bio link instead of a URL swap.
-  const igUser = process.env.IG_USER_ID ?? '';
-  const igToken = process.env.IG_ACCESS_TOKEN ?? '';
-  if (igUser && igToken) {
-    if (!card) {
-      console.log(`[social] ${sport}: Instagram skipped — needs a public card URL.`);
-    } else {
-      try {
-        const c = composeDailyPost({
-          sport,
-          sportName,
-          leans: post.leans.slice(0, CAPTION_LEANS),
-          siteUrl: SITE.url,
-          channel: 'instagram',
-          maxChars: 1000,
-        });
-        await postToInstagram(
-          { userId: igUser, accessToken: igToken },
-          { imageUrl: `${card}/jpeg`, caption: c.text },
-        );
-        posted++;
-        console.log(`[social] ${sport}: posted to Instagram`);
-      } catch (e) {
-        console.warn(`[social] ${sport}: Instagram failed —`, e instanceof Error ? e.message : e);
-      }
-      // Story alongside the feed post — vertical card, no caption (the API
-      // ignores captions on stories). Independent best-effort.
-      try {
-        await postToInstagram(
-          { userId: igUser, accessToken: igToken },
-          { imageUrl: `${card}/story`, kind: 'story' },
-        );
-        posted++;
-        console.log(`[social] ${sport}: posted Instagram story`);
-      } catch (e) {
-        console.warn(
-          `[social] ${sport}: Instagram story failed —`,
-          e instanceof Error ? e.message : e,
-        );
-      }
-    }
-  }
-
-  // Threads — image when available, text-only otherwise; links in Threads
-  // text are clickable, so swap in the tracked URL like Telegram.
-  const thUser = process.env.THREADS_USER_ID ?? '';
-  const thToken = process.env.THREADS_ACCESS_TOKEN ?? '';
-  if (thUser && thToken) {
-    try {
-      const c = composeDailyPost({
-        sport,
-        sportName,
-        leans: post.leans.slice(0, CAPTION_LEANS),
-        siteUrl: SITE.url,
-        channel: 'threads',
-        maxChars: 480,
-      });
-      const text = c.text.replace(c.linkDisplay, c.boardUrl);
-      await postToThreads(
-        { userId: thUser, accessToken: thToken },
-        { text, ...(card ? { imageUrl: card } : {}) },
-      );
-      posted++;
-      console.log(`[social] ${sport}: posted to Threads`);
-    } catch (e) {
-      console.warn(`[social] ${sport}: Threads failed —`, e instanceof Error ? e.message : e);
-    }
-  }
-
-  return posted;
-}
-
-/**
- * The multi-sport "today's slate" digest — the daily-slot bundle formats that
- * only make sense across sports: Instagram/Threads carousels, a Telegram
- * album, a Discord multi-embed message, a Bluesky thread (one reply per
- * sport's card), and engagement polls on Telegram + Discord. Runs once per day
- * when ≥2 sports have leans (a single-sport day is already covered by that
- * sport's own post). Every format is independent best-effort.
- */
-async function publishDigest(posts: SportPost[]): Promise<number> {
-  const entries: ContentPackEntry[] = posts.map((p) => ({
-    sport: p.sport,
-    sportName: p.sportName,
-    leans: p.leans,
-  }));
-  const cards = posts
-    .map((p) => ({ sport: p.sport, sportName: p.sportName, url: cardUrl(p.sport) }))
-    .filter((c): c is { sport: Sport; sportName: string; url: string } => c.url !== null);
-  const poll = composeDailyPoll(entries);
-  let posted = 0;
-
-  // Bluesky thread: digest root, then one reply per sport carrying its card.
-  const bskyId = process.env.BLUESKY_IDENTIFIER ?? '';
-  const bskyPw = process.env.BLUESKY_APP_PASSWORD ?? '';
-  if (bskyId && bskyPw) {
-    try {
-      const creds = { identifier: bskyId, appPassword: bskyPw };
-      const c = composeDailyDigest({ entries, siteUrl: SITE.url, channel: 'bluesky', maxChars: 290 });
-      const root = await postToBluesky(creds, {
-        text: c.text,
-        linkDisplay: c.linkDisplay,
-        linkTarget: c.boardUrl,
-      });
-      let parent: BlueskyRef = root;
-      for (const card of cards) {
-        const png = await fetchCardPng(card.url);
-        if (!png) continue;
-        parent = await postToBluesky(creds, {
-          text: `${card.sportName} — today's hottest props`,
-          image: { data: png, alt: c.imageAlt, width: 1200, height: 630 },
-          reply: { root, parent },
-        });
-      }
-      posted++;
-      console.log('[social] digest: posted Bluesky thread');
-    } catch (e) {
-      console.warn('[social] digest: Bluesky thread failed —', e instanceof Error ? e.message : e);
-    }
-  }
-
-  // Discord: one message — digest text, an embed per sport, and a native poll.
-  const discordUrl = process.env.DISCORD_WEBHOOK_URL ?? '';
-  if (discordUrl) {
-    try {
-      const c = composeDailyDigest({ entries, siteUrl: SITE.url, channel: 'discord', maxChars: 1500 });
-      await postToDiscordWebhook(discordUrl, {
-        content: c.text,
-        embeds: cards.map((card) => ({
-          title: `${card.sportName} — today's hottest props`,
-          url: `${SITE.url}/${card.sport}/board?utm_source=discord&utm_medium=social&utm_campaign=daily-digest`,
-          imageUrl: card.url,
-          color: SPORTS[card.sport].accent,
-        })),
-        ...(poll ? { poll } : {}),
-      });
-      posted++;
-      console.log('[social] digest: posted Discord slate message');
-    } catch (e) {
-      console.warn('[social] digest: Discord failed —', e instanceof Error ? e.message : e);
-    }
-  }
-
-  // Telegram: album of all cards (caption on the first), plus a poll.
-  const tgToken = process.env.TELEGRAM_BOT_TOKEN ?? '';
-  const tgChat = process.env.TELEGRAM_CHAT_ID ?? '';
-  if (tgToken && tgChat) {
-    const target = { botToken: tgToken, chatId: tgChat };
-    if (cards.length >= 2) {
-      try {
-        const c = composeDailyDigest({ entries, siteUrl: SITE.url, channel: 'telegram', maxChars: 900 });
-        await postTelegramAlbum(target, {
-          photoUrls: cards.map((card) => card.url),
-          caption: c.text.replace(c.linkDisplay, c.boardUrl),
-        });
-        posted++;
-        console.log('[social] digest: posted Telegram album');
-      } catch (e) {
-        console.warn('[social] digest: Telegram album failed —', e instanceof Error ? e.message : e);
-      }
-    }
-    if (poll) {
-      try {
-        await postTelegramPoll(target, poll);
-        posted++;
-        console.log('[social] digest: posted Telegram poll');
-      } catch (e) {
-        console.warn('[social] digest: Telegram poll failed —', e instanceof Error ? e.message : e);
-      }
-    }
-  }
-
-  // Instagram carousel (JPEG variants; needs ≥2 public cards).
-  const igUser = process.env.IG_USER_ID ?? '';
-  const igToken = process.env.IG_ACCESS_TOKEN ?? '';
-  if (igUser && igToken && cards.length >= 2) {
-    try {
-      const c = composeDailyDigest({ entries, siteUrl: SITE.url, channel: 'instagram', maxChars: 1000 });
-      await postInstagramCarousel(
-        { userId: igUser, accessToken: igToken },
-        { imageUrls: cards.map((card) => `${card.url}/jpeg`), caption: c.text },
-      );
-      posted++;
-      console.log('[social] digest: posted Instagram carousel');
-    } catch (e) {
-      console.warn('[social] digest: Instagram carousel failed —', e instanceof Error ? e.message : e);
-    }
-  }
-
-  // Threads carousel (PNG cards fine; links in text are clickable).
-  const thUser = process.env.THREADS_USER_ID ?? '';
-  const thToken = process.env.THREADS_ACCESS_TOKEN ?? '';
-  if (thUser && thToken && cards.length >= 2) {
-    try {
-      const c = composeDailyDigest({ entries, siteUrl: SITE.url, channel: 'threads', maxChars: 480 });
-      await postThreadsCarousel(
-        { userId: thUser, accessToken: thToken },
-        { imageUrls: cards.map((card) => card.url), text: c.text.replace(c.linkDisplay, c.boardUrl) },
-      );
-      posted++;
-      console.log('[social] digest: posted Threads carousel');
-    } catch (e) {
-      console.warn('[social] digest: Threads carousel failed —', e instanceof Error ? e.message : e);
-    }
-  }
-
-  return posted;
-}
+const configured = () => CHANNELS.filter((c) => c.isConfigured());
 
 async function main(): Promise<number> {
   if (!ENABLED && !DRY_RUN) {
@@ -403,7 +91,7 @@ async function main(): Promise<number> {
 
   // Every in-season sport with leans, annotated with its game-aware due status
   // (inside the pre-game window of ITS first game today, not yet posted).
-  const posts: (SportPost & { due: boolean; firstStart: Date | null })[] = [];
+  const posts: SportPost[] = [];
   for (const sport of SPORT_LIST) {
     if (EXCLUDED.has(sport)) continue;
     const leans = await getDailyLeans(sport, CARD_LEANS, now);
@@ -412,12 +100,10 @@ async function main(): Promise<number> {
     const due = FORCE || (await isSportDue(sport, now));
     posts.push({ sport, sportName: SPORTS[sport].name, leans, due, firstStart });
   }
-  if (posts.length === 0) {
-    console.log('[social] no sport has publishable leans today — nothing to post.');
-    return 0;
-  }
 
   let posted = 0;
+
+  // Per-sport posts at their game-aware windows.
   for (const post of posts) {
     const startLabel = post.firstStart
       ? `next start ${post.firstStart.toISOString()}`
@@ -439,33 +125,43 @@ async function main(): Promise<number> {
       console.log(`[social] ${post.sport}: not due yet (${startLabel}) — skipping this tick.`);
       continue;
     }
-    const n = await publishSport(post);
+    let n = 0;
+    for (const channel of configured()) n += await channel.postSport(post);
     if (n > 0) {
       await writeMarker(`social:${post.sport}`, n);
       posted += n;
     }
   }
 
+  const entries: ContentPackEntry[] = posts.map((p) => ({
+    sport: p.sport,
+    sportName: p.sportName,
+    leans: p.leans,
+  }));
+
   // Multi-sport digest bundle (carousels / album / thread / polls) — once per
   // day at the fixed daily slot, only when 2+ sports have leans (a single-sport
   // day is already covered by that sport's own post).
-  const digestDue =
-    FORCE || (isDailyTick(now) && !(await socialPostedToday('social:digest', now)));
+  const digestDue = FORCE || (isDailyTick(now) && !(await socialPostedToday('social:digest', now)));
   if (posts.length >= 2 && (DRY_RUN || digestDue)) {
+    const digest: DigestInput = {
+      entries,
+      cards: posts
+        .map((p) => ({ sport: p.sport, sportName: p.sportName, url: cardUrl(p.sport) }))
+        .filter((c): c is DigestInput['cards'][number] => c.url !== null),
+      poll: composeDailyPoll(entries),
+    };
     if (DRY_RUN) {
-      const entries: ContentPackEntry[] = posts.map((p) => ({
-        sport: p.sport,
-        sportName: p.sportName,
-        leans: p.leans,
-      }));
       const c = composeDailyDigest({ entries, siteUrl: SITE.url, channel: 'bluesky', maxChars: 290 });
-      const poll = composeDailyPoll(entries);
       console.log(
         `\n[social] DRY RUN — digest (due now: ${digestDue})\n${c.text}\n→ ${c.boardUrl}` +
-          (poll ? `\npoll: ${poll.question}\n${poll.options.map((o) => `  - ${o}`).join('\n')}` : ''),
+          (digest.poll
+            ? `\npoll: ${digest.poll.question}\n${digest.poll.options.map((o) => `  - ${o}`).join('\n')}`
+            : ''),
       );
     } else {
-      const n = await publishDigest(posts);
+      let n = 0;
+      for (const channel of configured()) n += await channel.postDigest(digest);
       if (n > 0) {
         await writeMarker('social:digest', n);
         posted += n;
@@ -473,18 +169,41 @@ async function main(): Promise<number> {
     }
   }
 
+  // Sunday streaks recap — a text post at the weekly slot (noon ET Sunday).
+  const weeklyDue = isWeeklySlot(now) && !(await socialPostedToday('social:weekly', now));
+  if (DRY_RUN || weeklyDue) {
+    const sports = SPORT_LIST.filter((s) => !EXCLUDED.has(s));
+    const streaks = await getWeeklyStreaks(sports);
+    const recap = composeWeeklyStreaks({ streaks, siteUrl: SITE.url });
+    if (recap) {
+      if (DRY_RUN) {
+        console.log(`\n[social] DRY RUN — weekly streaks (due now: ${weeklyDue})\n${recap.text}`);
+      } else {
+        let n = 0;
+        for (const channel of configured()) {
+          if (channel.postText) {
+            n += await channel.postText(recap.text, {
+              display: recap.linkDisplay,
+              target: recap.boardUrl,
+            });
+          }
+        }
+        if (n > 0) {
+          await writeMarker('social:weekly', n);
+          posted += n;
+        }
+      }
+    } else if (DRY_RUN) {
+      console.log('\n[social] DRY RUN — weekly streaks: fewer than 3 qualifying streaks.');
+    }
+  }
+
   // Private owner briefing for manual posting (X / Reddit / community Discords):
   // once per day at the fixed daily slot, covering ALL of today's sports at once
   // regardless of their individual posting windows.
-  const packDue =
-    FORCE || (isDailyTick(now) && !(await socialPostedToday('social:pack', now)));
+  const packDue = FORCE || (isDailyTick(now) && !(await socialPostedToday('social:pack', now)));
   const packUrl = process.env.DISCORD_CONTENT_PACK_WEBHOOK_URL ?? '';
-  if (DRY_RUN || packDue) {
-    const entries: ContentPackEntry[] = posts.map((p) => ({
-      sport: p.sport,
-      sportName: p.sportName,
-      leans: p.leans,
-    }));
+  if (posts.length > 0 && (DRY_RUN || packDue)) {
     const pack = composeContentPack({
       entries,
       siteUrl: SITE.url,
@@ -507,9 +226,13 @@ async function main(): Promise<number> {
     }
   }
 
-  console.log(
-    `[social] done — ${posted} post(s); ${posts.filter((p) => p.due).length}/${posts.length} sport(s) due this tick.`,
-  );
+  if (posts.length === 0) {
+    console.log('[social] no sport has publishable leans today — nothing to post.');
+  } else {
+    console.log(
+      `[social] done — ${posted} post(s); ${posts.filter((p) => p.due).length}/${posts.length} sport(s) due this tick.`,
+    );
+  }
   return posted;
 }
 

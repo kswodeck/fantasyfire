@@ -84,6 +84,16 @@ export function isDailyTick(now: Date): boolean {
   return etHour(now) === DAILY_TICK_HOUR_ET;
 }
 
+/** The weekly recap slot: Sunday's daily tick (noon ET, America/New_York). */
+export function isWeeklySlot(now: Date): boolean {
+  if (!isDailyTick(now)) return false;
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    weekday: 'short',
+  }).format(now);
+  return weekday === 'Sun';
+}
+
 /**
  * Should this sport post now? Never outside the posting window. With a known
  * first start, due means "first game within DUE_BEFORE_MIN, or up to
