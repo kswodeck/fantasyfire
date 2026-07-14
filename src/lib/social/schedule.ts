@@ -128,15 +128,20 @@ export function isDueNow(now: Date, firstStart: Date | null): boolean {
 }
 
 /**
- * The start time the due window should anchor on: the earliest game that is
- * upcoming or started within the last DUE_AFTER_MIN. The schedule feed buckets
- * days by UTC, so "today's" slate can carry LAST NIGHT's US-evening games
- * (anything after ~8pm ET crosses UTC midnight) — anchoring on the bucket's
- * raw minimum made a sport with a game tonight look 20+ hours stale and never
- * due. Null when every known start is long past (slate effectively over).
+ * The start time the due window should anchor on: the earliest UPCOMING game.
+ * A started game must not anchor while another game is still ahead — an early
+ * matinee (11am ET WNBA camp game) would otherwise put the whole slate
+ * "in grace" and fire the day's post hours before the evening games anyone is
+ * researching. Only when NOTHING is upcoming does the earliest game started
+ * within the last DUE_AFTER_MIN anchor instead — the catch-up that lets a
+ * morning-only slate (early MLB, London NFL) post at the first in-window tick.
+ * Null when every known start is long past (slate effectively over).
  */
 export function pickRelevantStart(starts: Date[], now: Date): Date | null {
+  const times = starts.map((s) => s.getTime());
+  const upcoming = times.filter((t) => t >= now.getTime());
+  if (upcoming.length > 0) return new Date(Math.min(...upcoming));
   const cutoff = now.getTime() - DUE_AFTER_MIN * 60_000;
-  const qualifying = starts.map((s) => s.getTime()).filter((t) => t >= cutoff);
-  return qualifying.length > 0 ? new Date(Math.min(...qualifying)) : null;
+  const inGrace = times.filter((t) => t >= cutoff);
+  return inGrace.length > 0 ? new Date(Math.min(...inGrace)) : null;
 }
