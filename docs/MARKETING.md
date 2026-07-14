@@ -372,7 +372,9 @@ Ordered so each phase is independently shippable and nothing waits on traffic:
 10. Mastodon poster (~30 lines, one `channels.ts` entry) if ever wanted.
 11. ✅ Weekly Umami metrics digest (`pnpm metrics`, Sundays in `weekly.yml` →
     content-pack channel). `weekly.yml` also auto-refreshes the Meta tokens
-    (needs a `GH_PAT` fine-grained secret with Secrets read/write).
+    (needs a `GH_PAT` fine-grained secret with **Environments: read and
+    write** on the repo — environment secrets are written through the
+    Environments API, not the Secrets one).
 
 ---
 
