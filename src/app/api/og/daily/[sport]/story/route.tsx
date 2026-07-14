@@ -9,6 +9,7 @@ import { Jimp, JimpMime } from 'jimp';
 import { getDailyLeans, type DailyLean } from '@/lib/server/social';
 import { isSport, SPORTS } from '@/lib/sports';
 import {
+  BestLineTag,
   cardDateLabel,
   heatBadge,
   LeanAvatar,
@@ -24,11 +25,12 @@ export const dynamic = 'force-dynamic';
 const SIZE = { width: 1080, height: 1920 };
 
 
-export async function GET(_request: Request, ctx: { params: Promise<{ sport: string }> }) {
+export async function GET(request: Request, ctx: { params: Promise<{ sport: string }> }) {
   const { sport } = await ctx.params;
   if (!isSport(sport)) return new Response('Unknown sport', { status: 404 });
 
-  const leans = await getDailyLeans(sport, 5).catch(() => [] as DailyLean[]);
+  const source = new URL(request.url).searchParams.get('s')?.trim().toLowerCase() || undefined;
+  const leans = await getDailyLeans(sport, 5, new Date(), source).catch(() => [] as DailyLean[]);
   const { headshots, teamLogos, sourceLogo } = await leanImages(sport, leans);
   const dateLabel = cardDateLabel();
   const cfg = SPORTS[sport];
@@ -151,6 +153,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
                       <div style={{ display: 'flex' }}>
                         {l.line} {l.statShort}
                       </div>
+                      {l.bestLine ? <BestLineTag fontSize={24} /> : null}
                       {payout ? (
                         <div
                           style={{

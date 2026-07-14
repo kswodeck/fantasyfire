@@ -44,6 +44,26 @@ export function teamStyle(sport: Sport, l: DailyLean): { color: string } {
   return { color: getTeam(sport, l.teamAbbreviation).primary };
 }
 
+/** "best line" marker (multi-source cards): this book posts the most favorable
+ *  number across books for the player+stat. Amber like the site's heat-1. */
+export function BestLineTag({ fontSize }: { fontSize: number }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        fontSize,
+        fontWeight: 700,
+        color: '#fbbf24',
+        border: '1.5px solid rgba(251,191,36,0.45)',
+        borderRadius: 999,
+        padding: `${Math.round(fontSize * 0.15)}px ${Math.round(fontSize * 0.55)}px`,
+      }}
+    >
+      best line
+    </div>
+  );
+}
+
 /** The social day's date label ("Jul 14, 2026") — ET-based, matching the
  *  posts, never the raw UTC date (which flips a day ahead after 8pm ET). */
 export function cardDateLabel(now = new Date()): string {

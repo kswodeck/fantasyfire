@@ -50,6 +50,8 @@ export interface BlueskyPostInput {
   linkDisplay?: string;
   linkTarget?: string;
   image?: { data: ArrayBuffer; alt: string; width?: number; height?: number };
+  /** Up to 4 images in one post (Bluesky's embed limit); wins over `image`. */
+  images?: { data: ArrayBuffer; alt: string; width?: number; height?: number }[];
   /** Thread this post under root/parent (both from earlier postToBluesky returns). */
   reply?: { root: BlueskyRef; parent: BlueskyRef };
 }
@@ -84,25 +86,25 @@ export async function postToBluesky(
   const auth = { authorization: `Bearer ${session.accessJwt}` };
 
   let embed: Record<string, unknown> | undefined;
-  if (post.image) {
-    const uploaded = await xrpc<{ blob: unknown }>(
-      service,
-      'com.atproto.repo.uploadBlob',
-      post.image.data,
-      { ...auth, 'content-type': 'image/png' },
-    );
-    embed = {
-      $type: 'app.bsky.embed.images',
-      images: [
-        {
-          image: uploaded.blob,
-          alt: post.image.alt,
-          ...(post.image.width && post.image.height
-            ? { aspectRatio: { width: post.image.width, height: post.image.height } }
-            : {}),
-        },
-      ],
-    };
+  const imageList = post.images?.length ? post.images.slice(0, 4) : post.image ? [post.image] : [];
+  if (imageList.length > 0) {
+    const images = [];
+    for (const img of imageList) {
+      const uploaded = await xrpc<{ blob: unknown }>(
+        service,
+        'com.atproto.repo.uploadBlob',
+        img.data,
+        { ...auth, 'content-type': 'image/png' },
+      );
+      images.push({
+        image: uploaded.blob,
+        alt: img.alt,
+        ...(img.width && img.height
+          ? { aspectRatio: { width: img.width, height: img.height } }
+          : {}),
+      });
+    }
+    embed = { $type: 'app.bsky.embed.images', images };
   }
 
   const facet =

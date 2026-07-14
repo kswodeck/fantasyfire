@@ -25,6 +25,7 @@ import { db } from '../lib/db';
 import { recordIngestRun } from './ingestRun';
 import {
   getDailyLeans,
+  getDailySourceLeans,
   getTodaySlateTiming,
   getWeeklyStreaks,
   isSportDue,
@@ -36,8 +37,10 @@ import {
   composeDailyDigest,
   composeDailyPoll,
   composeDailyPost,
+  composeMultiSourcePost,
   composeWeeklyStreaks,
   type ContentPackEntry,
+  type SourceBlock,
 } from '../lib/social/compose';
 import { CHANNELS, CAPTION_LEANS, cardUrl, type DigestInput } from '../lib/social/channels';
 import { postToDiscordWebhook } from '../lib/social/discord';
@@ -77,6 +80,9 @@ interface SportPost {
   sport: Sport;
   sportName: string;
   leans: DailyLean[];
+  /** Per-book blocks (PrizePicks/Underdog/Sleeper/Pick6) — 2+ turns the sport
+   *  post into a multi-card carousel/album/thread on every channel. */
+  sourceBlocks: SourceBlock[];
   due: boolean;
   firstStart: Date | null;
 }
@@ -98,9 +104,12 @@ async function main(): Promise<number> {
     if (EXCLUDED.has(sport)) continue;
     const leans = await getDailyLeans(sport, CARD_LEANS, now);
     if (leans.length === 0) continue;
+    const sourceBlocks = await getDailySourceLeans(sport, CARD_LEANS, now).catch(
+      () => [] as SourceBlock[],
+    );
     const { firstStart } = await getTodaySlateTiming(sport, now);
     const due = FORCE || (await isSportDue(sport, now));
-    posts.push({ sport, sportName: SPORTS[sport].name, leans, due, firstStart });
+    posts.push({ sport, sportName: SPORTS[sport].name, leans, sourceBlocks, due, firstStart });
   }
 
   let posted = 0;
@@ -115,15 +124,31 @@ async function main(): Promise<number> {
       ? `next start ${post.firstStart.toISOString()}`
       : 'no start time (daily-slot fallback)';
     if (DRY_RUN) {
-      const c = composeDailyPost({
-        sport: post.sport,
-        sportName: post.sportName,
-        leans: post.leans.slice(0, CAPTION_LEANS),
-        siteUrl: SITE.url,
-        channel: 'bluesky',
-      });
+      const multi = post.sourceBlocks.length >= 2;
+      const c = multi
+        ? composeMultiSourcePost({
+            sport: post.sport,
+            sportName: post.sportName,
+            blocks: post.sourceBlocks.map((b) => ({
+              source: b.source,
+              leans: b.leans.slice(0, CAPTION_LEANS),
+            })),
+            siteUrl: SITE.url,
+            channel: 'discord',
+            maxChars: 1800,
+          })
+        : composeDailyPost({
+            sport: post.sport,
+            sportName: post.sportName,
+            leans: post.leans.slice(0, CAPTION_LEANS),
+            siteUrl: SITE.url,
+            channel: 'bluesky',
+          });
+      const cards = multi
+        ? post.sourceBlocks.map((b) => cardUrl(post.sport, null, b.source)).join('\n      ')
+        : cardUrl(post.sport);
       console.log(
-        `\n[social] DRY RUN — ${post.sport} (${startLabel}; due now: ${post.due})\n${c.text}\n→ ${c.boardUrl}\ncard: ${cardUrl(post.sport) ?? '(no public site URL)'}`,
+        `\n[social] DRY RUN — ${post.sport} (${startLabel}; due now: ${post.due}; sources: ${post.sourceBlocks.map((b) => b.source).join(',') || '(single)'})\n${c.text}\n→ ${c.boardUrl}\ncard: ${cards ?? '(no public site URL)'}`,
       );
       continue;
     }

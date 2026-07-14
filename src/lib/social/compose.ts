@@ -142,6 +142,71 @@ export function composeDailyPost(opts: {
   return { text, linkDisplay, boardUrl, imageAlt };
 }
 
+/** One book's leans inside the multi-source post. */
+export interface SourceBlock {
+  source: string;
+  leans: DailyLean[];
+}
+
+/**
+ * The multi-source daily caption: the usual header, then one block per book —
+ * "PrizePicks:" + its lean lines — separated by blank lines, then the board
+ * footer. Fitting under `maxChars` drops trailing LEANS first (evenly, keeping
+ * every book at ≥1 lean), then trailing BOOKS as a last resort. Books whose
+ * payout vocabulary differs keep it per-block (demons/goblins vs multipliers)
+ * because leanLine reads each lean's own source data.
+ */
+export function composeMultiSourcePost(opts: {
+  sport: string;
+  sportName: string;
+  blocks: SourceBlock[];
+  siteUrl: string;
+  channel: SocialChannel;
+  maxChars?: number;
+}): DailyPostContent {
+  const { sport, sportName, siteUrl, channel, maxChars = 1500 } = opts;
+  if (opts.blocks.length === 0) throw new Error('composeMultiSourcePost needs at least one block');
+
+  const boardUrl = trackedBoardUrl(siteUrl, sport, channel);
+  const linkDisplay = `${siteUrl.replace(/^https?:\/\//, '')}/${sport}/board`;
+  const header = `Today's hottest ${sportName} props 🔥`;
+  const footer = `Full board → ${linkDisplay}`;
+
+  const render = (blocks: SourceBlock[]): string =>
+    [
+      header,
+      ...blocks.map(
+        (b) =>
+          `${sourceLabel(b.source)}:\n` +
+          b.leans.map((l) => `• ${leanLine(l)} ${tierFlames(l)}`).join('\n'),
+      ),
+      footer,
+    ].join('\n\n');
+
+  let blocks = opts.blocks.map((b) => ({ source: b.source, leans: [...b.leans] }));
+  let text = render(blocks);
+  // Trim leans round-robin from the longest block down to 1 each…
+  while ([...text].length > maxChars && blocks.some((b) => b.leans.length > 1)) {
+    const longest = blocks.reduce((a, b) => (b.leans.length > a.leans.length ? b : a));
+    longest.leans = longest.leans.slice(0, -1);
+    text = render(blocks);
+  }
+  // …then drop trailing books entirely if it still doesn't fit.
+  while ([...text].length > maxChars && blocks.length > 1) {
+    blocks = blocks.slice(0, -1);
+    text = render(blocks);
+  }
+
+  const imageAlt =
+    `Today's hottest ${sportName} props on FantasyFire across ` +
+    `${blocks.map((b) => sourceLabel(b.source)).join(', ')}. ` +
+    'Historical hit rates with sample-size confidence intervals — past performance, not betting advice.';
+
+  assertDescriptive(text);
+  assertDescriptive(imageAlt);
+  return { text, linkDisplay, boardUrl, imageAlt };
+}
+
 export interface ContentPackEntry {
   sport: string;
   sportName: string;

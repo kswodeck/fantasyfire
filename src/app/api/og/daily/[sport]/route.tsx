@@ -7,6 +7,7 @@ import { ImageResponse } from 'next/og';
 import { getDailyLeans, type DailyLean } from '@/lib/server/social';
 import { isSport, SPORTS } from '@/lib/sports';
 import {
+  BestLineTag,
   cardDateLabel,
   heatBadge,
   LeanAvatar,
@@ -21,11 +22,14 @@ export const dynamic = 'force-dynamic';
 
 const SIZE = { width: 1200, height: 630 };
 
-export async function GET(_request: Request, ctx: { params: Promise<{ sport: string }> }) {
+export async function GET(request: Request, ctx: { params: Promise<{ sport: string }> }) {
   const { sport } = await ctx.params;
   if (!isSport(sport)) return new Response('Unknown sport', { status: 404 });
 
-  const leans = await getDailyLeans(sport, 5).catch(() => [] as DailyLean[]);
+  // ?s=<book> pins the card to one book's lines (the multi-source carousel
+  // renders one card per book); default is the site's board preference.
+  const source = new URL(request.url).searchParams.get('s')?.trim().toLowerCase() || undefined;
+  const leans = await getDailyLeans(sport, 5, new Date(), source).catch(() => [] as DailyLean[]);
   const { headshots, teamLogos, sourceLogo } = await leanImages(sport, leans);
   const dateLabel = cardDateLabel();
   const cfg = SPORTS[sport];
@@ -127,6 +131,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ sport: str
                     ) : null}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+                    {l.bestLine ? <BestLineTag fontSize={18} /> : null}
                     {payout ? (
                       <div
                         style={{

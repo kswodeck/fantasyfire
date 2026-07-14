@@ -7,6 +7,7 @@ import {
   composeDailyDigest,
   composeDailyPoll,
   composeDailyPost,
+  composeMultiSourcePost,
   trackedBoardUrl,
 } from './compose';
 
@@ -65,6 +66,39 @@ describe('composeDailyPost', () => {
     });
     expect(c.text).toContain('Over 32.5 PTS (1.82×)');
     expect(c.text).not.toContain('(1×)');
+  });
+
+  it('multi-source: one labeled block per book, blank lines between, fits maxChars', () => {
+    const blocks = [
+      { source: 'prizepicks', leans: [lean({ oddsType: 'demon', linesSource: 'prizepicks' })] },
+      { source: 'underdog', leans: [lean({ multiplier: 1.31, linesSource: 'underdog' })] },
+      { source: 'sleeper', leans: [lean({ multiplier: 1.82, linesSource: 'sleeper' })] },
+      { source: 'pick6', leans: [lean({ linesSource: 'pick6' })] },
+    ];
+    const c = composeMultiSourcePost({
+      sport: 'wnba',
+      sportName: 'WNBA',
+      blocks,
+      siteUrl: SITE_URL,
+      channel: 'discord',
+      maxChars: 1800,
+    });
+    expect(c.text).toContain('PrizePicks:');
+    expect(c.text).toContain('Underdog:');
+    expect(c.text).toContain('Sleeper:');
+    expect(c.text).toContain('DK Pick6:');
+    expect(c.text).toContain('(1.82×)');
+    expect(c.text.split('\n\n').length).toBeGreaterThanOrEqual(5); // header + 4 blocks + footer
+
+    const tight = composeMultiSourcePost({
+      sport: 'wnba',
+      sportName: 'WNBA',
+      blocks: blocks.map((b) => ({ ...b, leans: [b.leans[0], lean({ slug: 'x2' }), lean({ slug: 'x3' })] })),
+      siteUrl: SITE_URL,
+      channel: 'bluesky',
+      maxChars: 290,
+    });
+    expect([...tight.text].length).toBeLessThanOrEqual(290);
   });
 
   it('never emits banned predictive/tout tokens', () => {

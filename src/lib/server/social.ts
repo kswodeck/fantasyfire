@@ -28,6 +28,9 @@ export interface DailyLean {
   oddsType?: string | null;
   /** Exact payout multiplier of the shown rung (e.g. Underdog); null when none. */
   multiplier?: number | null;
+  /** True when this book posts the most favorable line for the player+stat
+   *  across all books (cross-book lineValue) — the multi-source cards mark it. */
+  bestLine?: boolean;
   /** Only lean tiers are publishable — never "Slight lean" or below. */
   tier: 'Strong lean' | 'Lean';
   /** Book source id the line came from (providedSources.ts), null = our computed median. */
@@ -60,21 +63,14 @@ async function getSocialBoardRows(
   return { rows: await getBoard(sport, { limit: 40 }).catch(() => [] as BoardRow[]), source: null };
 }
 
-/**
- * Today's strongest publishable leans for a sport, or [] when the sport has no
- * slate TODAY (off-season, or its next slate is days out — same gate as the home
- * page). Filtered to players whose team is actually on today's slate, capped to
- * one lean per player for variety, ranked by the board's FireFactor order.
- */
-export async function getDailyLeans(
-  sport: Sport,
-  limit = 5,
-  now = new Date(),
-): Promise<DailyLean[]> {
-  const { hasSlate, teams } = await getSocialSlate(sport, now);
-  if (!hasSlate) return [];
-
-  const { rows, source } = await getSocialBoardRows(sport);
+/** BoardRows → publishable DailyLeans: lean tiers only, slate teams only, one
+ *  lean per player, board (FireFactor) order preserved. */
+function leansFromRows(
+  rows: BoardRow[],
+  source: string | null,
+  teams: Set<string>,
+  limit: number,
+): DailyLean[] {
   const seen = new Set<string>();
   const leans: DailyLean[] = [];
   for (const r of rows) {
@@ -95,26 +91,96 @@ export async function getDailyLeans(
       tier: r.fireScore.tier as DailyLean['tier'],
       oddsType: r.oddsType ?? null,
       multiplier: r.multiplier ?? null,
+      bestLine: !!source && r.lineValue?.best != null && r.lineValue.best.source === source,
       linesSource: source,
     });
     if (leans.length >= limit) break;
   }
-
-  // League team ids for the card's team logos (one batch query, best-effort).
-  const abbrs = [...new Set(leans.map((l) => l.teamAbbreviation).filter((a): a is string => !!a))];
-  if (abbrs.length > 0) {
-    const teamRows = await db.team
-      .findMany({
-        where: { sport, abbreviation: { in: abbrs } },
-        select: { abbreviation: true, externalId: true },
-      })
-      .catch(() => []);
-    const idByAbbr = new Map(teamRows.map((t) => [t.abbreviation, t.externalId]));
-    for (const l of leans) {
-      l.teamExternalId = l.teamAbbreviation ? (idByAbbr.get(l.teamAbbreviation) ?? null) : null;
-    }
-  }
   return leans;
+}
+
+/** League team ids for the card's team logos (one batch query, best-effort). */
+async function attachTeamIds(sport: Sport, leans: DailyLean[]): Promise<void> {
+  const abbrs = [...new Set(leans.map((l) => l.teamAbbreviation).filter((a): a is string => !!a))];
+  if (abbrs.length === 0) return;
+  const teamRows = await db.team
+    .findMany({
+      where: { sport, abbreviation: { in: abbrs } },
+      select: { abbreviation: true, externalId: true },
+    })
+    .catch(() => []);
+  const idByAbbr = new Map(teamRows.map((t) => [t.abbreviation, t.externalId]));
+  for (const l of leans) {
+    l.teamExternalId = l.teamAbbreviation ? (idByAbbr.get(l.teamAbbreviation) ?? null) : null;
+  }
+}
+
+/**
+ * Today's strongest publishable leans for a sport, or [] when the sport has no
+ * slate TODAY (off-season, or its next slate is days out — same gate as the home
+ * page). Filtered to players whose team is actually on today's slate, capped to
+ * one lean per player for variety, ranked by the board's FireFactor order.
+ * `sourceOverride` pins a specific book (the multi-source card variants);
+ * default is the site's board preference.
+ */
+export async function getDailyLeans(
+  sport: Sport,
+  limit = 5,
+  now = new Date(),
+  sourceOverride?: string,
+): Promise<DailyLean[]> {
+  const { hasSlate, teams } = await getSocialSlate(sport, now);
+  if (!hasSlate) return [];
+
+  let rows: BoardRow[];
+  let source: string | null;
+  if (sourceOverride) {
+    const boards = await getSourcedBoards(sport, [sourceOverride], { limit: 40 }).catch(
+      () => ({}) as Record<string, BoardRow[]>,
+    );
+    rows = boards[sourceOverride] ?? [];
+    source = sourceOverride;
+  } else {
+    ({ rows, source } = await getSocialBoardRows(sport));
+  }
+  const leans = leansFromRows(rows, source, teams, limit);
+  await attachTeamIds(sport, leans);
+  return leans;
+}
+
+/** The books the multi-source post covers, in display order (DFS pick'em only —
+ *  one card per book, capped at 4 by the tightest platform, Bluesky). */
+export const MULTI_SOURCE_BOOKS = ['prizepicks', 'underdog', 'sleeper', 'pick6'] as const;
+
+/**
+ * Per-book leans for the multi-source daily post: one entry per
+ * MULTI_SOURCE_BOOKS member that has publishable leans on today's slate, in
+ * that order. Empty/short when fewer books carry today's slate — the caller
+ * falls back to the single-card post below 2 entries.
+ */
+export async function getDailySourceLeans(
+  sport: Sport,
+  limitPerSource = 5,
+  now = new Date(),
+): Promise<{ source: string; leans: DailyLean[] }[]> {
+  const { hasSlate, teams } = await getSocialSlate(sport, now);
+  if (!hasSlate) return [];
+
+  const available = await getAvailableSources(sport).catch(() => [] as string[]);
+  const books = MULTI_SOURCE_BOOKS.filter((b) => available.includes(b));
+  if (books.length === 0) return [];
+
+  const boards = await getSourcedBoards(sport, books, { limit: 40 }).catch(
+    () => ({}) as Record<string, BoardRow[]>,
+  );
+  const blocks: { source: string; leans: DailyLean[] }[] = [];
+  for (const book of books) {
+    const leans = leansFromRows(boards[book] ?? [], book, teams, limitPerSource);
+    if (leans.length === 0) continue;
+    await attachTeamIds(sport, leans);
+    blocks.push({ source: book, leans });
+  }
+  return blocks;
 }
 
 /**
