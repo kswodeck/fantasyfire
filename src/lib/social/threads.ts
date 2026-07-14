@@ -27,6 +27,30 @@ async function graphPost(path: string, params: Record<string, string>): Promise<
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Wait until every container finishes processing. Meta downloads container
+ * images ASYNC — creating a CAROUSEL parent while a child is still
+ * IN_PROGRESS 400s with "Invalid Carousel Children ... invalid, nonexistent,
+ * or expired" (the exact failure from the first live multi-source run).
+ */
+async function waitForContainers(target: ThreadsTarget, ids: string[]): Promise<void> {
+  const deadline = Date.now() + 90_000;
+  for (const id of ids) {
+    for (;;) {
+      const res = await fetch(
+        `${GRAPH}/${id}?fields=status&access_token=${encodeURIComponent(target.accessToken)}`,
+      );
+      const body = (await res.json().catch(() => ({}))) as { status?: string };
+      if (body.status === 'FINISHED' || body.status === 'PUBLISHED') break;
+      if (body.status === 'ERROR' || body.status === 'EXPIRED') {
+        throw new Error(`threads container ${id} ended ${body.status}`);
+      }
+      if (Date.now() > deadline) throw new Error(`threads container ${id} still processing after 90s`);
+      await sleep(3_000);
+    }
+  }
+}
+
 /** Create + publish a post (image when a card URL exists, else text-only). */
 export async function postToThreads(
   target: ThreadsTarget,
@@ -81,6 +105,7 @@ export async function postThreadsCarousel(
     });
     children.push(child.id);
   }
+  await waitForContainers(target, children);
   const parent = await graphPost(`${target.userId}/threads`, {
     media_type: 'CAROUSEL',
     children: children.join(','),
