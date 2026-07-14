@@ -30,6 +30,32 @@ async function graphPost(path: string, params: Record<string, string>): Promise<
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Wait until every container finishes processing. Meta downloads container
+ * images ASYNC — a CAROUSEL parent referencing an IN_PROGRESS child can 400
+ * ("Invalid Carousel Children"); the sibling Threads poster hit exactly that
+ * on the first live multi-source run, IG just got lucky on timing.
+ */
+async function waitForContainers(target: InstagramTarget, ids: string[]): Promise<void> {
+  const deadline = Date.now() + 90_000;
+  for (const id of ids) {
+    for (;;) {
+      const res = await fetch(
+        `${GRAPH}/${id}?fields=status_code&access_token=${encodeURIComponent(target.accessToken)}`,
+      );
+      const body = (await res.json().catch(() => ({}))) as { status_code?: string };
+      if (body.status_code === 'FINISHED' || body.status_code === 'PUBLISHED') break;
+      if (body.status_code === 'ERROR' || body.status_code === 'EXPIRED') {
+        throw new Error(`instagram container ${id} ended ${body.status_code}`);
+      }
+      if (Date.now() > deadline) {
+        throw new Error(`instagram container ${id} still processing after 90s`);
+      }
+      await sleep(3_000);
+    }
+  }
+}
+
 /** Publish a container with a brief retry while it finishes processing. */
 async function publishContainer(target: InstagramTarget, creationId: string): Promise<string> {
   let lastError: unknown;
@@ -89,6 +115,7 @@ export async function postInstagramCarousel(
     });
     children.push(child.id);
   }
+  await waitForContainers(target, children);
   const parent = await graphPost(`${target.userId}/media`, {
     media_type: 'CAROUSEL',
     children: children.join(','),
