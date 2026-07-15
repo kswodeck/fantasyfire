@@ -68,8 +68,8 @@ export function InstallNudge() {
     <div className="fixed inset-x-0 bottom-4 z-50 flex justify-center px-4">
       <div className="flex items-center gap-3 rounded-full border border-line bg-surface-2 py-2 pl-4 pr-2 text-sm shadow-lg">
         <span>
-          Add <span className="font-semibold">FantasyFire</span> to your home screen — one tap to
-          today&rsquo;s boards.
+          Add <span className="font-semibold">FantasyFire</span>{' '}
+          to your home screen — one tap to today&rsquo;s boards.
         </span>
         <button
           type="button"
