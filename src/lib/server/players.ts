@@ -512,12 +512,32 @@ function toPlayerGame(r: StatGameRow): PlayerGame {
   };
 }
 
-export async function getPlayerGames(playerId: number): Promise<PlayerGame[]> {
-  const rows = await db.playerGameStat.findMany({
+export async function getPlayerGames(
+  playerId: number,
+  sport: Sport,
+  season?: string,
+): Promise<PlayerGame[]> {
+  // Per-sport column projection (egress saver): the same narrowed select the board
+  // uses, so only this sport's stat columns cross the wire instead of all ~60.
+  const select = boardStatSelect(sport);
+  if (season) {
+    const scoped = (await db.playerGameStat.findMany({
+      where: { playerId, season },
+      orderBy: { gameDate: 'desc' },
+      select,
+    })) as unknown as StatGameRow[];
+    // Common case: the active season has rows — return them (correctly excludes prior
+    // seasons from "recent form", matching the season-scoped DvP/leaders math). Fall
+    // through to the unscoped query ONLY for players with no active-season games
+    // (retired / rookie / season-long injury, reachable via dynamicParams) so their
+    // page still renders in full rather than blanking.
+    if (scoped.length > 0) return scoped.map(toPlayerGame);
+  }
+  const rows = (await db.playerGameStat.findMany({
     where: { playerId },
     orderBy: { gameDate: 'desc' },
-    include: { opponentTeam: { select: { abbreviation: true, externalId: true } } },
-  });
+    select,
+  })) as unknown as StatGameRow[];
   return rows.map(toPlayerGame);
 }
 
@@ -697,9 +717,21 @@ export async function searchPlayers(
         ],
       }
     : { sport };
+  // Explicit projection (egress saver): only the columns the PlayerListItem mapper
+  // below actually reads. Drops id/sport/college/country/draft*/fromYear/teamId —
+  // never emitted — so the output (and the v1 API shape) is byte-identical.
   const rows = await db.player.findMany({
     where,
-    include: {
+    select: {
+      externalId: true,
+      slug: true,
+      firstName: true,
+      lastName: true,
+      position: true,
+      posBucket: true,
+      jersey: true,
+      height: true,
+      weight: true,
       team: { select: { abbreviation: true, name: true, externalId: true } },
       _count: { select: { gameStats: true } },
       injury: {
@@ -1317,7 +1349,7 @@ export async function getPlayerResearch(
       ? statParam
       : defaultStatForSport(sport, record.posBucket);
 
-  const allGames = await getPlayerGames(record.id);
+  const allGames = await getPlayerGames(record.id, sport, season);
   // Keep only games where the player got a normal opportunity for their role.
   // NBA minutes are continuous, so the bar is the player's own blended average.
   // MLB plate appearances are small integers clustered at ~4 for regulars, so a
@@ -1921,11 +1953,23 @@ export async function getPlayerTopReads(
     include: { team: { select: { abbreviation: true, name: true, externalId: true } } },
   });
   if (!player) return [];
-  const rows = (await db.playerGameStat.findMany({
-    where: { playerId: player.id },
+  // Current season only (egress saver + correctness), matching loadBoardPool. Fall
+  // back to full history for players with no active-season games so the card still
+  // computes rather than silently emptying.
+  const season = await getActiveSeason(sport);
+  const select = boardStatSelect(sport);
+  let rows = (await db.playerGameStat.findMany({
+    where: { playerId: player.id, season },
     orderBy: { gameDate: 'desc' },
-    select: boardStatSelect(sport),
+    select,
   })) as unknown as Array<StatGameRow & { playerId: number }>;
+  if (rows.length === 0) {
+    rows = (await db.playerGameStat.findMany({
+      where: { playerId: player.id },
+      orderBy: { gameDate: 'desc' },
+      select,
+    })) as unknown as Array<StatGameRow & { playerId: number }>;
+  }
   const pool: BoardPool = {
     players: [player],
     gamesByPlayer: new Map([[player.id, rows.map(toPlayerGame)]]),
@@ -2520,10 +2564,14 @@ async function loadBoardPool(sport: Sport, scan: number): Promise<BoardPool> {
     take: scan,
   });
   if (players.length === 0) return { players: [], gamesByPlayer: new Map() };
+  // Current season only (egress saver + correctness): the board's "recent form" must
+  // not spill into prior seasons, and this matches the season-scoped DvP/leaders math.
+  // Never pruned, so without this the scan multiplies by every retained season.
+  const season = await getActiveSeason(sport);
   // Per-sport column select (egress saver). The dynamic select loses Prisma's precise
   // payload type, so map through StatGameRow (stat fields optional; missing → 0).
   const rows = (await db.playerGameStat.findMany({
-    where: { playerId: { in: players.map((p) => p.id) } },
+    where: { playerId: { in: players.map((p) => p.id) }, season },
     orderBy: { gameDate: 'desc' },
     select: boardStatSelect(sport),
   })) as unknown as Array<StatGameRow & { playerId: number }>;

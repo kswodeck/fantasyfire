@@ -15,14 +15,12 @@ export function useTopReads({
   slug,
   source,
   initialData,
-  hasLiveLines = true,
 }: {
   sport: Sport;
   slug: string;
   /** Which book's lines to rank (computed lines when the book has none). */
   source?: string;
   initialData?: BoardRow[];
-  hasLiveLines?: boolean;
 }) {
   return useQuery<BoardRow[]>({
     queryKey: ['topreads', sport, slug, source ?? null],
@@ -35,6 +33,10 @@ export function useTopReads({
     },
     initialData,
     placeholderData: (prev) => prev,
-    refetchOnMount: hasLiveLines ? 'always' : true,
+    staleTime: 5 * 60 * 1000,
+    // Trust the SSR seed on the initial source (revalidated by the ingest in the same
+    // run it moves lines); refetch only when the user switches book/source (diverged
+    // key, no seed). Saves a mount refetch per player view on the busiest surface.
+    refetchOnMount: initialData ? false : 'always',
   });
 }

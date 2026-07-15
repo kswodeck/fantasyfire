@@ -50,16 +50,22 @@ async function loadSport(sport: Sport): Promise<{
       : rows
           .filter((r) => r.player.teamAbbreviation && teams.has(r.player.teamAbbreviation))
           .slice(0, TEASER_ROWS);
+  // Only 4 rows are shown per card (after the today's-slate filter), so scan a
+  // smaller pool than the board default (120) — a big egress cut on the home path
+  // (every active sport, every 15-min regen) with ample headroom to still fill 4.
   if (sources.length > 0) {
     const boards = await getSourcedBoards(sport, sources, {
       limit: 24,
+      scan: 60,
       standardOnly: true,
     }).catch(() => ({}) as Record<string, BoardRow[]>);
     const boardsBySource: Record<string, BoardRow[]> = {};
     for (const [s, rows] of Object.entries(boards)) boardsBySource[s] = onSlate(rows);
     return { boardsBySource, medianLeans: [], hasGamesToday };
   }
-  const medianLeans = onSlate(await getBoard(sport, { limit: 24 }).catch(() => [] as BoardRow[]));
+  const medianLeans = onSlate(
+    await getBoard(sport, { limit: 24, scan: 60 }).catch(() => [] as BoardRow[]),
+  );
   return { boardsBySource: {}, medianLeans, hasGamesToday };
 }
 

@@ -5,8 +5,12 @@ import { isSport, SPORTS } from '@/lib/sports';
 export const alt = 'FantasyFire player prop research';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
-// Match the player page's ISR window so the OG image's freshness tracks the page.
-export const revalidate = 86400;
+// This card renders only the player's name, team, and position — effectively static
+// identity that changes at most on a trade — so it regenerates monthly rather than
+// daily. (Data-bearing cards, like the per-stat OG, stay on a tighter timer.) OG
+// images are a separate cache entry from the page and are NOT touched by the
+// on-demand line-move revalidation, so their timer is their only refresh path.
+export const revalidate = 2592000;
 
 // Dynamic OG image per player. `params` is a Promise in Next 16.
 export default async function Image({

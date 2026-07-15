@@ -20,6 +20,11 @@ export async function GET(request: Request, ctx: { params: Promise<{ sport: stri
   const image = await Jimp.fromBuffer(await pngResponse.arrayBuffer());
   const jpeg = await image.getBuffer(JimpMime.jpeg, { quality: 90 });
   return new Response(new Uint8Array(jpeg), {
-    headers: { 'content-type': 'image/jpeg' },
+    // Day/book-keyed URL (?d=, ?s=), so CDN-cache repeat fetches instead of
+    // re-encoding the JPEG (jimp) on every hit.
+    headers: {
+      'content-type': 'image/jpeg',
+      'cache-control': 'public, s-maxage=86400, stale-while-revalidate=86400',
+    },
   });
 }

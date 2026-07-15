@@ -3,7 +3,7 @@
  * Uses the Cache API only (no localStorage for app state). The API + URL stay
  * the source of truth (PLAN §3b #8); caches are disposable.
  */
-const VERSION = 'ff-v2';
+const VERSION = 'ff-v3';
 const STATIC_CACHE = `${VERSION}-static`;
 const PAGE_CACHE = `${VERSION}-pages`;
 const OFFLINE_URL = '/offline';
@@ -47,8 +47,17 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/')) return; // never cache the JSON API
 
+  // Content-hashed build assets are immutable — a cache hit is final, so serve it
+  // WITHOUT the background revalidation fetch. That fetch was firing an origin/edge
+  // request on every cached asset load (many per page), for files that can never
+  // change. Genuinely mutable static assets (icons, favicons) keep stale-while-
+  // revalidate so a re-brand still propagates.
+  if (url.pathname.startsWith('/_next/static')) {
+    event.respondWith(cacheFirstImmutable(request, STATIC_CACHE));
+    return;
+  }
+
   const isStatic =
-    url.pathname.startsWith('/_next/static') ||
     url.pathname.startsWith('/icons/') ||
     /\.(png|svg|ico|css|js|woff2?)$/.test(url.pathname);
 
@@ -105,6 +114,18 @@ async function putIfOk(cache, request, response) {
     cache.put(request, response.clone());
   }
   return response;
+}
+
+// Cache-first for immutable, content-hashed assets: a cache hit is authoritative,
+// so no background network request is made. Only a miss touches the network.
+async function cacheFirstImmutable(request, cacheName) {
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  // Miss: fetch once and cache. A failure here is a genuine network error for an
+  // uncached asset — surface it, exactly as a normal (non-SW) request would.
+  const res = await fetch(request);
+  return putIfOk(cache, request, res);
 }
 
 // Cache-first with a background refresh (stale-while-revalidate).
