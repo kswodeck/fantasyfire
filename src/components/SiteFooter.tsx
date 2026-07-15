@@ -40,7 +40,10 @@ export function SiteFooter() {
       <div className="mx-auto w-full max-w-5xl px-4 py-10">
         <div className="grid gap-8 sm:grid-cols-2 md:grid-cols-4">
           <div>
-            <Link href="/" className="flex items-center gap-2 font-semibold">
+            <Link
+              href="/"
+              className="flex items-center gap-2 font-semibold transition-opacity hover:opacity-75"
+            >
               <FlameMark className="h-5 w-5 text-brand" />
               <span>
                 Fantasy<span className="text-brand">Fire</span>
@@ -51,7 +54,7 @@ export function SiteFooter() {
             </p>
             <a
               href={`mailto:${SITE.email}`}
-              className="mt-3 inline-block text-xs text-muted transition-colors hover:text-foreground"
+              className="mt-3 inline-block text-xs text-muted underline-offset-4 transition-colors hover:text-brand hover:underline"
             >
               {SITE.email}
             </a>
@@ -65,7 +68,7 @@ export function SiteFooter() {
                       rel="me noopener noreferrer"
                       aria-label={s.label}
                       title={s.label}
-                      className="inline-flex items-center gap-1.5 text-muted transition-colors hover:text-foreground"
+                      className="inline-flex items-center gap-1.5 text-muted transition-all duration-150 hover:-translate-y-0.5 hover:text-brand"
                     >
                       <SocialIcon network={s.key} className="h-4 w-4" />
                       <span className="sr-only sm:not-sr-only">{s.label}</span>
@@ -86,7 +89,7 @@ export function SiteFooter() {
                   <li key={l.href}>
                     <Link
                       href={l.href}
-                      className="text-muted transition-colors hover:text-foreground"
+                      className="text-muted underline-offset-4 transition-colors hover:text-brand hover:underline"
                     >
                       {l.label}
                     </Link>
