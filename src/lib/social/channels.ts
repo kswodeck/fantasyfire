@@ -9,6 +9,7 @@ import {
   composeDailyPost,
   composeDailyDigest,
   composeMultiSourcePost,
+  trackedBoardUrl,
   type ContentPackEntry,
   type PollContent,
   type SourceBlock,
@@ -514,6 +515,12 @@ const threads: Channel = {
       userId: process.env.THREADS_USER_ID!,
       accessToken: process.env.THREADS_ACCESS_TOKEN!,
     };
+    // Threads caps text at 500 chars AFTER we swap the short display link for
+    // the tracked UTM URL — budget for the swap up front, or a caption composed
+    // to 480 lands at ~550 and the API 500s ("Param text must be at most 500").
+    const linkDisplay = `${SITE.url.replace(/^https?:\/\//, '')}/${post.sport}/board`;
+    const swapDelta = trackedBoardUrl(SITE.url, post.sport, 'threads').length - linkDisplay.length;
+    const budget = 480 - swapDelta;
     try {
       const blocks = multiBlocks(post);
       if (blocks) {
@@ -523,7 +530,7 @@ const threads: Channel = {
           blocks: blocks.map((b) => ({ source: b.source, leans: b.leans.slice(0, CAPTION_LEANS) })),
           siteUrl: SITE.url,
           channel: 'threads',
-          maxChars: 480,
+          maxChars: budget,
         });
         const imageUrls = blocks
           .map((b) => cardUrl(post.sport, null, b.source))
@@ -543,7 +550,7 @@ const threads: Channel = {
         leans: post.leans.slice(0, CAPTION_LEANS),
         siteUrl: SITE.url,
         channel: 'threads',
-        maxChars: 480,
+        maxChars: budget,
       });
       // Links in Threads text are clickable — swap in the tracked URL.
       const text = c.text.replace(c.linkDisplay, c.boardUrl);
