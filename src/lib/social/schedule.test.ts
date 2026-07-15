@@ -20,9 +20,9 @@ describe('etHour / isWithinPostingWindow', () => {
     expect(etHour(new Date('2026-01-13T17:00:00Z'))).toBe(12); // EST
   });
 
-  it('opens at noon ET and closes after the 10pm ET tick', () => {
-    expect(isWithinPostingWindow(new Date('2026-07-13T15:59:00Z'))).toBe(false); // 11:59am ET
-    expect(isWithinPostingWindow(new Date('2026-07-13T16:00:00Z'))).toBe(true); // noon ET
+  it('opens at 10am ET and closes after the 10pm ET tick', () => {
+    expect(isWithinPostingWindow(new Date('2026-07-13T13:59:00Z'))).toBe(false); // 9:59am ET
+    expect(isWithinPostingWindow(new Date('2026-07-13T14:00:00Z'))).toBe(true); // 10am ET
     expect(isWithinPostingWindow(new Date('2026-07-14T02:00:00Z'))).toBe(true); // 10pm ET
     expect(isWithinPostingWindow(new Date('2026-07-14T03:00:00Z'))).toBe(false); // 11pm ET
     expect(isWithinPostingWindow(new Date('2026-07-13T13:00:00Z'))).toBe(false); // 9am ET
@@ -51,8 +51,8 @@ describe('isDueNow', () => {
   });
 
   it('falls back to the daily slot when the start time is unknown', () => {
-    expect(isDueNow(new Date('2026-07-13T16:30:00Z'), null)).toBe(true); // noon ET hour
-    expect(isDueNow(new Date('2026-07-13T17:00:00Z'), null)).toBe(false); // 1pm ET
+    expect(isDueNow(new Date('2026-07-13T14:30:00Z'), null)).toBe(true); // 10:30am ET hour
+    expect(isDueNow(new Date('2026-07-13T16:00:00Z'), null)).toBe(false); // noon ET
   });
 });
 
@@ -148,9 +148,9 @@ describe('etDateIso / socialDayIso', () => {
 });
 
 describe('isDailyTick', () => {
-  it('is the noon-ET window-open hour only', () => {
-    expect(isDailyTick(new Date('2026-07-13T16:45:00Z'))).toBe(true); // 12:45pm ET
-    expect(isDailyTick(new Date('2026-07-13T17:00:00Z'))).toBe(false); // 1pm ET
-    expect(isDailyTick(new Date('2026-01-13T17:30:00Z'))).toBe(true); // 12:30pm EST (winter)
+  it('is the 10am-ET window-open hour only', () => {
+    expect(isDailyTick(new Date('2026-07-13T14:45:00Z'))).toBe(true); // 10:45am ET
+    expect(isDailyTick(new Date('2026-07-13T16:00:00Z'))).toBe(false); // noon ET
+    expect(isDailyTick(new Date('2026-01-13T15:30:00Z'))).toBe(true); // 10:30am EST (winter)
   });
 });
