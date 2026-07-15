@@ -25,6 +25,7 @@ export function RelatedLinks({
         {links.map((l) => (
           <Link
             key={l.href}
+            prefetch={false}
             href={l.href}
             className="group rounded-xl border border-line bg-surface p-4 transition-colors hover:bg-surface-2"
           >
@@ -54,6 +55,7 @@ export function MoreLinksRow({ label, links }: { label: string; links: RelatedLi
         <span key={l.href}>
           {i > 0 && <span className="text-muted"> · </span>}
           <Link
+            prefetch={false}
             href={l.href}
             className="font-medium text-brand transition-colors hover:text-brand-strong hover:underline"
           >

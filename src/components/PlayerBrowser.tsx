@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useSyncExternalStore } from 'react';
 import { SPORTS, type Sport } from '@/lib/sports';
 import type { PlayerListItem } from '@/lib/types';
 import { positionFilterOptions, playerMatchesPosition, teamFilterOptions } from '@/lib/filters';
@@ -10,12 +10,22 @@ import { ListFilters } from './ListFilters';
 
 const STEP = 48;
 
+// Read a `?q=` deep link client-side via useSyncExternalStore (the same pattern
+// InstallPrompt uses for browser-only reads): the server snapshot is empty so SSR
+// and hydration agree, then the real query applies after mount — no hydration
+// mismatch, and no setState-in-effect. The page stays statically rendered.
+const subscribeNever = () => () => {};
+const urlQuerySnapshot = () =>
+  new URLSearchParams(window.location.search).get('q')?.trim() || '';
+const serverQuerySnapshot = () => '';
+
 /**
  * Client browser for the full roster: instant name search + team + position
  * filters + "show more", all in memory. The page ships the whole roster
- * (~600 NBA / ~1250 MLB) so filtering needs no server round-trips. `initialQuery`
- * comes from the page's ?q= so the no-JS SearchForm submit still lands on a
- * pre-filtered list (the initial render — and its SSR HTML — honors it).
+ * (~600 NBA / ~1250 MLB) so filtering needs no server round-trips. The page is
+ * static (ISR) for cache efficiency, so a shared `?q=` deep link is honored
+ * client-side after mount (below) rather than via an SSR pre-filter — no
+ * hydration mismatch, and JS users still land on the filtered list.
  */
 export function PlayerBrowser({
   sport,
@@ -28,7 +38,11 @@ export function PlayerBrowser({
   initialQuery?: string;
   initialVisible?: number;
 }) {
-  const [q, setQ] = useState(initialQuery);
+  const urlQuery = useSyncExternalStore(subscribeNever, urlQuerySnapshot, serverQuerySnapshot);
+  // The effective search: what the user has typed (once they do), else an explicit
+  // prop, else the ?q= deep link.
+  const [typed, setTyped] = useState<string | null>(null);
+  const q = typed ?? (initialQuery || urlQuery);
   const [team, setTeam] = useState('');
   const [position, setPosition] = useState('');
   const [visible, setVisible] = useState(initialVisible);
@@ -61,7 +75,7 @@ export function PlayerBrowser({
         type="search"
         value={q}
         onChange={(e) => {
-          setQ(e.target.value);
+          setTyped(e.target.value);
           reset();
         }}
         placeholder={`Search ${noun} players…`}

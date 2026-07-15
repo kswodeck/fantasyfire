@@ -176,6 +176,13 @@ export async function GET(request: Request, ctx: { params: Promise<{ sport: stri
             brand + attribution + the rows. */}
       </div>
     ),
-    { ...SIZE },
+    {
+      ...SIZE,
+      // The card content is keyed by the caller's ?d= (social day) + ?s= (book), so a
+      // same-day copy is always correct — let the CDN serve repeat crawler/preview
+      // fetches instead of re-running the satori render + DB read every hit. Adding
+      // `headers` only augments (does not clobber) the built-in image content-type.
+      headers: { 'cache-control': 'public, s-maxage=86400, stale-while-revalidate=86400' },
+    },
   );
 }

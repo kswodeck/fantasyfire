@@ -338,6 +338,15 @@ async function changedPlayerStats(
     oddsType: string;
   }) => `${x.sport}|${x.playerId}|${x.stat}|${x.source}|${x.gameDate.getTime()}|${x.line}|${x.oddsType}`;
 
+  // Odds micro-jiggle almost every scrape (a -110 drifting to -112), which — because
+  // the key above already pins line+oddsType — was the dominant source of on-demand
+  // ISR-write churn: nearly every active prop re-flagged every 15 min. Bucket odds to
+  // ~10¢ so only a MATERIAL move (which actually shifts the de-vigged breakeven / +EV
+  // panel) re-flags a page, while trivial jiggle no longer forces a rewrite. Line
+  // moves are unaffected — a moved line is a brand-new key and flags via `!p` below.
+  const oddsBucket = (o: number | null): number | null =>
+    o == null ? null : Math.round(o / 10) * 10;
+
   try {
     const sports = [...new Set(resolved.map((d) => d.sport))];
     const gameDates = [...new Set(resolved.map((d) => d.gameDate.getTime()))].map((t) => new Date(t));
@@ -353,7 +362,11 @@ async function changedPlayerStats(
 
     for (const d of resolved) {
       const p = prev.get(keyOf(d));
-      if (!p || p.line !== d.line || (p.overOdds ?? null) !== d.overOdds || (p.underOdds ?? null) !== d.underOdds) {
+      if (
+        !p ||
+        oddsBucket(p.overOdds ?? null) !== oddsBucket(d.overOdds) ||
+        oddsBucket(p.underOdds ?? null) !== oddsBucket(d.underOdds)
+      ) {
         changed.add(`${d.sport}|${d.playerId}|${d.stat}`);
       }
     }

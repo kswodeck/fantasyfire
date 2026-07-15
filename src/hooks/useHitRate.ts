@@ -22,7 +22,6 @@ export function useHitRate({
   oddsType,
   multiplier,
   initialData,
-  hasLiveLines = true,
 }: {
   sport: Sport;
   slug: string;
@@ -35,10 +34,6 @@ export function useHitRate({
   oddsType?: string | null;
   multiplier?: number | null;
   initialData?: PlayerResearch;
-  /** Whether book lines exist for this sport. Off (median-line pages), the SSR
-   *  seed only goes stale with the nightly ingest, so the always-refetch on
-   *  mount would be a wasted duplicate DB read. */
-  hasLiveLines?: boolean;
 }) {
   return useQuery<PlayerResearch>({
     queryKey: ['hitrate', sport, slug, stat, line ?? null, source ?? null, oddsType ?? null, multiplier ?? null],
@@ -54,10 +49,13 @@ export function useHitRate({
     },
     initialData,
     placeholderData: (prev) => prev,
-    // The SSR seed comes from the page's ISR cache (daily), but book lines move
-    // intraday — when they exist, always revalidate on mount so the rendered
-    // line tracks the live API, not the cached HTML. Costs one call to the
-    // already-dynamic /hitrate route per load.
-    refetchOnMount: hasLiveLines ? 'always' : true,
+    staleTime: 5 * 60 * 1000,
+    // Trust the SSR seed on the INITIAL key: the ingest revalidates each player/stat
+    // page in the same run it writes a moved line (and material odds moves), so the
+    // seed is already current — a mount refetch to the force-dynamic API was a
+    // redundant edge request + DB read on the site's highest-traffic surface. When
+    // the user changes stat/line/source the key diverges (no seed) and React Query
+    // fetches on mount anyway, so live exploration is unaffected.
+    refetchOnMount: initialData ? false : 'always',
   });
 }

@@ -70,7 +70,11 @@ export function BoardRowCard({
       if (!res.ok) throw new Error(`Request failed (${res.status})`);
       return (await res.json()) as PlayerResearch;
     },
-    enabled: !isDefault,
+    // Only hit the force-dynamic API when there's no precomputed read to show. Every
+    // board rung already carries its own payout-anchored read (`pre` below) with the
+    // side/score/tier, so casual chip-clicking paints instantly from it — the live
+    // refetch was a redundant edge request + DB read for a verdict already on screen.
+    enabled: !isDefault && !currentRung?.read,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -96,7 +100,10 @@ export function BoardRowCard({
 
   return (
     <li className="relative flex items-center gap-2.5 px-2 py-2.5 transition-colors hover:bg-surface-2 sm:px-3">
-      <Link href={href} aria-label={`${row.player.fullName} ${fireScore.side} ${line} ${row.statShort}`} className="absolute inset-0" />
+      {/* prefetch off: a board can render dozens–hundreds of these rows, and default
+          prefetch fires one RSC edge request per visible/hovered link. The player
+          page is ISR-fast and has a loading skeleton, so on-click nav stays snappy. */}
+      <Link prefetch={false} href={href} aria-label={`${row.player.fullName} ${fireScore.side} ${line} ${row.statShort}`} className="absolute inset-0" />
       <PlayerAvatar sport={sport} externalId={row.player.externalId} name={row.player.fullName} size={36} ring={team.primary} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">

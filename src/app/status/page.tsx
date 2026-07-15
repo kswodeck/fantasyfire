@@ -5,7 +5,9 @@ import { getIngestStatus, type IngestStatus, type JobName } from '@/lib/server/s
 import { SPORTS } from '@/lib/sports';
 import { formatIsoDate } from '@/lib/format';
 
-export const revalidate = 300;
+// 10 min — the ingest cadence this page reports on is 15 min, so sub-10-min
+// freshness buys nothing but extra regenerations.
+export const revalidate = 600;
 
 export const metadata: Metadata = {
   title: 'Status',

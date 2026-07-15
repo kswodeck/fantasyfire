@@ -13,8 +13,8 @@ import webpush from 'web-push';
 import { db } from '../lib/db';
 import { recordIngestRun } from './ingestRun';
 import { getBoard } from '../lib/server/players';
-import { SITE, absoluteUrl } from '../lib/site';
-import { SPORT_LIST } from '../lib/sports';
+import { cardUrl } from '../lib/social/channels';
+import { SPORT_LIST, type Sport } from '../lib/sports';
 
 const VAPID_PUBLIC = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY ?? '';
@@ -25,7 +25,7 @@ const MIN_DAYS_BETWEEN = 2;
 const PICKS_PER_PUSH = 3;
 
 interface Lean {
-  sport: string;
+  sport: Sport;
   statShort: string;
   line: number;
   side: 'over' | 'under';
@@ -86,12 +86,11 @@ async function main(): Promise<number> {
     const body = picks
       .map((p) => `${p.firstName.charAt(0)}. ${p.lastName} ${p.side} ${p.line} ${p.statShort}`)
       .join('  ·  ');
-    // Rich notification image: the lead sport's daily card (public URL only —
-    // the browser fetches it, so localhost would render a broken image).
-    const cardImage =
-      SITE.url && !new URL(SITE.url).host.startsWith('localhost')
-        ? absoluteUrl(`/api/og/daily/${picks[0].sport}`)
-        : undefined;
+    // Rich notification image: the lead sport's daily card. Built via cardUrl so it
+    // carries the ?d= social-day key (and is null on localhost) — essential now that
+    // the OG route is CDN-cached, or a bare URL could serve yesterday's card across
+    // the day boundary under a "Today's hottest reads" title.
+    const cardImage = cardUrl(picks[0].sport) ?? undefined;
     const payload = JSON.stringify({
       title: "Today's hottest reads 🔥",
       body,

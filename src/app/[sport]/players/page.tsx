@@ -10,6 +10,11 @@ import { RelatedLinks } from '@/components/RelatedLinks';
 import { sportMeshLinks } from '@/lib/relatedLinks';
 
 export const dynamicParams = false;
+// ISR: the roster changes at most daily (ingest cadence), so regenerate hourly and
+// serve every repeat hit (crawlers dominate this route) from cache instead of
+// re-scanning the whole roster per request. Client-side name/team/position filtering
+// is unaffected — PlayerBrowser holds the full roster and filters in memory.
+export const revalidate = 3600;
 
 export function generateStaticParams() {
   return SPORT_LIST.map((sport) => ({ sport }));
@@ -17,7 +22,6 @@ export function generateStaticParams() {
 
 type PageProps = {
   params: Promise<{ sport: string }>;
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -35,15 +39,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 // complete team/position/name filtering (a high cap, not a real page size).
 const ROSTER_LIMIT = 5000;
 
-export default async function PlayersPage({ params, searchParams }: PageProps) {
+export default async function PlayersPage({ params }: PageProps) {
   const { sport: raw } = await params;
   if (!isSport(raw)) notFound();
   const sport: Sport = raw;
   const cfg = SPORTS[sport];
-
-  // ?q= from the no-JS SearchForm — pre-filters the initial (SSR'd) render.
-  const sp = await searchParams;
-  const initialQuery = typeof sp.q === 'string' ? sp.q.trim() : '';
 
   let players: PlayerListItem[] = [];
   try {
@@ -77,7 +77,7 @@ export default async function PlayersPage({ params, searchParams }: PageProps) {
           No players available yet. Run the ingest to populate data.
         </p>
       ) : (
-        <PlayerBrowser sport={sport} players={players} initialQuery={initialQuery} />
+        <PlayerBrowser sport={sport} players={players} />
       )}
 
       <RelatedLinks links={sportMeshLinks(sport, 'players')} />

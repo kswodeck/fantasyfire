@@ -10,6 +10,7 @@ export function PlayerCard({ player }: { player: PlayerListItem }) {
   const team = getTeam(player.sport, player.teamAbbreviation);
   return (
     <Link
+      prefetch={false}
       href={`/${player.sport}/${player.slug}`}
       className="flex items-center gap-3 rounded-xl border border-l-4 border-line bg-surface p-3 transition-colors hover:bg-surface-2"
       style={{ borderLeftColor: team.primary }}

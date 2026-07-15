@@ -25,6 +25,18 @@ async function ingestSport(sport: Sport): Promise<number> {
     return 0;
   }
 
+  // Empty feed (out-of-season sport, or simply no injuries): nothing can match, so
+  // skip the expensive full-roster scan — the dominant egress cost of this job, run
+  // every 15 min against every sport including the huge off-season college rosters.
+  // Still clear this sport's stored rows so recovered/off-season injuries don't
+  // linger; final DB state is identical to the full path (createMany never fires
+  // when there are no matches anyway).
+  if (rows.length === 0) {
+    await db.playerInjury.deleteMany({ where: { sport } });
+    console.log(`[injuries:${sport}] empty feed — cleared stored injuries, skipped roster scan`);
+    return 0;
+  }
+
   const players = await db.player.findMany({
     where: { sport },
     select: { id: true, firstName: true, lastName: true },

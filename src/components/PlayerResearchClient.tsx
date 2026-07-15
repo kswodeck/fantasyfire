@@ -149,7 +149,6 @@ export function PlayerResearchClient({
     oddsType: line !== undefined ? rungHint?.oddsType : undefined,
     multiplier: line !== undefined ? rungHint?.multiplier : undefined,
     initialData: isInitialKey ? initialResearch : undefined,
-    hasLiveLines: availableSources.length > 0,
   });
   const data = query.data ?? initialResearch;
 
@@ -160,7 +159,6 @@ export function PlayerResearchClient({
     slug,
     source,
     initialData: source === initialSource ? initialTopReads : undefined,
-    hasLiveLines: availableSources.length > 0,
   });
 
   function syncUrl(nextStat: StatKey, nextLine: number | undefined, nextSource: string) {
