@@ -8,8 +8,8 @@
 // All hours are EASTERN (America/New_York, DST-aware via Intl) — the audience
 // clock — never raw UTC, so the window doesn't drift an hour every DST change.
 
-/** No posting outside this ET window: first possible run noon, last 10pm. */
-export const WINDOW_START_HOUR_ET = 12;
+/** No posting outside this ET window: first possible run 10am, last 10pm. */
+export const WINDOW_START_HOUR_ET = 10;
 export const WINDOW_END_HOUR_ET = 22;
 
 /** A sport is due once its first start time is within this many minutes. */
@@ -28,7 +28,7 @@ export const DAILY_TICK_HOUR_ET = WINDOW_START_HOUR_ET;
 /**
  * The social "day" rolls over at this ET hour (11pm), NOT midnight: "today"
  * runs 11pm ET yesterday → 11pm ET today, so a late West Coast tip (10:30pm
- * ET) still belongs to today while the posting window (noon–10pm ET) sits
+ * ET) still belongs to today while the posting window (10am–10pm ET) sits
  * entirely inside one day. This replaces the schedule feed's UTC-day buckets,
  * which roll at 8pm ET and split US evenings across two "days".
  */
@@ -92,18 +92,18 @@ export function socialDayIso(d: Date): string {
   return etDateIso(new Date(socialDayStart(d).getTime() + 12 * 3_600_000));
 }
 
-/** True inside the ET posting window (noon–10pm inclusive of both tick hours). */
+/** True inside the ET posting window (10am–10pm inclusive of both tick hours). */
 export function isWithinPostingWindow(now: Date): boolean {
   const h = etHour(now);
   return h >= WINDOW_START_HOUR_ET && h <= WINDOW_END_HOUR_ET;
 }
 
-/** True during the fixed daily slot's hour (noon ET — the window-open tick). */
+/** True during the fixed daily slot's hour (10am ET — the window-open tick). */
 export function isDailyTick(now: Date): boolean {
   return etHour(now) === DAILY_TICK_HOUR_ET;
 }
 
-/** The weekly recap slot: Sunday's daily tick (noon ET, America/New_York). */
+/** The weekly recap slot: Sunday's daily tick (10am ET, America/New_York). */
 export function isWeeklySlot(now: Date): boolean {
   if (!isDailyTick(now)) return false;
   const weekday = new Intl.DateTimeFormat('en-US', {

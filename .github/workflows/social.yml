@@ -1,12 +1,12 @@
 name: Game-aware social publish + push digest
 
 # The outward-facing daily comms (docs/MARKETING.md §3 + §6), timed to the games:
-# the workflow ticks HOURLY through the posting window (NOON–10PM ET — never the
+# the workflow ticks HOURLY through the posting window (10AM–10PM ET — never the
 # middle of the night; the window is computed in America/New_York inside the
 # code, so DST can't shift it) and each sport posts at the first tick where its
-# first game is within 2 hours. Slates whose first game tips before noon ET
+# first game is within 2 hours. Slates whose first game tips before 10am ET
 # catch up at the window-open tick. The owner content pack + web-push digest go
-# once per day at the window open (noon ET), which is also the fallback for
+# once per day at the window open (10am ET), which is also the fallback for
 # sports whose schedule feed has no start times.
 #
 # COST CONTROL (private repo = billed Actions minutes): a ~15-second "check" job
@@ -40,10 +40,10 @@ name: Game-aware social publish + push digest
 
 on:
   schedule:
-    # Hourly ticks covering noon–10pm ET across BOTH DST offsets (EDT: 16:00–02:00
-    # UTC; EST: 17:00–03:00 UTC). The script itself enforces the exact ET window,
+    # Hourly ticks covering 10am–10pm ET across BOTH DST offsets (EDT: 14:00–02:00
+    # UTC; EST: 15:00–03:00 UTC). The script itself enforces the exact ET window,
     # so the out-of-window edge ticks exit at the cheap check job.
-    - cron: '0 16-23 * * *'
+    - cron: '0 14-23 * * *'
     - cron: '0 0-3 * * *'
   workflow_dispatch:
     inputs:
@@ -144,12 +144,13 @@ jobs:
       - name: Publish due social posts
         run: pnpm social ${{ inputs.dry_run && '--dry-run' || '' }} ${{ inputs.force && '--force' || '' }}
 
-      # Web-push lean digest — once per day at the daily slot (noon ET; inert
-      # until VAPID keys exist). Best-effort: a push hiccup shouldn't fail the job.
+      # Web-push lean digest — once per day at the daily slot (10am ET, the window
+      # open; inert until VAPID keys exist). Best-effort: a push hiccup shouldn't
+      # fail the job.
       - name: Send push digest
         if: ${{ (success() || failure()) && !inputs.dry_run }}
         run: |
-          if [ "$(TZ=America/New_York date +%H)" = "12" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "$(TZ=America/New_York date +%H)" = "10" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             pnpm push
           else
             echo "Not the daily slot — skipping push digest."

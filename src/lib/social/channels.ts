@@ -9,7 +9,6 @@ import {
   composeDailyPost,
   composeDailyDigest,
   composeMultiSourcePost,
-  trackedBoardUrl,
   type ContentPackEntry,
   type PollContent,
   type SourceBlock,
@@ -507,6 +506,25 @@ const instagram: Channel = {
   },
 };
 
+/**
+ * Threads hard-caps text at 500 UTF-16 code units, but our composers budget by code
+ * POINTS — so flame emoji (surrogate pairs) undercount and a caption "fit" to ~480
+ * lands over 500 and the API 500s. Compose, swap the short display link for the
+ * clickable tracked URL, then shrink the budget until the FINAL text truly fits
+ * (drops trailing leans/books first — the URL at the tail is never truncated).
+ */
+function fitThreadsText(
+  compose: (maxChars: number) => { text: string; linkDisplay: string; boardUrl: string },
+): string {
+  let text = '';
+  for (let budget = 460; budget >= 160; budget -= 40) {
+    const c = compose(budget);
+    text = c.text.replace(c.linkDisplay, c.boardUrl);
+    if (text.length <= 500) return text;
+  }
+  return text; // trimmed to minimum content — best effort
+}
+
 const threads: Channel = {
   key: 'threads',
   isConfigured: () => !!(process.env.THREADS_USER_ID && process.env.THREADS_ACCESS_TOKEN),
@@ -515,45 +533,39 @@ const threads: Channel = {
       userId: process.env.THREADS_USER_ID!,
       accessToken: process.env.THREADS_ACCESS_TOKEN!,
     };
-    // Threads caps text at 500 chars AFTER we swap the short display link for
-    // the tracked UTM URL — budget for the swap up front, or a caption composed
-    // to 480 lands at ~550 and the API 500s ("Param text must be at most 500").
-    const linkDisplay = `${SITE.url.replace(/^https?:\/\//, '')}/${post.sport}/board`;
-    const swapDelta = trackedBoardUrl(SITE.url, post.sport, 'threads').length - linkDisplay.length;
-    const budget = 480 - swapDelta;
     try {
       const blocks = multiBlocks(post);
       if (blocks) {
-        const c = composeMultiSourcePost({
-          sport: post.sport,
-          sportName: post.sportName,
-          blocks: blocks.map((b) => ({ source: b.source, leans: b.leans.slice(0, CAPTION_LEANS) })),
-          siteUrl: SITE.url,
-          channel: 'threads',
-          maxChars: budget,
-        });
         const imageUrls = blocks
           .map((b) => cardUrl(post.sport, null, b.source))
           .filter((u): u is string => u !== null);
         if (imageUrls.length >= 2) {
-          await postThreadsCarousel(target, {
-            imageUrls,
-            text: c.text.replace(c.linkDisplay, c.boardUrl),
-          });
+          const text = fitThreadsText((maxChars) =>
+            composeMultiSourcePost({
+              sport: post.sport,
+              sportName: post.sportName,
+              blocks: blocks.map((b) => ({ source: b.source, leans: b.leans.slice(0, CAPTION_LEANS) })),
+              siteUrl: SITE.url,
+              channel: 'threads',
+              maxChars,
+            }),
+          );
+          await postThreadsCarousel(target, { imageUrls, text });
           console.log(`[social] ${post.sport}: posted Threads multi-source carousel`);
           return 1;
         }
       }
-      const c = composeDailyPost({
-        sport: post.sport,
-        sportName: post.sportName,
-        leans: post.leans.slice(0, CAPTION_LEANS),
-        siteUrl: SITE.url,
-        channel: 'threads',
-        maxChars: budget,
-      });
-      // Links in Threads text are clickable — swap in the tracked URL.
-      const text = c.text.replace(c.linkDisplay, c.boardUrl);
+      // Links in Threads text are clickable — fitThreadsText swaps in the tracked URL.
+      const text = fitThreadsText((maxChars) =>
+        composeDailyPost({
+          sport: post.sport,
+          sportName: post.sportName,
+          leans: post.leans.slice(0, CAPTION_LEANS),
+          siteUrl: SITE.url,
+          channel: 'threads',
+          maxChars,
+        }),
+      );
       const card = cardUrl(post.sport);
       await postToThreads(target, { text, ...(card ? { imageUrl: card } : {}) });
       console.log(`[social] ${post.sport}: posted to Threads`);
@@ -566,17 +578,19 @@ const threads: Channel = {
   async postDigest(digest) {
     if (digest.cards.length < 2) return 0;
     try {
-      const c = composeDailyDigest({
-        entries: digest.entries,
-        siteUrl: SITE.url,
-        channel: 'threads',
-        maxChars: 480,
-      });
+      const text = fitThreadsText((maxChars) =>
+        composeDailyDigest({
+          entries: digest.entries,
+          siteUrl: SITE.url,
+          channel: 'threads',
+          maxChars,
+        }),
+      );
       await postThreadsCarousel(
         { userId: process.env.THREADS_USER_ID!, accessToken: process.env.THREADS_ACCESS_TOKEN! },
         {
           imageUrls: digest.cards.map((card) => card.url),
-          text: c.text.replace(c.linkDisplay, c.boardUrl),
+          text,
         },
       );
       console.log('[social] digest: posted Threads carousel');
