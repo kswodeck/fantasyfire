@@ -49,5 +49,6 @@ export function sportSections(sport: Sport): SportSection[] {
       seg: 'matchups',
       desc: sport === 'mlb' ? 'Pitching allowed by team' : 'Defense vs position',
     },
+    { label: 'Accuracy', seg: 'accuracy', desc: 'How past leans settled, day by day' },
   ];
 }

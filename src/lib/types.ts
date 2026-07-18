@@ -414,3 +414,15 @@ export interface YesterdayRecap {
   misses: number;
   pushes: number;
 }
+
+/** Multi-day settled ledger for the /[sport]/accuracy page (see server/recap.ts). */
+export interface AccuracyLedger {
+  /** Settled days, most recent first (bounded — see LEDGER_DAYS). */
+  days: YesterdayRecap[];
+  totals: { hits: number; misses: number; pushes: number };
+  /** Record split by pre-game strength tier. */
+  byTier: {
+    strong: { hits: number; misses: number; pushes: number };
+    lean: { hits: number; misses: number; pushes: number };
+  };
+}

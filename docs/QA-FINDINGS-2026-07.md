@@ -213,7 +213,9 @@ All dev-side findings above are now implemented on this branch:
 - **F10** Home page: "between slates / off-season" strip links dormant sports;
   hero + "Edge vs. the market" card no longer overclaim when provided lines are
   off.
-- **D5** "Yesterday's leans, settled" shipped snapshot-free
+- **D5** Shipped snapshot-free as a full **`/[sport]/accuracy` settled-leans
+  ledger** (last 10 slate days, overall + per-tier records, per-day settled rows)
+  plus the "Yesterday's leans, settled" strip
   (`src/lib/server/recap.ts` + `YesterdayRecapStrip`): recomputes the prior
   slate's top leans from pre-slate logs and settles them against the box score.
   No new tables/writes; `unstable_cache` 6h per sport, so it runs ~4×/day/sport
