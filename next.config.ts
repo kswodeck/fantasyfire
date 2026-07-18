@@ -117,6 +117,13 @@ const nextConfig: NextConfig = {
       // /[sport]/streaks merged into Trends (each row now shows the current streak
       // alongside the L10 swing). Permanent redirect to preserve SEO.
       { source: '/:sport/streaks', destination: '/:sport/trends', permanent: true },
+      // Junk root paths like /& and /$ that Search Console surfaced as 404s. The
+      // site never emits these — they're external mis-links (social/scraper URL
+      // parsers grabbing a trailing `&`/`$` off a shared link). They already 404
+      // (dynamicParams=false on /[sport]), but a 301 to home clears them from the
+      // index and lands any stray visitor somewhere real. Scoped to a single
+      // segment that is exactly one of those chars, so no real slug can match.
+      { source: '/:junk([&$])', destination: '/', permanent: true },
     ];
   },
 };
