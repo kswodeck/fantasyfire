@@ -38,10 +38,9 @@ import {
   wilsonInterval,
   STAT_DEFS,
   FIREFACTOR_MIN_GAMES,
-  defaultLine,
   defaultPropLine,
 } from '@/lib/stats';
-import { fairPriceReadout, marketConsensus, type MarketConsensus } from '@/lib/odds';
+import { fairPriceReadout, marketConsensus } from '@/lib/odds';
 import { parseSlate, normalizeName } from '@/lib/slate';
 import { posBucketLabel } from '@/lib/filters';
 import { currentSeason, previousSeason } from '@/lib/season';
@@ -127,7 +126,7 @@ const getActiveSeason = cache(async (sport: Sport): Promise<string> => {
 //   Soccer         -> null (NOT filtered): the feed has no per-player minutes, and
 //                     every involvement proxy we do have (shots, fouls) correlates
 //                     with performance, so filtering on it would bias hit rates.
-function opportunityFor(
+export function opportunityFor(
   sport: Sport,
   posBucket: string | null | undefined,
   g: PlayerGame,
@@ -1729,7 +1728,7 @@ const BOARD_SOCCER_STATS: Record<string, StatKey[]> = {
   G: ['saves'],
 };
 
-function boardStatsFor(sport: Sport, posBucket: string | null): StatKey[] {
+export function boardStatsFor(sport: Sport, posBucket: string | null): StatKey[] {
   // MLB pitchers are excluded for now (no matchup, and starts aren't filtered).
   if (sport === 'mlb') return posBucket === 'P' ? [] : BOARD_MLB_HITTER_STATS;
   if (sport === 'nfl' || sport === 'cfb') return BOARD_NFL_STATS[posBucket ?? ''] ?? [];
@@ -2556,7 +2555,7 @@ function boardStatSelect(sport: Sport) {
 export type BoardPool = { players: BoardPlayer[]; gamesByPlayer: Map<number, PlayerGame[]> };
 
 /** Top-`scan` most-active players + all their games (one batched query each). */
-async function loadBoardPool(sport: Sport, scan: number): Promise<BoardPool> {
+export async function loadBoardPool(sport: Sport, scan: number): Promise<BoardPool> {
   const players = await db.player.findMany({
     where: { sport },
     include: { team: { select: { abbreviation: true, name: true, externalId: true } } },
@@ -2585,7 +2584,7 @@ async function loadBoardPool(sport: Sport, scan: number): Promise<BoardPool> {
 }
 
 /** Keep only games where the player got their normal role-relative opportunity. */
-function qualifyGames(
+export function qualifyGames(
   sport: Sport,
   posBucket: string | null,
   allGames: PlayerGame[],
@@ -2681,9 +2680,14 @@ function statLinesFor(
   }
   return boardStatsFor(sport, posBucket).map((stat) => {
     const book = providedLines.get(`${playerId}:${stat}`);
+    // Fallback = the BOOK-STYLE half-point line (x.5, straddling the season
+    // median, tilt-balanced) rather than the raw integer median: it matches the
+    // number a user actually sees at a sportsbook/DFS app, and a half-point line
+    // never pushes — so "Under 1 R" (with pushes silently excluded) can't
+    // overstate an edge that vanishes at the bettable 0.5.
     return book != null
       ? { stat, line: book, provided: true }
-      : { stat, line: defaultLine(games, stat), provided: false };
+      : { stat, line: defaultPropLine(games, stat), provided: false };
   });
 }
 

@@ -5,13 +5,14 @@ import { median } from '../format';
 /**
  * Our "typical-game" line for a stat: the season MEDIAN game, floored to 0.5.
  *
- * Used wherever we RANK leans — the board, streaks, and trends (the board
- * literally labels these "our typical-game (median) line"). The raw median sits
- * at the typical game, and with pushes (games exactly
- * on the line) excluded from the hit rate, Over/Under comes out balanced — so a
- * lean reflects real recent form, not where the line was placed. Rounding the
- * median UP to the next half-point instead put the line above the typical game and
- * forced ~every count stat Under (a ~100%-Under board), which is why we don't.
+ * HISTORY: this was the board's ranking line. The board now ranks against
+ * defaultPropLine below (the book-style x.5 that never pushes) so the number a
+ * user sees matches the number a book would post — an integer median with pushes
+ * excluded could overstate an edge that vanishes at the bettable half-point.
+ * Kept for the API's "season median to 0.5" fallback semantics and tests.
+ * (Historical note: rounding the median UP to the next half-point put the line
+ * above the typical game and forced ~every count stat Under — defaultPropLine
+ * avoids that by choosing the STRADDLING half-point that best balances O/U.)
  */
 export function defaultLine(games: GameStatLine[], stat: StatKey): number {
   if (games.length === 0) return 0.5;

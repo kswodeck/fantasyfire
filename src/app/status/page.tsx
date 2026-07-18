@@ -28,7 +28,13 @@ const JOB_LABELS: Record<JobName, string> = {
   cfb: 'CFB ingest',
   cbb: 'CBB ingest',
   schedule: 'Schedule pull',
+  injuries: 'Injuries pull',
   indexnow: 'IndexNow ping',
+  providedlines: 'Book lines pull',
+  social: 'Social publish',
+  push: 'Push digest',
+  metrics: 'Metrics digest',
+  prune: 'DB prune',
 };
 
 function relTime(fromIso: string | null, nowIso: string): string {
@@ -142,8 +148,9 @@ export default async function StatusPage() {
               </thead>
               <tbody>
                 {status.jobs.map((j) => {
-                  const tone: 'ok' | 'warn' | 'bad' =
-                    j.lastStatus === null
+                  const tone: 'ok' | 'warn' | 'bad' = j.offSeason
+                    ? 'ok'
+                    : j.lastStatus === null
                       ? 'warn'
                       : j.lastStatus === 'failure'
                         ? 'bad'
@@ -168,6 +175,7 @@ export default async function StatusPage() {
                       </td>
                       <td className="px-3 py-2 text-muted">
                         {relTime(j.lastRunAt, status!.generatedAt)}
+                        {j.offSeason && <span className="ml-1 text-xs">(off-season)</span>}
                         {j.lastStatus === 'failure' && (
                           <span className="ml-1 font-medium text-under">(failed)</span>
                         )}

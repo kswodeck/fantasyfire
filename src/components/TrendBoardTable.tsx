@@ -176,8 +176,14 @@ function TrendRowCard({
           <LeanArrow tier="Lean" side={d.side} size={14} />
           {Math.round(d.recentRate * d.recentGames)} of {d.recentGames}
         </div>
-        <div className="text-[11px] tabular-nums text-muted">
-          {pct(d.recentRate)} <span className="text-muted">L10</span>
+        <div
+          className="text-[11px] tabular-nums text-muted"
+          title={`Of the last 10 games, ${d.recentGames} were decided at this line — pushes (landing exactly on the line) don't count either way.`}
+        >
+          {pct(d.recentRate)}{' '}
+          <span className="text-muted">
+            L10{d.recentGames < 10 ? ` (${d.recentGames} decided)` : ''}
+          </span>
           <span className="hidden sm:inline"> · vs {pct(d.seasonRate)} season</span>
         </div>
         {streakSample && (

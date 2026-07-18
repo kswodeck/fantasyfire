@@ -386,3 +386,31 @@ export interface TonightGame {
   homeProbablePitcher: string | null;
   awayProbablePitcher: string | null;
 }
+
+/** One settled lean from the "yesterday's leans" recap (snapshot-free: the lean
+ *  is recomputed from the game logs BEFORE that day, then settled against the
+ *  day's actual box score — deterministic, no stored predictions). */
+export interface RecapRow {
+  player: { fullName: string; slug: string; teamAbbreviation: string | null };
+  stat: StatKey;
+  statShort: string;
+  line: number;
+  side: FireSide;
+  /** FireFactor the lean would have carried pre-game (no matchup/Vegas context —
+   *  those aren't reconstructable after the fact — so it's the conservative read). */
+  score: number;
+  tier: FireTier;
+  /** The player's actual stat value in the settled game. */
+  actual: number;
+  result: 'hit' | 'miss' | 'push';
+}
+
+/** The settled recap for a sport's most recent completed slate day. */
+export interface YesterdayRecap {
+  /** ISO day (YYYY-MM-DD) of the settled slate. */
+  date: string;
+  rows: RecapRow[];
+  hits: number;
+  misses: number;
+  pushes: number;
+}

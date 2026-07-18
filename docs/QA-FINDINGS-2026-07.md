@@ -185,3 +185,37 @@ The daily-changing boards are the retention engine; make the return trip explici
 3. F7 embeds + D3 owner switches — distribution that's already paid for.
 4. F2/F3 verdict-panel labeling — trust polish on the money page.
 5. D4 manual seeding loop — ongoing, 15 min/day.
+
+---
+
+## Implementation addendum (2026-07-18)
+
+All dev-side findings above are now implemented on this branch:
+
+- **F1** Board/trends fallback line is now `defaultPropLine` (book-style x.5 —
+  never pushes); board copy updated. Enabling `PROVIDED_LINES_ENABLED` (owner
+  step) remains the preferred end state.
+- **F2** Verdict sub-score bars are labeled as evidence for the leaning side
+  ("supports it / argues against it" + tooltip); the projection multiplier chip
+  reads "(×0.95 context)" with a per-factor hover breakdown that explains the
+  MLB probable-starter vs staff-grade distinction.
+- **F3** Trends rows show "(N decided)" + tooltip when pushes shrink the window.
+- **F4** /status: off-season pulls no longer warn or flip the banner; injuries
+  job listed; optional jobs (providedlines/social/push/metrics/prune) appear
+  once they've run.
+- **F5** Game pages hide sub-cutoff "No read" rows (home teaser too).
+- **F6** Heat-word chips carry an explanatory tooltip.
+- **F7** Embed button re-enabled on both player pages; the line-source
+  provenance label ("PrizePicks line / our line / your line") now renders.
+- **F8** Unknown player slugs return a real HTTP 404 (existence gate in
+  `[playerSlug]/layout.tsx`, above the streaming boundary).
+- **F9** Mobile horizontal overflow fixed (SportNav bleed matched to parent).
+- **F10** Home page: "between slates / off-season" strip links dormant sports;
+  hero + "Edge vs. the market" card no longer overclaim when provided lines are
+  off.
+- **D5** "Yesterday's leans, settled" shipped snapshot-free
+  (`src/lib/server/recap.ts` + `YesterdayRecapStrip`): recomputes the prior
+  slate's top leans from pre-slate logs and settles them against the box score.
+  No new tables/writes; `unstable_cache` 6h per sport, so it runs ~4×/day/sport
+  regardless of traffic (Supabase/Vercel cost ≈ one extra board-pool scan 4×/day
+  per in-season sport). Rendered on each sport page and /board.

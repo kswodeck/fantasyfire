@@ -34,7 +34,13 @@ export function GameLeans({
 }) {
   const hasSources = sources.length > 0;
   const sourced = useSourced(boardsBySource, sources, defaultSource);
-  const rows = hasSources ? sourced.rows : medianRows;
+  const allRows = hasSources ? sourced.rows : medianRows;
+  // Below-cutoff rows ("No read") add noise on a per-game page — a reader wants the
+  // matchup's genuine leans, not every line we looked at. The full universe stays
+  // browsable on the board/player pages.
+  const rows = allRows.filter(
+    (r) => r.fireScore.tier !== 'Pass' && r.fireScore.tier !== 'No lean',
+  );
   const payout = useBoardPayoutFilter(rows);
 
   return (

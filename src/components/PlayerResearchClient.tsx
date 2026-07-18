@@ -309,6 +309,9 @@ export function PlayerResearchClient({
             {data.seasonAverage !== null && (
               <> · season avg {num1(data.seasonAverage)} {statDef.short}</>
             )}
+            {/* Provenance of the number being analyzed — the user should never have
+                to guess whether this is their entry, a book's line, or our default. */}
+            {lineSourceLabel && <> · {lineSourceLabel}</>}
           </span>
           {query.isFetching && (
             <span className="ml-auto animate-pulse text-xs text-brand">updating…</span>

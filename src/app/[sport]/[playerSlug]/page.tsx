@@ -80,9 +80,11 @@ const JOB_TITLE: Record<Sport, string> = {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { sport, playerSlug } = await params;
-  if (!isSport(sport)) return { title: 'Player not found' };
+  // notFound() here (not in the page body) so an unknown slug gets a real 404
+  // status — the page body only throws after the loading shell has streamed a 200.
+  if (!isSport(sport)) notFound();
   const player = await getPlayerBySlug(sport, playerSlug);
-  if (!player) return { title: 'Player not found' };
+  if (!player) notFound();
 
   const cfg = SPORTS[sport];
   const teamBit = player.teamAbbreviation ? ` (${player.teamAbbreviation})` : '';
@@ -250,7 +252,7 @@ export default async function PlayerPage({ params }: PageProps) {
               team={player.teamAbbreviation}
             />
             <ShareButton />
-            {/* <EmbedButton sport={sport} slug={player.slug} /> */}
+            <EmbedButton sport={sport} slug={player.slug} />
           </div>
         </div>
       </header>
