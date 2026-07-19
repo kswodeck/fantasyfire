@@ -158,7 +158,7 @@ export default async function GamePage({ params }: PageProps) {
         The strongest FireFactor reads for this matchup, split by team.{' '}
         {hasSources
           ? 'Lines are the real book numbers — switch books below.'
-          : 'Lines are our own typical-game (median) line, not a sportsbook line.'}
+          : 'Lines are our own book-style half-point line, centered on each player’s typical game — not a sportsbook’s posted number.'}
       </p>
 
       <GameLeans

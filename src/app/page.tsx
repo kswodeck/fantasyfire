@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { FlameMark } from '@/components/FlameMark';
 import { HomeTopLeans, type HomeCard } from '@/components/HomeTopLeans';
 import { getBoard, getSourcedBoards, getTonightSlate, hasUpcomingGames } from '@/lib/server/players';
-import { getAvailableSources } from '@/lib/server/providedLines';
+import { getAvailableSources, providedLinesEnabled } from '@/lib/server/providedLines';
 import { SITE } from '@/lib/site';
 import { SPORT_LIST, SPORTS, type Sport } from '@/lib/sports';
 import { socialDayIso } from '@/lib/social/schedule';
@@ -44,11 +44,18 @@ async function loadSport(sport: Sport): Promise<{
   const hasGamesToday = slate.games.length > 0 && slate.date === todayIso;
   if (!hasGamesToday) return { boardsBySource: {}, medianLeans: [], hasGamesToday };
   const teams = slateTeams(slate.games);
+  // The teaser sells the strongest reads — a "No read" row on the home page is
+  // pure noise (same filter as the per-game page).
+  const isRead = (r: BoardRow) =>
+    r.fireScore.tier !== 'Pass' && r.fireScore.tier !== 'No lean';
   const onSlate = (rows: BoardRow[]): BoardRow[] =>
     teams.size === 0
-      ? rows.slice(0, TEASER_ROWS)
+      ? rows.filter(isRead).slice(0, TEASER_ROWS)
       : rows
-          .filter((r) => r.player.teamAbbreviation && teams.has(r.player.teamAbbreviation))
+          .filter(
+            (r) =>
+              isRead(r) && r.player.teamAbbreviation && teams.has(r.player.teamAbbreviation),
+          )
           .slice(0, TEASER_ROWS);
   // Only 4 rows are shown per card (after the today's-slate filter), so scan a
   // smaller pool than the board default (120) — a big egress cut on the home path
@@ -112,10 +119,25 @@ export default async function Home() {
               in every player prop
             </span>
           </h1>
+          {/* The market-pricing claim only renders when book lines are actually on
+              (PROVIDED_LINES_ENABLED) — the hero must never promise a feature the
+              page below can't show. */}
           <p className="max-w-xl text-lg text-muted">
-            {SITE.name} projects every player prop across eight pro and college leagues from public game logs —
-            adjusted for matchup, pace, the Vegas game total, and usage — then prices it against the
-            market to show where the number is soft. Built on the uncertainty most tools hide.
+            {providedLinesEnabled() ? (
+              <>
+                {SITE.name} projects every player prop across eight pro and college leagues from
+                public game logs — adjusted for matchup, pace, the Vegas game total, and usage —
+                then prices it against the market to show where the number is soft. Built on the
+                uncertainty most tools hide.
+              </>
+            ) : (
+              <>
+                {SITE.name} projects every player prop across eight pro and college leagues from
+                public game logs — adjusted for matchup, pace, the Vegas game total, and usage —
+                with hit rates, confidence intervals, and a fair-price calculator for the number
+                on your card. Built on the uncertainty most tools hide.
+              </>
+            )}
           </p>
           {/* The one clear next step from the hero: the all-sports board. */}
           <Link
@@ -146,6 +168,33 @@ export default async function Home() {
         </div>
       )}
 
+      {/* Dormant sports (off-season, or no slate today). Without this the summer
+          home page is two cards and the "eight leagues" claim above has nothing to
+          point at — historical leaders/players/matchups stay browsable year-round. */}
+      {cards.length < SPORT_LIST.length && (
+        <div className="mx-auto w-full max-w-5xl px-2 sm:px-4">
+          <section className="mb-10 rounded-xl border border-line bg-surface px-4 py-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+                Between slates / off-season
+              </span>
+              {SPORT_LIST.filter((s) => !cards.some((c) => c.sport === s)).map((s) => (
+                <Link
+                  key={s}
+                  href={`/${s}`}
+                  className="rounded-full border border-line px-3 py-1 font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                >
+                  {SPORTS[s].name}
+                </Link>
+              ))}
+              <span className="text-xs text-muted">
+                season stats, leaders &amp; player pages still open
+              </span>
+            </div>
+          </section>
+        </div>
+      )}
+
       <div className="mx-auto w-full max-w-5xl px-2 sm:px-4">
         <section className="grid gap-4 pb-10 sm:grid-cols-3">
           <FeatureCard
@@ -154,7 +203,11 @@ export default async function Home() {
           />
           <FeatureCard
             title="Edge vs. the market"
-            body="We de-vig the books we track to a no-vig fair price, flag the best available number, and show the +EV — automatically, no odds to type."
+            body={
+              providedLinesEnabled()
+                ? 'We de-vig the books we track to a no-vig fair price, flag the best available number, and show the +EV — automatically, no odds to type.'
+                : "Enter the book's odds on any player page to see the implied probability, the no-vig fair price, and the edge vs. that player's history."
+            }
           />
           <FeatureCard
             title="Honest by construction"

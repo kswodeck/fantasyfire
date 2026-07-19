@@ -140,7 +140,16 @@ export function BoardRowCard({
         </div>
       </div>
       <div className={`shrink-0 text-right transition-opacity ${loading ? 'opacity-40' : ''}`}>
-        <div className={`flex items-center justify-end gap-1 text-sm font-semibold ${tierTextClass(fireScore.tier, fireScore.side)}`}>
+        <div
+          className={`flex items-center justify-end gap-1 text-sm font-semibold ${tierTextClass(fireScore.tier, fireScore.side)}`}
+          title={
+            fireScore.tier === 'No lean' || fireScore.tier === 'Pass'
+              ? 'No read — recent history gives no meaningful lean on this line.'
+              : `${heatLabel(fireScore.tier, fireScore.side)} = ${
+                  fireScore.tier === 'Strong lean' ? 'strong' : fireScore.tier === 'Lean' ? 'solid' : 'slight'
+                } ${fireScore.side} lean. The word carries the direction (warm = over, cool = under); the FF number is strength only.`
+          }
+        >
           <LeanArrow tier={fireScore.tier} side={fireScore.side} size={15} decorative />
           {heatLabel(fireScore.tier, fireScore.side)}
         </div>

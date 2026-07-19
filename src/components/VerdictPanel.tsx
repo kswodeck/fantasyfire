@@ -1,7 +1,31 @@
 import type { PlayerVerdict } from '@/lib/types';
+import type { ProjectionAdjustments } from '@/lib/stats';
 import { num1, pct } from '@/lib/format';
 import { LeanArrow } from './LeanArrow';
 import { tierTextClass, tierBoxClass, gradeTextClass, heatLabel } from '@/lib/tierStyle';
+
+/** Spell out which context factors moved the projection — hover text for the
+ *  "(×0.95 context)" chip. For MLB hitters the opponent factor prefers the
+ *  probable opposing STARTER over the staff-wide grade, so it can legitimately
+ *  disagree with the Matchup letter below (a soft staff, a tough starter). */
+function factorBreakdown(factors: ProjectionAdjustments | undefined): string {
+  const parts: string[] = [];
+  const add = (label: string, v: number | null | undefined) => {
+    if (v != null && Number.isFinite(v) && Math.abs(v - 1) >= 0.005) {
+      parts.push(`${label} ×${v.toFixed(2)}`);
+    }
+  };
+  add('opponent', factors?.opponent);
+  add('pace', factors?.pace);
+  add('Vegas total', factors?.environment);
+  add('usage trend', factors?.volume);
+  const detail = parts.length ? parts.join(' · ') : 'no individual factor moved it';
+  return (
+    `Context multiplier on the recent-form base: ${detail}. ` +
+    `For MLB hitters the opponent factor uses the probable opposing starter when known, ` +
+    `so it can differ from the team-wide Matchup grade below.`
+  );
+}
 
 /**
  * The "verdict" read for a player + stat + line. Presentational only (data via
@@ -59,22 +83,36 @@ export function VerdictPanel({
         )}
       </div>
 
-      {/* Component breakdown — the number is never shown without this. */}
+      {/* Component breakdown — the number is never shown without this. Every bar is
+          EVIDENCE FOR THE LEANING SIDE (50 = neutral/abstains), so a favorable
+          matchup reads ~0 on an under lean — that's the matchup arguing for the
+          over, not missing data. The suffix word spells that out. */}
       <div className="mt-3 space-y-1.5">
-        {fireScore.components.map((c) => (
-          <div key={c.key} className="flex items-center gap-2 text-xs">
-            <span className="w-28 shrink-0 text-muted sm:w-40">{c.label}</span>
-            <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface">
-              <span
-                className="block h-full rounded-full bg-brand"
-                style={{ width: `${Math.round(c.score * 100)}%` }}
-              />
-            </span>
-            <span className="w-8 shrink-0 text-right tabular-nums text-muted">
-              {Math.round(c.score * 100)}
-            </span>
-          </div>
-        ))}
+        {fireScore.components.map((c) => {
+          const word =
+            c.score >= 0.6 ? 'supports it' : c.score <= 0.4 ? 'argues against it' : 'neutral';
+          return (
+            <div
+              key={c.key}
+              className="flex items-center gap-2 text-xs"
+              title={`Each bar is evidence for the ${fireScore.side} lean: 50 is neutral (it abstains), higher supports the ${fireScore.side}, lower argues against it. Example: a soft matchup scores low on an under lean because it favors the over.`}
+            >
+              <span className="w-28 shrink-0 text-muted sm:w-40">{c.label}</span>
+              <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface">
+                <span
+                  className="block h-full rounded-full bg-brand"
+                  style={{ width: `${Math.round(c.score * 100)}%` }}
+                />
+              </span>
+              <span className="w-8 shrink-0 text-right tabular-nums text-muted">
+                {Math.round(c.score * 100)}
+              </span>
+              <span className="hidden w-24 shrink-0 text-right text-[10px] text-muted sm:block">
+                {word}
+              </span>
+            </div>
+          );
+        })}
       </div>
 
       {/* Sub-reads: estimate range, consistency, matchup. */}
@@ -86,8 +124,11 @@ export function VerdictPanel({
           <div className="text-sm font-semibold tabular-nums">
             {num1(projection.projection)} {statShort}
             {adjusted && (
-              <span className="ml-1 font-normal text-[11px] text-muted">
-                (×{projection.adjustment.toFixed(2)} matchup)
+              <span
+                className="ml-1 font-normal text-[11px] text-muted"
+                title={factorBreakdown(projection.factors)}
+              >
+                (×{projection.adjustment.toFixed(2)} context)
               </span>
             )}
           </div>

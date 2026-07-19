@@ -9,8 +9,14 @@ import { sectionHref, sportSections } from '@/lib/sportNav';
 // hover menu. Scrollable on mobile; highlights the current section.
 export function SportNav({ sport }: { sport: Sport }) {
   const pathname = usePathname();
+  // The bleed must mirror the parent's padding (px-2 / sm:px-4 in the sport
+  // layout) — a -mx-4 bleed inside a px-2 parent overhangs 8px and gives the
+  // whole page a horizontal scrollbar on phones.
   return (
-    <nav aria-label={`${sport.toUpperCase()} sections`} className="-mx-4 overflow-x-auto px-4">
+    <nav
+      aria-label={`${sport.toUpperCase()} sections`}
+      className="-mx-2 overflow-x-auto px-2 sm:-mx-4 sm:px-4"
+    >
       <ul className="flex gap-1 whitespace-nowrap text-sm">
         {sportSections(sport).map((it) => {
           const href = sectionHref(sport, it.seg);

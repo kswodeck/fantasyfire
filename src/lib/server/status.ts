@@ -5,8 +5,12 @@ import { db } from '@/lib/db';
 import { SPORT_LIST, type Sport } from '@/lib/sports';
 
 /** Jobs we expect to run nightly, in pipeline order. */
-export const KNOWN_JOBS = ['nba', 'mlb', 'nfl', 'nhl', 'wnba', 'mls', 'cfb', 'cbb', 'schedule', 'indexnow'] as const;
-export type JobName = (typeof KNOWN_JOBS)[number];
+export const KNOWN_JOBS = ['nba', 'mlb', 'nfl', 'nhl', 'wnba', 'mls', 'cfb', 'cbb', 'schedule', 'injuries', 'indexnow'] as const;
+/** Best-effort / opt-in jobs (provided lines, social, push, metrics, prune): shown
+ *  when they've ever run so the page reflects the whole pipeline, but they never
+ *  flip the health banner — each is inert until its env/secrets are configured. */
+export const OPTIONAL_JOBS = ['providedlines', 'social', 'push', 'metrics', 'prune'] as const;
+export type JobName = (typeof KNOWN_JOBS)[number] | (typeof OPTIONAL_JOBS)[number];
 
 /** A daily job is "stale" if its last successful run is older than this. */
 export const STALE_AFTER_MS = 30 * 60 * 60 * 1000; // 30h = daily cadence + margin
@@ -21,6 +25,9 @@ export interface JobStatus {
   error: string | null;
   /** Last successful run missing or older than the cadence. */
   stale: boolean;
+  /** True for a sport pull whose sport has no upcoming slate or recent games —
+   *  staleness is expected and shouldn't read as a problem. */
+  offSeason?: boolean;
 }
 
 export interface SportFreshness {
@@ -64,7 +71,7 @@ export async function getIngestStatus(now: Date = new Date()): Promise<IngestSta
   const latestByJob = new Map<string, (typeof recent)[number]>();
   for (const r of recent) if (!latestByJob.has(r.job)) latestByJob.set(r.job, r);
 
-  const jobs: JobStatus[] = KNOWN_JOBS.map((job) => {
+  const toStatus = (job: JobName): JobStatus => {
     const r = latestByJob.get(job);
     if (!r) {
       return {
@@ -88,7 +95,13 @@ export async function getIngestStatus(now: Date = new Date()): Promise<IngestSta
       error: r.error,
       stale,
     };
-  });
+  };
+  const jobs: JobStatus[] = [
+    ...KNOWN_JOBS.map(toStatus),
+    // Optional jobs only appear once they've actually run — an unconfigured
+    // (inert) job isn't a health problem, it just doesn't exist yet.
+    ...OPTIONAL_JOBS.filter((job) => latestByJob.has(job)).map(toStatus),
+  ];
 
   const todayUtc = startOfTodayUtc(now);
   const sports: SportFreshness[] = await Promise.all(
@@ -106,10 +119,33 @@ export async function getIngestStatus(now: Date = new Date()): Promise<IngestSta
     }),
   );
 
-  // "Healthy" tracks the data-pull jobs — schedule/indexnow are best-effort and
-  // shouldn't flip the top-line indicator red.
+  // "Healthy" tracks the data-pull jobs — schedule/indexnow/injuries and the
+  // optional jobs are best-effort and shouldn't flip the top-line indicator red.
+  // A pull only counts while its sport is IN SEASON (an upcoming slate, or a
+  // completed game within the last 10 days): a paused off-season workflow is not
+  // a data problem, and without this gate the banner would warn all summer.
+  const IN_SEASON_RECENT_MS = 10 * 24 * 60 * 60 * 1000;
+  const freshnessBySport = new Map(sports.map((s) => [s.sport, s]));
+  const inSeason = (sport: Sport): boolean => {
+    const f = freshnessBySport.get(sport);
+    if (!f) return false;
+    if (f.upcomingGames > 0) return true;
+    return (
+      f.lastGameDate !== null &&
+      now.getTime() - new Date(`${f.lastGameDate}T00:00:00Z`).getTime() < IN_SEASON_RECENT_MS
+    );
+  };
   const pulls: JobName[] = ['nba', 'mlb', 'nfl', 'nhl', 'wnba', 'mls', 'cfb', 'cbb'];
-  const healthy = jobs.filter((j) => pulls.includes(j.job)).every((j) => !j.stale);
+  // Un-flag stale OFF-SEASON pulls in the table too — an amber dot on "NBA ingest"
+  // in July reads as a problem when it's just the calendar.
+  const displayJobs = jobs.map((j) =>
+    pulls.includes(j.job) && !inSeason(j.job as Sport)
+      ? { ...j, stale: false, offSeason: true }
+      : j,
+  );
+  const healthy = displayJobs
+    .filter((j) => pulls.includes(j.job) && inSeason(j.job as Sport))
+    .every((j) => !j.stale);
 
-  return { generatedAt: now.toISOString(), jobs, sports, healthy };
+  return { generatedAt: now.toISOString(), jobs: displayJobs, sports, healthy };
 }

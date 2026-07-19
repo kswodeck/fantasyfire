@@ -13,11 +13,13 @@ import {
   hasUpcomingGames,
 } from '@/lib/server/players';
 import { getAvailableSources } from '@/lib/server/providedLines';
+import { getYesterdayRecap } from '@/lib/server/recap';
 import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import { isOverOnly } from '@/lib/payoutVariant';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
 import type { BoardRow, InjuryReportRow, TonightGame, TrendRow } from '@/lib/types';
 import { OffSeasonFallback } from '@/components/OffSeasonFallback';
+import { YesterdayRecapStrip } from '@/components/YesterdayRecapStrip';
 
 export const revalidate = 900; // 15 min — matches the lines ingest cadence, bounding board↔player-page score skew to one cycle
 export const dynamicParams = false;
@@ -107,6 +109,11 @@ export default async function SportHome({ params }: PageProps) {
     // Injuries are a nice-to-have on the tile — degrade to the static hint.
   }
 
+  // Yesterday's leans, settled — the daily honesty loop (null off-season / no
+  // strong-enough leans / DB unavailable; cached 6h so it doesn't ride the
+  // page's 15-min ISR).
+  const recap = await getYesterdayRecap(sport);
+
   const hasBoard = hasSources
     ? Object.values(boardsBySource).some((r) => r.length > 0)
     : medianRows.length > 0;
@@ -129,8 +136,8 @@ export default async function SportHome({ params }: PageProps) {
           <>Lines are the real book numbers — switch books with the selector. </>
         ) : (
           <>
-            The lines shown are our own typical-game (median) line, not a sportsbook
-            line.{' '}
+            Lines are our own book-style half-point line, centered on each
+            player&rsquo;s typical game — not a sportsbook&rsquo;s posted number.{' '}
           </>
         )}
         Filter to {slateWord.toLowerCase()}&rsquo;s slate or a single matchup, and open a
@@ -163,6 +170,8 @@ export default async function SportHome({ params }: PageProps) {
           .
         </p>
       )}
+
+      {recap && <YesterdayRecapStrip sport={sport} recap={recap} />}
 
       {/* Section hub — Trends, Injuries, Players, Leaders, Matchups at a glance.
           This IS the page's internal-link mesh: the tiles cover every section the
