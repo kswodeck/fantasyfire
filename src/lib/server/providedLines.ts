@@ -143,15 +143,48 @@ export async function getProvidedLinesBySource(
     const rows = await db.providedLine.findMany({
       where: { sport, playerId, stat, gameDate: { gte: recentCutoff(RESEARCH_WINDOW_DAYS) } },
       orderBy: [{ gameDate: 'desc' }, { fetchedAt: 'desc' }],
-      select: { source: true, line: true },
+      select: { source: true, line: true, oddsType: true, multiplier: true, overOdds: true, underOdds: true, gameDate: true },
     });
-    const latest = new Map<string, number>();
-    for (const r of rows) if (!latest.has(r.source)) latest.set(r.source, r.line); // newest-first
-    return orderSources([...latest.keys()]).map((source) => ({ source, line: latest.get(source) as number }));
+    // A book's representative line for cross-book comparison is its STANDARD
+    // rung, not merely its newest row — "newest wins" could crown a demon /
+    // goblin / alternate rung fetched moments after the standard line, polluting
+    // the consensus with a number no book treats as its market line. Within each
+    // source's newest slate: prefer the newest NORMAL rung (post-normalization),
+    // fall back to the newest rung of any kind (a ladder with no standard line —
+    // e.g. an alternates-only Pick6 card — is still that book's best answer).
+    const pick = latestNormalFirst(rows);
+    return orderSources([...pick.keys()]).map((source) => ({ source, line: pick.get(source)!.line }));
   } catch (e) {
     console.warn('[providedLines] getProvidedLinesBySource failed:', e instanceof Error ? e.message : e);
     return [];
   }
+}
+
+/** Per source: restrict to that source's newest slate day, then prefer the newest
+ *  NORMAL rung (after effectiveOddsType normalization), else the newest rung of
+ *  any kind. Rows must arrive newest-first (gameDate desc, fetchedAt desc). */
+function latestNormalFirst<
+  T extends {
+    source: string;
+    gameDate: Date;
+    oddsType?: string | null;
+    multiplier?: number | null;
+    overOdds?: number | null;
+    underOdds?: number | null;
+  },
+>(rows: T[]): Map<string, T> {
+  const dayBySource = new Map<string, number>();
+  const chosen = new Map<string, { row: T; normal: boolean }>();
+  for (const r of rows) {
+    const day = dayBySource.get(r.source);
+    if (day === undefined) dayBySource.set(r.source, r.gameDate.getTime());
+    else if (r.gameDate.getTime() !== day) continue; // older slate — ignore
+    const normal = isNormalKind(effectiveOddsType(r) ?? r.oddsType);
+    const cur = chosen.get(r.source);
+    if (!cur) chosen.set(r.source, { row: r, normal });
+    else if (normal && !cur.normal) chosen.set(r.source, { row: r, normal });
+  }
+  return new Map([...chosen.entries()].map(([s, c]) => [s, c.row]));
 }
 
 /**
@@ -170,15 +203,16 @@ export async function getProvidedQuotesBySource(
     const rows = await db.providedLine.findMany({
       where: { sport, playerId, stat, gameDate: { gte: recentCutoff(RESEARCH_WINDOW_DAYS) } },
       orderBy: [{ gameDate: 'desc' }, { fetchedAt: 'desc' }],
-      select: { source: true, line: true, overOdds: true, underOdds: true },
+      select: { source: true, line: true, oddsType: true, multiplier: true, overOdds: true, underOdds: true, gameDate: true },
     });
-    const latest = new Map<string, { line: number; overOdds: number | null; underOdds: number | null }>();
-    for (const r of rows) {
-      if (!latest.has(r.source)) {
-        latest.set(r.source, { line: r.line, overOdds: r.overOdds, underOdds: r.underOdds });
-      }
-    }
-    return orderSources([...latest.keys()]).map((source) => ({ source, ...latest.get(source)! }));
+    // Same standard-rung preference as getProvidedLinesBySource: the market
+    // consensus must be built from each book's plain line, never a variant rung
+    // that happened to be fetched last.
+    const pick = latestNormalFirst(rows);
+    return orderSources([...pick.keys()]).map((source) => {
+      const r = pick.get(source)!;
+      return { source, line: r.line, overOdds: r.overOdds, underOdds: r.underOdds };
+    });
   } catch (e) {
     console.warn('[providedLines] getProvidedQuotesBySource failed:', e instanceof Error ? e.message : e);
     return [];

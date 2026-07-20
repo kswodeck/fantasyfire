@@ -387,10 +387,14 @@ export function statValue(stat: StatKey, g: GameStatLine): number {
 }
 
 /** The fantasy-score keys and the sport → key lookup — used to normalize a generic
- *  "fantasy score" mention to the right sport's key. WNBA shares the NBA key
- *  (PrizePicks scores both basketball leagues identically). Sports without a
- *  verified PrizePicks scoring table (NHL, soccer; MLB pitchers) are deliberately
- *  absent — we never compute a fantasy score we can't stand behind. */
+ *  "fantasy score" mention to the right sport's key. WNBA and CBB share the NBA key:
+ *  PrizePicks applies ONE uniform basketball scoring formula across all three leagues
+ *  (PTS×1 · REB×1.2 · AST×1.5 · STL×3 · BLK×3 · TOV×−1), and its CBB "Fantasy Score"
+ *  market is ingested (PP_STAT_MAP.cbb). Sports without a verified PrizePicks scoring
+ *  table (NHL, soccer; MLB pitchers) are deliberately absent — we never compute a
+ *  fantasy score we can't stand behind. VERIFY the CBB formula against a live PP CBB
+ *  Fantasy Score prop in-season (see docs/CBB-READINESS.md) — if PP ever diverges the
+ *  college formula, split it out here rather than sharing the NBA key. */
 export const FANTASY_SCORE_KEYS: ReadonlySet<StatKey> = new Set<StatKey>([
   'fs',
   'hitterFs',
