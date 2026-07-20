@@ -42,9 +42,17 @@ export const PP_FLEX_PLAY: ReadonlyArray<{ picks: number; allHit: number; oneMis
  */
 export const PP_BREAKEVEN_STEPS: Readonly<Record<'demon' | 'goblin', readonly number[]>> = {
   // Nearest goblin ≈ a mild discount; the deepest (easiest) goblins pay the least.
-  goblin: [0.65, 0.72, 0.8],
-  // Nearest demon ≈ a mild boost; the deepest (hardest) demons pay the most.
-  demon: [0.35, 0.3, 0.25],
+  goblin: [0.65, 0.72, 0.8, 0.86, 0.9],
+  // Nearest demon ≈ a mild boost; the deepest (hardest) demons pay the most. The
+  // table previously stopped at 0.25, which flattened EVERY deep ("extreme") demon
+  // to the same harsh bar: a rung whose payout implies a ~10–15% breakeven was
+  // being scored as if it needed 25% — so no extreme demon could ever grade above
+  // "No read", regardless of how likely it actually was. The added steps keep the
+  // 0.5 × (standard payout / variant payout) convention falling as the ladder
+  // deepens; per the header rule they sit at the GENEROUS end of the plausible
+  // range because the true payout is unknown. VERIFY against the PrizePicks app
+  // (a deep demon's advertised entry-multiplier boost) when tuning.
+  demon: [0.35, 0.3, 0.25, 0.18, 0.12],
 };
 
 /** How demons/goblins bend those tables — qualitative, since the app computes the

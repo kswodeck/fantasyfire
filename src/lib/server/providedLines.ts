@@ -12,7 +12,7 @@ import type { Sport } from '@/lib/sports';
 import type { StatKey } from '@/lib/stats';
 import type { ProvidedVariant } from '@/lib/types';
 import { DEFAULT_PROVIDED_SOURCE, orderSources } from '@/lib/providedSources';
-import { pickRepresentative, isNormalKind } from '@/lib/payoutVariant';
+import { pickRepresentative, isNormalKind, effectiveOddsType } from '@/lib/payoutVariant';
 
 /** Master switch. Anything other than "true" keeps the feature inert. */
 export function providedLinesEnabled(): boolean {
@@ -84,10 +84,14 @@ export async function getProvidedVariants(
       const d = r.gameDate.getTime();
       if (day === null) day = d; // newest slate wins
       else if (d !== day) continue; // skip older-slate rungs
+      // effectiveOddsType: a "standard"-tagged rung with a far-from-1× multiplier
+      // and no odds is really a payout variant (legacy Pick6 rows) — normalize
+      // here so every consumer (scoring, side-pinning, filters) agrees.
+      const oddsType = effectiveOddsType(r) ?? r.oddsType;
       const variant: ProvidedVariant = {
         source,
         line: r.line,
-        oddsType: r.oddsType,
+        oddsType,
         multiplier: r.multiplier,
         overOdds: r.overOdds,
         underOdds: r.underOdds,
@@ -96,7 +100,7 @@ export async function getProvidedVariants(
       if (at === undefined) {
         idxByLine.set(r.line, out.length);
         out.push(variant);
-      } else if (isNormalKind(r.oddsType) && !isNormalKind(out[at].oddsType)) {
+      } else if (isNormalKind(oddsType) && !isNormalKind(out[at].oddsType)) {
         out[at] = variant;
       }
     }
@@ -264,10 +268,13 @@ export async function getProvidedVariantMap(
         arr = [];
         map.set(key, arr);
       }
+      // Same effectiveOddsType normalization as getProvidedVariants — the board
+      // and the player page must classify a rung identically.
+      const oddsType = effectiveOddsType(r) ?? r.oddsType;
       const variant: ProvidedVariant = {
         source,
         line: r.line,
-        oddsType: r.oddsType,
+        oddsType,
         multiplier: r.multiplier,
         overOdds: r.overOdds,
         underOdds: r.underOdds,
@@ -276,7 +283,7 @@ export async function getProvidedVariantMap(
       // variant sharing its number — see getProvidedVariants.
       const at = arr.findIndex((v) => v.line === r.line);
       if (at === -1) arr.push(variant);
-      else if (isNormalKind(r.oddsType) && !isNormalKind(arr[at].oddsType)) arr[at] = variant;
+      else if (isNormalKind(oddsType) && !isNormalKind(arr[at].oddsType)) arr[at] = variant;
     }
   } catch (e) {
     console.warn('[providedLines] getProvidedVariantMap failed; treating as none:', e instanceof Error ? e.message : e);

@@ -6,6 +6,7 @@ import {
   variantRank,
   ladderBreakeven,
   resolvedBreakeven,
+  effectiveOddsType,
   shownBreakeven,
   decimalFromAmerican,
   sidedBreakevens,
@@ -178,5 +179,36 @@ describe('sidedBreakevens', () => {
     const b = sidedBreakevens({ overOdds: -10000, underOdds: 5000 })!;
     expect(b.over).toBeLessThanOrEqual(0.95);
     expect(b.under).toBeGreaterThanOrEqual(0.05);
+  });
+});
+
+describe('effectiveOddsType', () => {
+  it('reclassifies a "standard" rung whose posted multiplier is far from 1× (no odds)', () => {
+    // Legacy Pick6 rows: DK's More-only default at 0.7× / 2.4× stored as standard.
+    expect(effectiveOddsType({ oddsType: 'standard', multiplier: 0.7 })).toBe('alternate');
+    expect(effectiveOddsType({ oddsType: 'standard', multiplier: 2.4 })).toBe('alternate');
+  });
+
+  it('keeps genuinely balanced lines standard', () => {
+    expect(effectiveOddsType({ oddsType: 'standard', multiplier: null })).toBe('standard');
+    expect(effectiveOddsType({ oddsType: 'standard', multiplier: 1 })).toBe('standard');
+    expect(effectiveOddsType({ oddsType: 'balanced', multiplier: 1.04 })).toBe('balanced');
+    expect(effectiveOddsType({ oddsType: 'standard', multiplier: 0.95 })).toBe('standard');
+  });
+
+  it('never touches sided books (two-sided odds present) or explicit variants', () => {
+    // Sleeper: standard line with sided odds and a riding multiplier.
+    expect(
+      effectiveOddsType({ oddsType: 'standard', multiplier: 1.62, overOdds: -161, underOdds: 140 }),
+    ).toBe('standard');
+    expect(effectiveOddsType({ oddsType: 'demon', multiplier: null })).toBe('demon');
+    expect(effectiveOddsType({ oddsType: 'alternate', multiplier: 1.31 })).toBe('alternate');
+  });
+
+  it('the reclassified rung scores like the alternate it really is', () => {
+    // 0.7× → needs ~71% to break even; 2.4× → ~21% — and both become over-only.
+    expect(variantBreakeven('alternate', 0.7)).toBeCloseTo(0.5 / 0.7, 10);
+    expect(variantBreakeven('alternate', 2.4)).toBeCloseTo(0.5 / 2.4, 10);
+    expect(isOverOnly(effectiveOddsType({ oddsType: 'standard', multiplier: 0.7 }))).toBe(true);
   });
 });
