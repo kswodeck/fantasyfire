@@ -33,6 +33,38 @@ export function isNormalKind(oddsType: string | null | undefined): boolean {
   return payoutKind(oddsType) === 'normal';
 }
 
+/** How far a posted multiplier may sit from 1× before a "standard"-tagged rung is
+ *  treated as a payout variant. Wide enough that a genuinely balanced 0.95×/1.05×
+ *  line stays standard; DK's More-only specials run 0.6–0.8× and 1.2×+. */
+const NORMAL_MULT_TOLERANCE = 0.1;
+
+/**
+ * Defense-in-depth against feed drift: a rung TAGGED as a plain line but carrying a
+ * posted payout multiplier far from 1× — with no two-sided odds — is a payout variant
+ * in disguise. (Early Pick6 ingests stored DK's highlighted More-only rung, e.g. a
+ * 0.7× or 2.4× special, as 'standard': FireFactor then ignored the payout — the
+ * breakeven stayed 0.5 — and the app could recommend an Under the book doesn't even
+ * sell.) Normalizing at READ time also repairs rows already in the DB. Sided books
+ * (Sleeper) are untouched: their standard lines carry two-sided odds.
+ */
+export function effectiveOddsType(v: {
+  oddsType?: string | null;
+  multiplier?: number | null;
+  overOdds?: number | null;
+  underOdds?: number | null;
+}): string | null | undefined {
+  if (
+    payoutKind(v.oddsType) === 'normal' &&
+    v.multiplier != null &&
+    Math.abs(v.multiplier - 1) > NORMAL_MULT_TOLERANCE &&
+    v.overOdds == null &&
+    v.underOdds == null
+  ) {
+    return 'alternate';
+  }
+  return v.oddsType;
+}
+
 /**
  * True when a line only pays the over ("more"). PrizePicks demons/goblins and
  * Underdog alternates are one-directional by the books' own rules — only the

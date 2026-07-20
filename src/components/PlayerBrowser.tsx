@@ -105,7 +105,9 @@ export function PlayerBrowser({
         <p className="text-sm text-muted">No players match these filters.</p>
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2">
+          {/* data-testid: the e2e specs need a nav-proof way to grab a PLAYER card —
+              every href-based locator here eventually matched the SportNav links. */}
+          <div data-testid="players-grid" className="grid gap-3 sm:grid-cols-2">
             {shown.map((p) => (
               <PlayerCard key={p.slug} player={p} />
             ))}

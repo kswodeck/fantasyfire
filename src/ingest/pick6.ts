@@ -13,6 +13,11 @@
 // We map each rung to a ProvidedLineRow with its exact multiplier, so the existing
 // variantBreakeven (0.5 / multiplier) prices every rung correctly.
 //
+// SIDEDNESS IS THE STANDARD/ALTERNATE TEST: only a rung that sells BOTH More and
+// Less is a 'standard' line; every More-only rung is an 'alternate' with its exact
+// multiplier — including the rung DK happens to highlight as the card's default,
+// which is frequently a More-only 0.7× or 2.4× special (see parseCategory).
+//
 // Flow (all GET, no auth):
 //   1. /pick6/v1/pickgroups/main            → sportLeagues[] (abbreviation → sportLeagueKey)
 //   2. /pick6/v1/pickgroups/{sportLeagueKey} → pickGroups[] (upcoming pickGroupId per slate)
@@ -163,6 +168,20 @@ function moreMultiplier(m: P6Market): number | null {
   return typeof mult === 'number' && mult > 0 ? mult : null;
 }
 
+/**
+ * True when the rung ALSO sells a priced "Less" side — Pick6's genuine two-sided
+ * (standard) lines. Detected structurally (any priced selection other than More)
+ * so we never depend on knowing Less's exact proposition id.
+ */
+function hasLessSide(m: P6Market): boolean {
+  return (m.activeSelections ?? []).some(
+    (s) =>
+      s.statLinePropositionId !== PROP_MORE &&
+      typeof s.standingsMultiplier === 'number' &&
+      s.standingsMultiplier > 0,
+  );
+}
+
 interface P6League {
   leagueAbbreviation?: string;
 }
@@ -194,11 +213,9 @@ interface P6Market {
 }
 interface P6Card {
   entities?: { dkId?: number; compIds?: number[] }[];
-  /** The line DK highlights as the main/default one — our "standard" anchor. */
-  defaultPickableMarketId?: number;
   activePickableMarkets?: P6Market[];
 }
-interface P6CategoryResponse {
+export interface P6CategoryResponse {
   pickCardByPickableId?: Record<string, P6Card | { pickCard?: P6Card }>;
   entityInfoByDkId?: Record<string, { fullName?: string; name?: string }>;
   pickSixMarketById?: Record<string, { name?: string }>;
@@ -226,26 +243,7 @@ function unwrap(v: P6Card | { pickCard?: P6Card }): P6Card {
   return (v as { pickCard?: P6Card }).pickCard ?? (v as P6Card);
 }
 
-/**
- * The pickableMarketId to treat as the card's STANDARD line — modeled exactly like
- * Underdog's balanced line: the book's own default/main line, or (when that's paused/
- * missing) the live rung whose multiplier is nearest 1×. Every other live rung becomes
- * an ALTERNATE carrying its exact multiplier, so Pick6 renders like Underdog (one base
- * line + a cycling multiplier chip) rather than PrizePicks goblin/demon icons.
- */
-function standardMarketId(card: P6Card, liveMarkets: P6Market[]): number | undefined {
-  const dflt = card.defaultPickableMarketId;
-  if (dflt != null && liveMarkets.some((m) => m.pickableMarketId === dflt)) return dflt;
-  let best: P6Market | undefined;
-  for (const m of liveMarkets) {
-    const mult = moreMultiplier(m);
-    if (mult == null) continue;
-    if (!best || Math.abs(mult - 1) < Math.abs((moreMultiplier(best) ?? Infinity) - 1)) best = m;
-  }
-  return best?.pickableMarketId;
-}
-
-function parseCategory(sport: Sport, body: P6CategoryResponse, out: ProvidedLineRow[]): void {
+export function parseCategory(sport: Sport, body: P6CategoryResponse, out: ProvidedLineRow[]): void {
   const cards = body.pickCardByPickableId ?? {};
   const entities = body.entityInfoByDkId ?? {};
   const markets = body.pickSixMarketById ?? {};
@@ -261,12 +259,10 @@ function parseCategory(sport: Sport, body: P6CategoryResponse, out: ProvidedLine
     const compId = card.entities?.[0]?.compIds?.[0];
     const gameDate = dateOnlyUtc(compId != null ? comps[String(compId)]?.startTime : undefined);
 
-    // Only currently-pickable rungs with a priced More side; one of them is the
-    // standard (base) line, the rest are alternates.
+    // Only currently-pickable rungs with a priced More side.
     const liveMarkets = (card.activePickableMarkets ?? []).filter(
       (m) => !m.isPaused && moreMultiplier(m) != null,
     );
-    const stdId = standardMarketId(card, liveMarkets);
 
     for (const m of liveMarkets) {
       const marketName = m.pickSixMarketId != null ? markets[String(m.pickSixMarketId)]?.name : undefined;
@@ -275,6 +271,16 @@ function parseCategory(sport: Sport, body: P6CategoryResponse, out: ProvidedLine
       const line = typeof m.targetValue === 'number' ? m.targetValue : NaN;
       if (!Number.isFinite(line)) continue;
       const mult = moreMultiplier(m)!;
+      // CLASSIFICATION IS BY SIDEDNESS, NOT BY DK'S HIGHLIGHTED DEFAULT. A rung
+      // that also sells "Less" is the true two-sided standard line (in practice
+      // ~1× both ways — no payout info to carry, so multiplier stays null and it
+      // anchors at the flat 0.5 breakeven). A More-only rung is a payout variant
+      // NO MATTER WHAT — DK often highlights a More-only 0.7× (goblin-like) or
+      // 2.4× (demon-like) rung as the card's default, and storing that as
+      // 'standard' both hid the payout from FireFactor (breakeven stayed 0.5)
+      // and let the app recommend an Under the book doesn't sell. 'alternate'
+      // rungs are over-only (isOverOnly) and score against 0.5/multiplier.
+      const twoSided = hasLessSide(m);
       out.push({
         sport,
         source: 'pick6',
@@ -285,10 +291,8 @@ function parseCategory(sport: Sport, body: P6CategoryResponse, out: ProvidedLine
         // Pick6 prices via fixed multipliers, not two-sided odds.
         overOdds: null,
         underOdds: null,
-        // The default/main line is the standard anchor; every other rung is an
-        // alternate carrying its multiplier (→ 0.5/multiplier breakeven), same as UD.
-        oddsType: m.pickableMarketId === stdId ? 'standard' : 'alternate',
-        multiplier: mult,
+        oddsType: twoSided ? 'standard' : 'alternate',
+        multiplier: twoSided ? null : mult,
         gameDate,
       });
     }
