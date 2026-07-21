@@ -418,14 +418,43 @@ export interface YesterdayRecap {
   pushes: number;
 }
 
+/** Hit/miss/push tally for a segment of settled leans. */
+export interface WinRecord {
+  hits: number;
+  misses: number;
+  pushes: number;
+}
+
+/** Strength segment of a lean, from its FireFactor tier:
+ *  extreme = Blazing/Frozen (Strong lean) · normal = Hot/Cold (Lean) ·
+ *  slight = Warm/Cool (Slight lean). */
+export type LeanTierSegment = 'extreme' | 'normal' | 'slight';
+/** Side filter for the accuracy view. */
+export type AccuracySideFilter = 'both' | 'over' | 'under';
+/** One segment's record split by side (both/over/under). */
+export type AccuracySideRecords = Record<AccuracySideFilter, WinRecord>;
+
+/** Settled-lean records sliced by strength segment × side — powers the accuracy
+ *  page's tier/side filters. `all` spans every segment; each tier key is that
+ *  segment alone; every value carries its own both/over/under split. Computed over
+ *  ALL settled rows (authoritative even when the day list ships a display sample). */
+export interface AccuracyBreakdown {
+  all: AccuracySideRecords;
+  extreme: AccuracySideRecords;
+  normal: AccuracySideRecords;
+  slight: AccuracySideRecords;
+}
+
 /** Multi-day settled ledger for the /[sport]/accuracy page (see server/recap.ts). */
 export interface AccuracyLedger {
   /** Settled days, most recent first (bounded — see LEDGER_DAYS). */
   days: YesterdayRecap[];
-  totals: { hits: number; misses: number; pushes: number };
+  totals: WinRecord;
   /** Record split by pre-game strength tier. */
   byTier: {
-    strong: { hits: number; misses: number; pushes: number };
-    lean: { hits: number; misses: number; pushes: number };
+    strong: WinRecord;
+    lean: WinRecord;
   };
+  /** Tier × side records over ALL settled rows — drives the filter controls. */
+  breakdown: AccuracyBreakdown;
 }

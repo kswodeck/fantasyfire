@@ -3,10 +3,9 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { SportSelect } from '@/components/SportSelect';
-import { RecapRowList } from '@/components/YesterdayRecapStrip';
+import { AccuracyExplorer } from '@/components/AccuracyExplorer';
 import { OffSeasonFallback } from '@/components/OffSeasonFallback';
 import { getAccuracyLedger, LEDGER_DAYS } from '@/lib/server/recap';
-import { formatIsoDate } from '@/lib/format';
 import { SPORT_LIST, SPORTS, isSport, type Sport } from '@/lib/sports';
 
 // 6h — matches the ledger's unstable_cache window (the underlying data changes
@@ -35,23 +34,6 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     alternates: { canonical: `/${sport}/accuracy` },
     openGraph: { type: 'website', title, description, url: `/${sport}/accuracy` },
   };
-}
-
-function Record({ label, hits, misses, pushes }: { label: string; hits: number; misses: number; pushes: number }) {
-  const settled = hits + misses;
-  return (
-    <div className="rounded-xl border border-line bg-surface p-4">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">{label}</div>
-      <div className="mt-1 text-2xl font-bold tabular-nums tracking-tight">
-        {settled === 0 ? '—' : `${hits} of ${settled}`}
-      </div>
-      <div className="text-[11px] text-muted">
-        {settled === 0
-          ? 'nothing settled'
-          : `${Math.round((hits / settled) * 100)}% landed${pushes > 0 ? ` · ${pushes} push` : ''}`}
-      </div>
-    </div>
-  );
 }
 
 export default async function AccuracyPage({ params }: PageProps) {
@@ -88,39 +70,7 @@ export default async function AccuracyPage({ params }: PageProps) {
           <OffSeasonFallback sport={sport} what="settled leans" />
         </div>
       ) : (
-        <>
-          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <Record label={`All leans · last ${ledger.days.length} slates`} {...ledger.totals} />
-            <Record label="Strong leans (Blazing / Frozen)" {...ledger.byTier.strong} />
-            <Record label="Leans (Hot / Cold)" {...ledger.byTier.lean} />
-          </div>
-
-          <div className="mt-6 space-y-4">
-            {ledger.days.map((d) => {
-              const settled = d.hits + d.misses;
-              return (
-                <section
-                  key={d.date}
-                  aria-label={`Settled leans for ${d.date}`}
-                  className="rounded-xl border border-line bg-surface p-4"
-                >
-                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                    <h2 className="text-sm font-semibold">{formatIsoDate(d.date)}</h2>
-                    <span className="text-sm font-semibold tabular-nums">
-                      {d.hits} of {settled} landed
-                      {d.pushes > 0 && (
-                        <span className="font-normal text-muted"> · {d.pushes} push</span>
-                      )}
-                    </span>
-                  </div>
-                  <div className="mt-3">
-                    <RecapRowList rows={d.rows} />
-                  </div>
-                </section>
-              );
-            })}
-          </div>
-        </>
+        <AccuracyExplorer days={ledger.days} breakdown={ledger.breakdown} />
       )}
 
       <p className="mt-6 text-xs leading-relaxed text-muted">
