@@ -12,6 +12,7 @@ const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
       { label: 'My Playbook', href: '/playbook' },
       { label: 'Heat Check', href: '/board' },
       { label: 'Trends', href: '/trends' },
+      { label: 'Accuracy', href: '/accuracy' },
     ],
   },
   {

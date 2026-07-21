@@ -173,6 +173,16 @@ export function MobileNav() {
                     Trends
                   </Link>
                 </li>
+                <li className="border-t border-line/60">
+                  <Link
+                    href="/accuracy"
+                    onClick={close}
+                    aria-current={pathname === '/accuracy' ? 'page' : undefined}
+                    className={`${itemBase}${pathname === '/accuracy' ? ' bg-surface-2' : ''}`}
+                  >
+                    Accuracy
+                  </Link>
+                </li>
 
                 {NAV_SPORT_ORDER.map((s) => {
                   const name = SPORTS[s].name;

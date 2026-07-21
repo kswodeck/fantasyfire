@@ -46,7 +46,7 @@ import {
   statValue,
   volumeMultiplier,
 } from '@/lib/stats';
-import type { Sport } from '@/lib/sports';
+import { SPORT_LIST, type Sport } from '@/lib/sports';
 import type { AccuracyLedger, RecapRow, YesterdayRecap } from '@/lib/types';
 
 /** Max settled rows per day (top leans by pre-game score). */
@@ -127,6 +127,7 @@ function settleDay(sport: Sport, pool: BoardPool, day: string): YesterdayRecap |
               : 'miss'
             : 'push';
       const row: RecapRow = {
+        sport,
         player: {
           fullName: `${p.firstName} ${p.lastName}`,
           slug: p.slug,
@@ -207,7 +208,11 @@ async function computeLedger(sport: Sport): Promise<AccuracyLedger | null> {
 export async function getAccuracyLedger(sport: Sport): Promise<AccuracyLedger | null> {
   const cached = unstable_cache(
     async () => computeLedger(sport),
-    ['accuracy-ledger', sport],
+    // The version segment (v2) is part of the cache key: bump it on any change to
+    // the cached ROW SHAPE so entries written by older code are never read. v2
+    // added RecapRow.sport — a v1 entry (rows without `sport`) would crash the
+    // all-sports SportTag until it expired. Bump again on future shape changes.
+    ['accuracy-ledger', 'v2', sport],
     { revalidate: 21_600, tags: [`recap-${sport}`] },
   );
   return cached().catch(() => null);
@@ -224,4 +229,65 @@ export async function getYesterdayRecap(sport: Sport): Promise<YesterdayRecap | 
   if (!latest) return null;
   const ageMs = Date.now() - new Date(`${latest.date}T00:00:00Z`).getTime();
   return ageMs > RECAP_MAX_AGE_DAYS * 86_400_000 ? null : latest;
+}
+
+/** Max merged rows shown per day on the ALL-SPORTS ledger (top leans across every
+ *  sport that settled that date), so a big multi-league slate stays readable. */
+const ALL_SPORTS_ROWS_PER_DAY = 12;
+
+/**
+ * The cross-sport ("All Sports") settled ledger — every in-season sport's cached
+ * per-sport ledger merged into combined records and per-DATE rows (each row keeps
+ * its own sport, so a mixed day tags/links correctly). Reuses getAccuracyLedger's
+ * 6h cache per sport (no new scans), so this is just an in-memory merge over data
+ * the sport pages and strips already computed. Null when nothing settled anywhere.
+ */
+export async function getAllSportsAccuracy(): Promise<AccuracyLedger | null> {
+  const ledgers = await Promise.all(
+    SPORT_LIST.map(async (sport) => getAccuracyLedger(sport)),
+  );
+  const present = ledgers.filter((l): l is AccuracyLedger => l !== null);
+  if (present.length === 0) return null;
+
+  // Merge every sport's days by DATE — in-season leagues largely share slate days,
+  // so a date aggregates all sports that settled it.
+  const byDate = new Map<string, RecapRow[]>();
+  for (const l of present) {
+    for (const d of l.days) {
+      const arr = byDate.get(d.date) ?? [];
+      arr.push(...d.rows);
+      byDate.set(d.date, arr);
+    }
+  }
+
+  const days: YesterdayRecap[] = [...byDate.entries()]
+    .sort(([a], [b]) => (a < b ? 1 : a > b ? -1 : 0)) // newest date first
+    .map(([date, allRows]) => {
+      const rows = [...allRows].sort((a, b) => b.score - a.score).slice(0, ALL_SPORTS_ROWS_PER_DAY);
+      return {
+        date,
+        rows,
+        hits: rows.filter((r) => r.result === 'hit').length,
+        misses: rows.filter((r) => r.result === 'miss').length,
+        pushes: rows.filter((r) => r.result === 'push').length,
+      };
+    });
+
+  // Records are computed FROM THE SHOWN (merged, capped) rows so the summary tiles
+  // reconcile exactly with the visible per-day counts — unlike a per-sport ledger,
+  // an all-sports day is capped, so summing the source ledgers' totals would drift.
+  const shown = days.flatMap((d) => d.rows);
+  const record = (rows: RecapRow[]) => ({
+    hits: rows.filter((r) => r.result === 'hit').length,
+    misses: rows.filter((r) => r.result === 'miss').length,
+    pushes: rows.filter((r) => r.result === 'push').length,
+  });
+  return {
+    days,
+    totals: record(shown),
+    byTier: {
+      strong: record(shown.filter((r) => r.tier === 'Strong lean')),
+      lean: record(shown.filter((r) => r.tier === 'Lean')),
+    },
+  };
 }

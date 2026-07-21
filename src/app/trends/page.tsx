@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { SportSelect } from '@/components/SportSelect';
 import { AllTrendsExplorer } from '@/components/AllTrendsExplorer';
+import { AllSportsNav } from '@/components/AllSportsNav';
 import { getAllSportsTrends } from '@/lib/server/allSports';
 import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import type { AllSportsTrends } from '@/lib/server/allSports';
@@ -32,6 +33,7 @@ export default async function AllTrendsPage() {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-2 py-8 sm:px-4">
+      <AllSportsNav />
       <Breadcrumbs
         className="mb-4"
         items={[{ label: 'Home', href: '/' }, { label: 'Trends' }]}

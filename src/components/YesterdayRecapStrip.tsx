@@ -5,20 +5,20 @@ import { formatIsoDate } from '@/lib/format';
 import { leanTextClass } from '@/lib/tierStyle';
 import { SportTag } from './SportTag';
 
-/** One settled-lean row list — shared by the board strip and the accuracy page. */
+/** One settled-lean row list — shared by the board strip and the accuracy page.
+ *  Each row carries its OWN sport (RecapRow.sport), so a merged all-sports day
+ *  links and tags every row correctly; the `sport` prop is now unused. */
 export function RecapRowList({
-  sport,
   rows,
   showSport = false,
 }: {
-  sport: Sport;
   rows: RecapRow[];
   showSport?: boolean;
 }) {
   return (
     <ul className="grid gap-x-4 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-3">
       {rows.map((r) => (
-        <li key={`${r.player.slug}:${r.stat}`} className="flex items-center gap-2 text-xs">
+        <li key={`${r.sport}:${r.player.slug}:${r.stat}`} className="flex items-center gap-2 text-xs">
           <span
             aria-label={r.result === 'hit' ? 'landed' : r.result === 'push' ? 'push' : 'missed'}
             className={`w-4 shrink-0 text-center font-bold ${
@@ -31,10 +31,10 @@ export function RecapRowList({
           >
             {r.result === 'hit' ? '✓' : r.result === 'push' ? '–' : '✗'}
           </span>
-          {showSport && <SportTag sport={sport} />}
+          {showSport && <SportTag sport={r.sport} />}
           <Link
             prefetch={false}
-            href={`/${sport}/${r.player.slug}?stat=${r.stat}&line=${r.line}`}
+            href={`/${r.sport}/${r.player.slug}?stat=${r.stat}&line=${r.line}`}
             className="min-w-0 truncate font-medium hover:text-brand"
           >
             {r.player.fullName}
@@ -88,7 +88,7 @@ export function YesterdayRecapStrip({
         </span>
       </div>
       <div className="mt-3">
-        <RecapRowList sport={sport} rows={recap.rows} showSport={showSport} />
+        <RecapRowList rows={recap.rows} showSport={showSport} />
       </div>
       <p className="mt-3 text-[11px] leading-relaxed text-muted">
         Settled facts, not a track record: each row is the strongest pre-game recent-form

@@ -391,6 +391,9 @@ export interface TonightGame {
  *  is recomputed from the game logs BEFORE that day, then settled against the
  *  day's actual box score — deterministic, no stored predictions). */
 export interface RecapRow {
+  /** The row's sport — needed so a MERGED all-sports day can tag/link each row
+   *  (a single-sport ledger's rows all share the page's sport). */
+  sport: Sport;
   player: { fullName: string; slug: string; teamAbbreviation: string | null };
   stat: StatKey;
   statShort: string;

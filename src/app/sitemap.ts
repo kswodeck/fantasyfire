@@ -118,6 +118,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: homeMod,
     },
     {
+      url: absoluteUrl('/accuracy'),
+      changeFrequency: 'daily',
+      priority: 0.7,
+      lastModified: homeMod,
+    },
+    {
       url: absoluteUrl('/how-it-works'),
       changeFrequency: 'monthly',
       priority: 0.6,
