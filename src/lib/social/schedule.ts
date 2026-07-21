@@ -92,6 +92,19 @@ export function socialDayIso(d: Date): string {
   return etDateIso(new Date(socialDayStart(d).getTime() + 12 * 3_600_000));
 }
 
+/**
+ * The LABEL of the social day immediately before the one containing `now` —
+ * the site's one "yesterday", on the SAME 11pm-ET rollover clock as
+ * socialDayIso/getTonightSlate's "today". Anything on the site that means
+ * "yesterday" (the settled-leans strip, any future relative-day copy) should
+ * derive it from here rather than a raw UTC-midnight diff, so "today" and
+ * "yesterday" always flip in lockstep instead of drifting apart by however
+ * many hours separate the ET rollover from UTC midnight.
+ */
+export function previousSocialDayIso(now: Date): string {
+  return etDateIso(new Date(socialDayStart(now).getTime() - 12 * 3_600_000));
+}
+
 /** True inside the ET posting window (10am–10pm inclusive of both tick hours). */
 export function isWithinPostingWindow(now: Date): boolean {
   const h = etHour(now);

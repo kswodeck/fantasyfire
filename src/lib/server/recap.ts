@@ -48,6 +48,7 @@ import {
 } from '@/lib/stats';
 import { SPORT_LIST, type Sport } from '@/lib/sports';
 import { computeBreakdown } from '@/lib/accuracySegments';
+import { previousSocialDayIso, socialDayIso } from '@/lib/social/schedule';
 import type { AccuracyLedger, RecapRow, YesterdayRecap } from '@/lib/types';
 
 /** Safety cap on stored rows per day. Generous (was 9) so all three strength
@@ -225,23 +226,44 @@ export async function getAccuracyLedger(sport: Sport): Promise<AccuracyLedger | 
   return cached().catch(() => null);
 }
 
+/** Whole calendar days `date` sits behind `today` — both plain YYYY-MM-DD labels
+ *  (never a raw ms diff), so this stays a pure day-count regardless of what
+ *  wall-clock instant `now` happens to fall on. */
+function daysBehind(date: string, today: string): number {
+  return Math.round(
+    (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${date}T00:00:00Z`)) / 86_400_000,
+  );
+}
+
 /**
  * The most recent settled day, for the board/sport-page strip — served from the
  * same cached ledger (no extra compute). Null when the freshest settled day is
- * too old to honestly call "yesterday".
+ * too old to show at all.
+ *
+ * Anchored to the SAME 11pm-ET rollover clock the slate's "Today only" toggle
+ * uses (socialDayIso) — previously this compared raw UTC-midnight math against
+ * wall-clock Date.now(), so "yesterday" here and "today" on the board flipped
+ * at different times each day (drifting apart by however many hours separate
+ * UTC midnight from 11pm ET) and could label a 2-day-old settle as "yesterday"
+ * during an ingest lag. `isYesterday` lets the UI only say "Yesterday's" when
+ * the shown date truly IS the social day before today.
  */
-export async function getYesterdayRecap(sport: Sport): Promise<YesterdayRecap | null> {
+export async function getYesterdayRecap(
+  sport: Sport,
+  now: Date = new Date(),
+): Promise<(YesterdayRecap & { isYesterday: boolean }) | null> {
   const ledger = await getAccuracyLedger(sport);
   const latest = ledger?.days[0];
   if (!latest) return null;
-  const ageMs = Date.now() - new Date(`${latest.date}T00:00:00Z`).getTime();
-  if (ageMs > RECAP_MAX_AGE_DAYS * 86_400_000) return null;
+  const today = socialDayIso(now);
+  if (daysBehind(latest.date, today) > RECAP_MAX_AGE_DAYS) return null;
   // The strip is a compact teaser (the ledger page shows the full day). Slice to
   // the top leans and recompute the record over exactly what's shown, so the
   // strip's "X of Y landed" stays self-consistent.
   const rows = latest.rows.slice(0, STRIP_ROWS);
   return {
     date: latest.date,
+    isYesterday: latest.date === previousSocialDayIso(now),
     rows,
     hits: rows.filter((r) => r.result === 'hit').length,
     misses: rows.filter((r) => r.result === 'miss').length,
