@@ -46,11 +46,17 @@ import {
   statValue,
   volumeMultiplier,
 } from '@/lib/stats';
-import type { Sport } from '@/lib/sports';
+import { SPORT_LIST, type Sport } from '@/lib/sports';
+import { computeBreakdown } from '@/lib/accuracySegments';
 import type { AccuracyLedger, RecapRow, YesterdayRecap } from '@/lib/types';
 
-/** Max settled rows per day (top leans by pre-game score). */
-const RECAP_MAX_ROWS = 9;
+/** Safety cap on stored rows per day. Generous (was 9) so all three strength
+ *  segments — including the lowest-scored Slight leans — are represented for the
+ *  per-segment records; the ~90-player scan already bounds the real count. */
+const RECAP_MAX_ROWS = 60;
+/** How many rows the compact "yesterday" board strip shows (the ledger page shows
+ *  the rest). */
+const STRIP_ROWS = 9;
 /** The freshest day must be at most this old for the strip to say "yesterday". */
 const RECAP_MAX_AGE_DAYS = 4;
 /** How many completed slate days the full ledger covers. */
@@ -112,8 +118,11 @@ function settleDay(sport: Sport, pool: BoardPool, day: string): YesterdayRecap |
         cv: consistency.cv,
         gamesPlayed: prior.length,
       });
-      // Only settle reads strong enough to have headlined the board.
-      if (fs.score < FIREFACTOR_TIER_CUTOFFS.lean) continue;
+      // Settle every real lean — Slight (Warm/Cool) and up — so the accuracy page
+      // can break the record down by strength segment (extreme / normal / slight).
+      // Below the Slight cutoff is a No-lean / Pass, which carries no directional
+      // read worth grading.
+      if (fs.score < FIREFACTOR_TIER_CUTOFFS.slight) continue;
 
       const actual = statValue(stat, settledGame);
       const result: RecapRow['result'] =
@@ -127,6 +136,7 @@ function settleDay(sport: Sport, pool: BoardPool, day: string): YesterdayRecap |
               : 'miss'
             : 'push';
       const row: RecapRow = {
+        sport,
         player: {
           fullName: `${p.firstName} ${p.lastName}`,
           slug: p.slug,
@@ -182,18 +192,15 @@ async function computeLedger(sport: Sport): Promise<AccuracyLedger | null> {
   if (days.length === 0) return null;
 
   const sum = (f: (d: YesterdayRecap) => number) => days.reduce((a, d) => a + f(d), 0);
-  const tierTotals = (tier: 'Strong lean' | 'Lean') => {
-    const rows = days.flatMap((d) => d.rows.filter((r) => r.tier === tier));
-    return {
-      hits: rows.filter((r) => r.result === 'hit').length,
-      misses: rows.filter((r) => r.result === 'miss').length,
-      pushes: rows.filter((r) => r.result === 'push').length,
-    };
-  };
+  const allRows = days.flatMap((d) => d.rows);
+  const breakdown = computeBreakdown(allRows);
   return {
     days,
     totals: { hits: sum((d) => d.hits), misses: sum((d) => d.misses), pushes: sum((d) => d.pushes) },
-    byTier: { strong: tierTotals('Strong lean'), lean: tierTotals('Lean') },
+    // byTier kept for back-compat (strong/normal); the richer tier×side split is
+    // in `breakdown`, which the accuracy page's filters read.
+    byTier: { strong: breakdown.extreme.both, lean: breakdown.normal.both },
+    breakdown,
   };
 }
 
@@ -207,7 +214,12 @@ async function computeLedger(sport: Sport): Promise<AccuracyLedger | null> {
 export async function getAccuracyLedger(sport: Sport): Promise<AccuracyLedger | null> {
   const cached = unstable_cache(
     async () => computeLedger(sport),
-    ['accuracy-ledger', sport],
+    // The version segment is part of the cache key: bump it on any change to the
+    // cached row shape OR which rows are stored, so stale entries are never read.
+    //   v2 — added RecapRow.sport (a v1 entry crashed the all-sports SportTag).
+    //   v3 — included Slight leans + the breakdown field (a v2 entry lacks it and
+    //        omits slight rows, so the new tier filters would read wrong records).
+    ['accuracy-ledger', 'v3', sport],
     { revalidate: 21_600, tags: [`recap-${sport}`] },
   );
   return cached().catch(() => null);
@@ -223,5 +235,73 @@ export async function getYesterdayRecap(sport: Sport): Promise<YesterdayRecap | 
   const latest = ledger?.days[0];
   if (!latest) return null;
   const ageMs = Date.now() - new Date(`${latest.date}T00:00:00Z`).getTime();
-  return ageMs > RECAP_MAX_AGE_DAYS * 86_400_000 ? null : latest;
+  if (ageMs > RECAP_MAX_AGE_DAYS * 86_400_000) return null;
+  // The strip is a compact teaser (the ledger page shows the full day). Slice to
+  // the top leans and recompute the record over exactly what's shown, so the
+  // strip's "X of Y landed" stays self-consistent.
+  const rows = latest.rows.slice(0, STRIP_ROWS);
+  return {
+    date: latest.date,
+    rows,
+    hits: rows.filter((r) => r.result === 'hit').length,
+    misses: rows.filter((r) => r.result === 'miss').length,
+    pushes: rows.filter((r) => r.result === 'push').length,
+  };
+}
+
+/** Max merged rows shown per day on the ALL-SPORTS ledger (top leans across every
+ *  sport that settled that date), so a big multi-league slate stays readable. */
+const ALL_SPORTS_ROWS_PER_DAY = 12;
+
+/**
+ * The cross-sport ("All Sports") settled ledger — every in-season sport's cached
+ * per-sport ledger merged into combined records and per-DATE rows (each row keeps
+ * its own sport, so a mixed day tags/links correctly). Reuses getAccuracyLedger's
+ * 6h cache per sport (no new scans), so this is just an in-memory merge over data
+ * the sport pages and strips already computed. Null when nothing settled anywhere.
+ */
+export async function getAllSportsAccuracy(): Promise<AccuracyLedger | null> {
+  const ledgers = await Promise.all(
+    SPORT_LIST.map(async (sport) => getAccuracyLedger(sport)),
+  );
+  const present = ledgers.filter((l): l is AccuracyLedger => l !== null);
+  if (present.length === 0) return null;
+
+  // Merge every sport's days by DATE — in-season leagues largely share slate days,
+  // so a date aggregates all sports that settled it.
+  const byDate = new Map<string, RecapRow[]>();
+  for (const l of present) {
+    for (const d of l.days) {
+      const arr = byDate.get(d.date) ?? [];
+      arr.push(...d.rows);
+      byDate.set(d.date, arr);
+    }
+  }
+
+  // The breakdown (tier × side records) is computed over EVERY merged row so the
+  // filter tiles are authoritative; the per-day list ships a capped sample sorted
+  // by score for readability (a big multi-league night can be huge). The tiles are
+  // the source of truth for the segment records; the day list is recent examples.
+  const allMergedRows = [...byDate.values()].flat();
+  const breakdown = computeBreakdown(allMergedRows);
+
+  const days: YesterdayRecap[] = [...byDate.entries()]
+    .sort(([a], [b]) => (a < b ? 1 : a > b ? -1 : 0)) // newest date first
+    .map(([date, allRows]) => {
+      const rows = [...allRows].sort((a, b) => b.score - a.score).slice(0, ALL_SPORTS_ROWS_PER_DAY);
+      return {
+        date,
+        rows,
+        hits: rows.filter((r) => r.result === 'hit').length,
+        misses: rows.filter((r) => r.result === 'miss').length,
+        pushes: rows.filter((r) => r.result === 'push').length,
+      };
+    });
+
+  return {
+    days,
+    totals: breakdown.all.both,
+    byTier: { strong: breakdown.extreme.both, lean: breakdown.normal.both },
+    breakdown,
+  };
 }

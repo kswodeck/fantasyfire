@@ -33,6 +33,9 @@ export function SiteHeader() {
           <Link href="/trends" className="transition-colors hover:text-foreground">
             Trends
           </Link>
+          <Link href="/accuracy" className="transition-colors hover:text-foreground">
+            Accuracy
+          </Link>
           <Link
             href="/playbook"
             className="transition-colors hover:text-foreground"

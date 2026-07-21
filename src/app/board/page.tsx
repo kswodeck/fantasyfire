@@ -5,6 +5,7 @@ import { SportSelect } from '@/components/SportSelect';
 import { AllBoardExplorer } from '@/components/AllBoardExplorer';
 import { getAllSportsBoard } from '@/lib/server/allSports';
 import { getYesterdayRecap } from '@/lib/server/recap';
+import { AllSportsNav } from '@/components/AllSportsNav';
 import { YesterdayRecapStrip } from '@/components/YesterdayRecapStrip';
 import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
 import { SPORT_LIST } from '@/lib/sports';
@@ -50,6 +51,9 @@ export default async function AllBoardPage() {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-2 py-8 sm:px-4">
+      {/* Cross-surface tabs (Heat Check / Trends / Accuracy), mirroring the
+          single-sport section nav. */}
+      <AllSportsNav />
       <Breadcrumbs
         className="mb-4"
         items={[{ label: 'Home', href: '/' }, { label: 'Heat Check' }]}

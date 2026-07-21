@@ -17,6 +17,7 @@ import { BookLogo } from './BookLogo';
 import { PayoutBadge } from './PayoutBadge';
 import { orderSources, sourceLabel } from '@/lib/providedSources';
 import { normalizeName } from '@/lib/slate';
+import { EntryCalculator } from './EntryCalculator';
 
 /** One player as shown on the Playbook: favorited and/or carrying saved props. */
 interface PlayerEntry {
@@ -160,6 +161,12 @@ export function PlaybookClient() {
           className="ml-auto w-40 rounded-full border border-line bg-surface px-3 py-1 text-xs text-foreground outline-none focus:border-brand"
         />
       </div>
+
+      {/* PrizePicks entry EV — renders itself only when there are enough eligible
+          PrizePicks STANDARD legs saved (it returns null otherwise). Fed the full
+          saved list (not the filtered view) so the book/name filters above don't
+          silently shrink an entry. */}
+      <EntryCalculator props={props} />
 
       {groups.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface p-6 text-sm text-muted">
