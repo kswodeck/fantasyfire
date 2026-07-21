@@ -6,6 +6,7 @@ import {
   isDueNow,
   isWithinPostingWindow,
   pickRelevantStart,
+  previousSocialDayIso,
   socialDayIso,
   socialDayStart,
   socialDayWindow,
@@ -144,6 +145,41 @@ describe('etDateIso / socialDayIso', () => {
     expect(socialDayIso(new Date('2026-07-14T01:00:00Z'))).toBe('2026-07-13'); // 9pm ET Jul 13
     expect(socialDayIso(new Date('2026-07-14T03:30:00Z'))).toBe('2026-07-14'); // 11:30pm ET Jul 13 → next day
     expect(socialDayIso(new Date('2026-07-14T16:00:00Z'))).toBe('2026-07-14'); // noon ET Jul 14
+  });
+});
+
+describe('previousSocialDayIso', () => {
+  it('is exactly one calendar day before socialDayIso, at the same instant', () => {
+    // Regression for the Today/Yesterday clock mismatch: the settled-leans strip
+    // used to compare raw UTC midnight against wall-clock now, so "yesterday"
+    // there and "today" on the board (socialDayIso) flipped at different times
+    // of day. Both must now derive from the same 11pm-ET rollover.
+    const moments = [
+      new Date('2026-07-14T01:00:00Z'), // 9pm ET Jul 13 (before rollover)
+      new Date('2026-07-14T03:30:00Z'), // 11:30pm ET Jul 13 (just after rollover)
+      new Date('2026-07-14T16:00:00Z'), // noon ET Jul 14
+      new Date('2026-01-13T17:00:00Z'), // EST, noon ET Jan 13
+    ];
+    for (const now of moments) {
+      const today = socialDayIso(now);
+      const yesterday = previousSocialDayIso(now);
+      const diffDays =
+        (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${yesterday}T00:00:00Z`)) / 86_400_000;
+      expect(diffDays).toBe(1);
+    }
+  });
+
+  it('rolls at the same 11pm ET boundary as socialDayIso (never independently)', () => {
+    // 10:59pm ET Jul 13 — one minute before rollover: still inside Jul 13's
+    // social day, so "today" is the 13th and "yesterday" the 12th.
+    const beforeRollover = new Date('2026-07-14T02:59:00Z');
+    expect(socialDayIso(beforeRollover)).toBe('2026-07-13');
+    expect(previousSocialDayIso(beforeRollover)).toBe('2026-07-12');
+
+    // One minute later — 11:00pm ET — rolls both forward together.
+    const afterRollover = new Date('2026-07-14T03:00:00Z');
+    expect(socialDayIso(afterRollover)).toBe('2026-07-14');
+    expect(previousSocialDayIso(afterRollover)).toBe('2026-07-13');
   });
 });
 

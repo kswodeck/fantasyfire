@@ -56,6 +56,13 @@ export function RecapRowList({
  * fact from the box score, framed descriptively: this is what the recent-form
  * read said pre-game and what actually happened — never a track-record or
  * win-rate claim. The full multi-day ledger lives at /[sport]/accuracy.
+ *
+ * `isYesterday` (from getYesterdayRecap, anchored to the same 11pm-ET rollover
+ * clock the board's "Today only" toggle uses) gates the headline: only when the
+ * shown date truly IS the social day before today does it say "Yesterday's" —
+ * an ingest lag that leaves the freshest settle a day or two stale reads as
+ * "Most recently settled" instead, so the label is never wrong even when the
+ * data is.
  */
 export function YesterdayRecapStrip({
   sport,
@@ -63,19 +70,19 @@ export function YesterdayRecapStrip({
   showSport = false,
 }: {
   sport: Sport;
-  recap: YesterdayRecap;
+  recap: YesterdayRecap & { isYesterday: boolean };
   showSport?: boolean;
 }) {
   const settled = recap.hits + recap.misses;
   if (settled === 0) return null;
   return (
     <section
-      aria-label="Yesterday's leans, settled"
+      aria-label="Recently settled leans"
       className="mt-6 rounded-xl border border-line bg-surface p-4"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h2 className="text-sm font-semibold">
-          Yesterday&rsquo;s leans, settled
+          {recap.isYesterday ? "Yesterday’s leans, settled" : 'Most recently settled leans'}
           <span className="ml-2 text-xs font-normal text-muted">
             {formatIsoDate(recap.date)}
           </span>
