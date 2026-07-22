@@ -58,6 +58,9 @@ const RECAP_MAX_ROWS = 60;
 /** How many rows the compact "yesterday" board strip shows (the ledger page shows
  *  the rest). */
 const STRIP_ROWS = 9;
+/** Max strip rows that may share the same stat+side (e.g. "Under 1.5 Hits") — keeps
+ *  a day where that combo dominates the pool from filling the whole teaser with it. */
+const STRIP_MAX_PER_STAT_SIDE = 2;
 /** The freshest day must be at most this old for the strip to say "yesterday". */
 const RECAP_MAX_AGE_DAYS = 4;
 /** How many completed slate days the full ledger covers. */
@@ -226,6 +229,41 @@ export async function getAccuracyLedger(sport: Sport): Promise<AccuracyLedger | 
   return cached().catch(() => null);
 }
 
+/** Greedy diversity cap for a curated top-N teaser (the strip, the all-sports merge)
+ *  — NOT for the full per-sport ledger, which stays a plain score sort so it's an
+ *  honest, uncurated record. `rows` must already be sorted by score descending.
+ *  Walks the list filling `limit` slots, skipping a row once every one of its group
+ *  keys has hit that constraint's cap (e.g. one stat+side combo, like "Under 1.5
+ *  Hits", can otherwise fill the whole list on a day where it happens to be most
+ *  hitters' single strongest read). Anything skipped backfills any slots still open
+ *  once the diverse pass runs out, so a genuinely one-note day still shows a full
+ *  list instead of coming up short. */
+export function pickDiverse(
+  rows: readonly RecapRow[],
+  limit: number,
+  constraints: ReadonlyArray<{ key: (r: RecapRow) => string; max: number }>,
+): RecapRow[] {
+  const picked: RecapRow[] = [];
+  const skipped: RecapRow[] = [];
+  const counts = constraints.map(() => new Map<string, number>());
+  for (const row of rows) {
+    if (picked.length >= limit) break;
+    const keys = constraints.map((c) => c.key(row));
+    const fits = constraints.every((c, i) => (counts[i].get(keys[i]) ?? 0) < c.max);
+    if (fits) {
+      picked.push(row);
+      constraints.forEach((c, i) => counts[i].set(keys[i], (counts[i].get(keys[i]) ?? 0) + 1));
+    } else {
+      skipped.push(row);
+    }
+  }
+  for (const row of skipped) {
+    if (picked.length >= limit) break;
+    picked.push(row);
+  }
+  return picked;
+}
+
 /** Whole calendar days `date` sits behind `today` — both plain YYYY-MM-DD labels
  *  (never a raw ms diff), so this stays a pure day-count regardless of what
  *  wall-clock instant `now` happens to fall on. */
@@ -257,10 +295,13 @@ export async function getYesterdayRecap(
   if (!latest) return null;
   const today = socialDayIso(now);
   if (daysBehind(latest.date, today) > RECAP_MAX_AGE_DAYS) return null;
-  // The strip is a compact teaser (the ledger page shows the full day). Slice to
-  // the top leans and recompute the record over exactly what's shown, so the
-  // strip's "X of Y landed" stays self-consistent.
-  const rows = latest.rows.slice(0, STRIP_ROWS);
+  // The strip is a compact teaser (the ledger page shows the full day). Cap how
+  // many rows can share the same stat+side so it can't turn into the same lean
+  // repeated across the strip, then recompute the record over exactly what's
+  // shown, so the strip's "X of Y landed" stays self-consistent.
+  const rows = pickDiverse(latest.rows, STRIP_ROWS, [
+    { key: (r) => `${r.stat}:${r.side}`, max: STRIP_MAX_PER_STAT_SIDE },
+  ]);
   return {
     date: latest.date,
     isYesterday: latest.date === previousSocialDayIso(now),
@@ -274,6 +315,14 @@ export async function getYesterdayRecap(
 /** Max merged rows shown per day on the ALL-SPORTS ledger (top leans across every
  *  sport that settled that date), so a big multi-league slate stays readable. */
 const ALL_SPORTS_ROWS_PER_DAY = 12;
+/** Max of those 12 that may come from one sport — otherwise a day where one
+ *  league's reads simply score higher (or is the only one with a settled slate)
+ *  can crowd out every other sport on the "All Sports" page. */
+const ALL_SPORTS_MAX_PER_SPORT = 5;
+/** Max of those 12 that may share the same sport+stat+side — the cross-sport
+ *  version of STRIP_MAX_PER_STAT_SIDE (e.g. a dozen hitters all settling on
+ *  "Under 1.5 Hits" shouldn't be able to fill the entire day's list by itself). */
+const ALL_SPORTS_MAX_PER_STAT_SIDE = 2;
 
 /**
  * The cross-sport ("All Sports") settled ledger — every in-season sport's cached
@@ -301,16 +350,22 @@ export async function getAllSportsAccuracy(): Promise<AccuracyLedger | null> {
   }
 
   // The breakdown (tier × side records) is computed over EVERY merged row so the
-  // filter tiles are authoritative; the per-day list ships a capped sample sorted
-  // by score for readability (a big multi-league night can be huge). The tiles are
-  // the source of truth for the segment records; the day list is recent examples.
+  // filter tiles are authoritative; the per-day list ships a capped, diversity-aware
+  // sample for readability (a big multi-league night can be huge, and without the
+  // sport/stat+side caps a single dominant read could otherwise fill the whole day).
+  // The tiles are the source of truth for the segment records; the day list is
+  // recent examples.
   const allMergedRows = [...byDate.values()].flat();
   const breakdown = computeBreakdown(allMergedRows);
 
   const days: YesterdayRecap[] = [...byDate.entries()]
     .sort(([a], [b]) => (a < b ? 1 : a > b ? -1 : 0)) // newest date first
     .map(([date, allRows]) => {
-      const rows = [...allRows].sort((a, b) => b.score - a.score).slice(0, ALL_SPORTS_ROWS_PER_DAY);
+      const sorted = [...allRows].sort((a, b) => b.score - a.score);
+      const rows = pickDiverse(sorted, ALL_SPORTS_ROWS_PER_DAY, [
+        { key: (r) => r.sport, max: ALL_SPORTS_MAX_PER_SPORT },
+        { key: (r) => `${r.sport}:${r.stat}:${r.side}`, max: ALL_SPORTS_MAX_PER_STAT_SIDE },
+      ]);
       return {
         date,
         rows,
