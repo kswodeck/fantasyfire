@@ -457,4 +457,10 @@ export interface AccuracyLedger {
   };
   /** Tier × side records over ALL settled rows — drives the filter controls. */
   breakdown: AccuracyBreakdown;
+  /** Stats whose settled reads are so lopsided to one side (see
+   *  server/recap.ts's ONE_SIDED_THRESHOLD) that they're de-prioritized — not
+   *  removed — in the board strip / all-sports teaser, so a genuinely two-sided
+   *  read gets first claim on those limited slots. The full day list here is
+   *  untouched; this only informs how teasers built FROM it pick their rows. */
+  oneSidedStats: StatKey[];
 }

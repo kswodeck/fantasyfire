@@ -45,6 +45,7 @@ import {
   recentFormEstimate,
   statValue,
   volumeMultiplier,
+  type StatKey,
 } from '@/lib/stats';
 import { SPORT_LIST, type Sport } from '@/lib/sports';
 import { computeBreakdown } from '@/lib/accuracySegments';
@@ -61,6 +62,11 @@ const STRIP_ROWS = 9;
 /** Max strip rows that may share the same stat+side (e.g. "Under 1.5 Hits") — keeps
  *  a day where that combo dominates the pool from filling the whole teaser with it. */
 const STRIP_MAX_PER_STAT_SIDE = 2;
+/** Max strip rows that may come from a structurally one-sided stat (see
+ *  ONE_SIDED_THRESHOLD below) — de-prioritized, not banned, so a stat that's
+ *  currently a player's ONLY qualifying read still gets shown when nothing more
+ *  differentiated is available that day. */
+const STRIP_MAX_ONE_SIDED = 3;
 /** The freshest day must be at most this old for the strip to say "yesterday". */
 const RECAP_MAX_AGE_DAYS = 4;
 /** How many completed slate days the full ledger covers. */
@@ -70,11 +76,28 @@ export const LEDGER_DAYS = 10;
 const LEDGER_MAX_AGE_DAYS = 21;
 /** Pool breadth: matches the home-teaser scan — plenty to fill 9 rows/day. */
 const RECAP_SCAN = 90;
+/** A stat needs at least this many qualifying reads (across the whole ledger
+ *  window) before its over/under split is trustworthy enough to judge — a
+ *  thin sample shouldn't get a stat excluded off a handful of rows. */
+const ONE_SIDED_MIN_SAMPLE = 8;
+/** A stat is "structurally one-sided" once one side clears the Slight-lean bar
+ *  this much more often than the other. This isn't a real over-vs-under read —
+ *  it's the stat's own shape: a floor-bound, low counting stat (MLB Hits, Total
+ *  Bases) has no achievable book-style half-point line that splits it near
+ *  50/50 (see defaultPropLine's header), so its "best available" line still
+ *  hands the model a lopsided edge on the same side for nearly every player.
+ *  It's still a real, honestly-earned read — just not a DIFFERENTIATED one — so
+ *  it stays in the full ledger and is only de-prioritized (not removed) in the
+ *  curated teasers below, the same way pickDiverse de-prioritizes a repeated
+ *  stat+side combo. */
+const ONE_SIDED_THRESHOLD = 0.92;
 
-/** Settle ONE slate day from an already-loaded pool: recompute each player's
- *  strongest pre-day lean from their prior games, then check the day's box score. */
-function settleDay(sport: Sport, pool: BoardPool, day: string): YesterdayRecap | null {
-  const candidates: RecapRow[] = [];
+/** ALL qualifying (score ≥ Slight) reads for every player who played this day —
+ *  one row per (player, stat) that clears the bar. Not collapsed to each
+ *  player's single best yet — computeLedger needs the full pool first to know
+ *  which stats are structurally one-sided (see below). */
+function candidatesForDay(sport: Sport, pool: BoardPool, day: string): RecapRow[] {
+  const out: RecapRow[] = [];
   for (const p of pool.players) {
     const all = pool.gamesByPlayer.get(p.id);
     if (!all) continue;
@@ -86,7 +109,6 @@ function settleDay(sport: Sport, pool: BoardPool, day: string): YesterdayRecap |
     if (prior.length < FIREFACTOR_MIN_GAMES) continue;
     const volumeMult = volumeMultiplier(prior.map((g) => opportunityFor(sport, p.posBucket, g)));
 
-    let best: RecapRow | null = null;
     for (const stat of boardStatsFor(sport, p.posBucket)) {
       const line = defaultPropLine(prior, stat);
       // Same degenerate-line guard as the board: a 0.5 line means the player
@@ -139,7 +161,7 @@ function settleDay(sport: Sport, pool: BoardPool, day: string): YesterdayRecap |
               ? 'hit'
               : 'miss'
             : 'push';
-      const row: RecapRow = {
+      out.push({
         sport,
         player: {
           fullName: `${p.firstName} ${p.lastName}`,
@@ -154,13 +176,49 @@ function settleDay(sport: Sport, pool: BoardPool, day: string): YesterdayRecap |
         tier: fs.tier,
         actual,
         result,
-      };
-      // One row per player per day (the strongest lean) — variety over volume.
-      if (!best || row.score > best.score) best = row;
+      });
     }
-    if (best) candidates.push(best);
   }
+  return out;
+}
 
+/** Stats whose settled reads are so lopsided to one side that they should be
+ *  de-prioritized in a curated teaser (see ONE_SIDED_THRESHOLD) — measured over
+ *  every qualifying candidate in the current settlement window, so it reflects
+ *  what's actually achievable right now rather than a fixed, hand-picked list. */
+export function structurallyOneSidedStats(candidates: readonly RecapRow[]): Set<StatKey> {
+  const bySide = new Map<StatKey, { over: number; under: number }>();
+  for (const r of candidates) {
+    const e = bySide.get(r.stat) ?? { over: 0, under: 0 };
+    if (r.side === 'over') e.over++;
+    else e.under++;
+    bySide.set(r.stat, e);
+  }
+  const oneSided = new Set<StatKey>();
+  for (const [stat, { over, under }] of bySide) {
+    const total = over + under;
+    if (total < ONE_SIDED_MIN_SAMPLE) continue;
+    if (Math.max(over, under) / total >= ONE_SIDED_THRESHOLD) oneSided.add(stat);
+  }
+  return oneSided;
+}
+
+/** Collapse a day's full candidate pool to one row per player: their single
+ *  best-scoring qualifying read. (One-sided stats are still eligible here —
+ *  they're only de-prioritized later, at the teaser layer.) */
+function bestPerPlayer(candidates: readonly RecapRow[]): RecapRow[] {
+  const bestBySlug = new Map<string, RecapRow>();
+  for (const r of candidates) {
+    const cur = bestBySlug.get(r.player.slug);
+    if (!cur || r.score > cur.score) bestBySlug.set(r.player.slug, r);
+  }
+  return [...bestBySlug.values()];
+}
+
+/** Settle ONE slate day from an already-loaded pool of per-day candidates into
+ *  the day's final rows. */
+function settleDay(day: string, dayCandidates: readonly RecapRow[]): YesterdayRecap | null {
+  const candidates = bestPerPlayer(dayCandidates);
   if (candidates.length === 0) return null;
   candidates.sort((a, b) => b.score - a.score);
   const rows = candidates.slice(0, RECAP_MAX_ROWS);
@@ -188,9 +246,15 @@ async function computeLedger(sport: Sport): Promise<AccuracyLedger | null> {
   const recentDays = [...daySet].filter((d) => d >= cutoff).sort().reverse().slice(0, LEDGER_DAYS);
   if (recentDays.length === 0) return null;
 
+  const candidatesByDay = new Map(recentDays.map((day) => [day, candidatesForDay(sport, pool, day)]));
+  // Measured over the whole window (a single day's candidates are too thin a
+  // sample to judge a stat's shape by) and carried on the ledger so the teaser
+  // builders below can de-prioritize these stats without recomputing them.
+  const oneSidedStats = structurallyOneSidedStats([...candidatesByDay.values()].flat());
+
   const days: YesterdayRecap[] = [];
   for (const day of recentDays) {
-    const settled = settleDay(sport, pool, day);
+    const settled = settleDay(day, candidatesByDay.get(day)!);
     if (settled) days.push(settled);
   }
   if (days.length === 0) return null;
@@ -205,6 +269,7 @@ async function computeLedger(sport: Sport): Promise<AccuracyLedger | null> {
     // in `breakdown`, which the accuracy page's filters read.
     byTier: { strong: breakdown.extreme.both, lean: breakdown.normal.both },
     breakdown,
+    oneSidedStats: [...oneSidedStats],
   };
 }
 
@@ -296,11 +361,17 @@ export async function getYesterdayRecap(
   const today = socialDayIso(now);
   if (daysBehind(latest.date, today) > RECAP_MAX_AGE_DAYS) return null;
   // The strip is a compact teaser (the ledger page shows the full day). Cap how
-  // many rows can share the same stat+side so it can't turn into the same lean
-  // repeated across the strip, then recompute the record over exactly what's
-  // shown, so the strip's "X of Y landed" stays self-consistent.
+  // many rows can share the same stat+side, and how many can come from a
+  // structurally one-sided stat, so it can't turn into the same (or same-shaped)
+  // lean repeated across the strip — then recompute the record over exactly
+  // what's shown, so the strip's "X of Y landed" stays self-consistent.
+  const oneSided = new Set(ledger.oneSidedStats);
   const rows = pickDiverse(latest.rows, STRIP_ROWS, [
     { key: (r) => `${r.stat}:${r.side}`, max: STRIP_MAX_PER_STAT_SIDE },
+    {
+      key: (r) => (oneSided.has(r.stat) ? 'one-sided' : `exempt:${r.player.slug}:${r.stat}`),
+      max: STRIP_MAX_ONE_SIDED,
+    },
   ]);
   return {
     date: latest.date,
@@ -323,6 +394,9 @@ const ALL_SPORTS_MAX_PER_SPORT = 5;
  *  version of STRIP_MAX_PER_STAT_SIDE (e.g. a dozen hitters all settling on
  *  "Under 1.5 Hits" shouldn't be able to fill the entire day's list by itself). */
 const ALL_SPORTS_MAX_PER_STAT_SIDE = 2;
+/** Max of those 12 that may come from any sport's structurally one-sided stat —
+ *  the cross-sport version of STRIP_MAX_ONE_SIDED. */
+const ALL_SPORTS_MAX_ONE_SIDED = 4;
 
 /**
  * The cross-sport ("All Sports") settled ledger — every in-season sport's cached
@@ -337,6 +411,14 @@ export async function getAllSportsAccuracy(): Promise<AccuracyLedger | null> {
   );
   const present = ledgers.filter((l): l is AccuracyLedger => l !== null);
   if (present.length === 0) return null;
+
+  // Each sport judges "structurally one-sided" independently (a stat's shape is
+  // sport-specific), so the merge needs a per-sport lookup, not a flat set.
+  const oneSidedBySport = new Map<Sport, Set<StatKey>>();
+  SPORT_LIST.forEach((sport, i) => {
+    const l = ledgers[i];
+    if (l) oneSidedBySport.set(sport, new Set(l.oneSidedStats));
+  });
 
   // Merge every sport's days by DATE — in-season leagues largely share slate days,
   // so a date aggregates all sports that settled it.
@@ -365,6 +447,13 @@ export async function getAllSportsAccuracy(): Promise<AccuracyLedger | null> {
       const rows = pickDiverse(sorted, ALL_SPORTS_ROWS_PER_DAY, [
         { key: (r) => r.sport, max: ALL_SPORTS_MAX_PER_SPORT },
         { key: (r) => `${r.sport}:${r.stat}:${r.side}`, max: ALL_SPORTS_MAX_PER_STAT_SIDE },
+        {
+          key: (r) =>
+            oneSidedBySport.get(r.sport)?.has(r.stat)
+              ? 'one-sided'
+              : `exempt:${r.sport}:${r.player.slug}:${r.stat}`,
+          max: ALL_SPORTS_MAX_ONE_SIDED,
+        },
       ]);
       return {
         date,
@@ -380,5 +469,8 @@ export async function getAllSportsAccuracy(): Promise<AccuracyLedger | null> {
     totals: breakdown.all.both,
     byTier: { strong: breakdown.extreme.both, lean: breakdown.normal.both },
     breakdown,
+    // Informational union across sports — the per-day rows above already used
+    // each sport's own list (oneSidedBySport) to de-prioritize correctly.
+    oneSidedStats: [...new Set(present.flatMap((l) => l.oneSidedStats))],
   };
 }

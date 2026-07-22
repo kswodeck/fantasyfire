@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pickDiverse } from './recap';
+import { pickDiverse, structurallyOneSidedStats } from './recap';
 import type { RecapRow } from '@/lib/types';
 
 function row(partial: Partial<RecapRow>): RecapRow {
@@ -92,5 +92,103 @@ describe('pickDiverse', () => {
     ];
     const picked = pickDiverse(rows, 10, [{ key: (r) => `${r.stat}:${r.side}`, max: 1 }]);
     expect(picked).toEqual(rows);
+  });
+});
+
+describe('structurallyOneSidedStats', () => {
+  it('flags a stat that clears the bar almost entirely on one side', () => {
+    // The reported bug: 96 MLB "hits" reads, all under — no achievable book-style
+    // line splits this stat anywhere near 50/50, so it's a leaguewide shape, not
+    // a differentiated read.
+    const rows = Array.from({ length: 20 }, (_, i) =>
+      row({ stat: 'hits', side: 'under', player: { fullName: `H${i}`, slug: `h${i}`, teamAbbreviation: 'ATL' } }),
+    );
+    expect(structurallyOneSidedStats(rows)).toEqual(new Set(['hits']));
+  });
+
+  it('keeps a stat whose over/under split is genuinely mixed', () => {
+    const overs = Array.from({ length: 10 }, (_, i) =>
+      row({ stat: 'ast', side: 'over', player: { fullName: `O${i}`, slug: `o${i}`, teamAbbreviation: 'NY' } }),
+    );
+    const unders = Array.from({ length: 9 }, (_, i) =>
+      row({ stat: 'ast', side: 'under', player: { fullName: `U${i}`, slug: `u${i}`, teamAbbreviation: 'NY' } }),
+    );
+    expect(structurallyOneSidedStats([...overs, ...unders])).toEqual(new Set());
+  });
+
+  it('ignores a thin sample even if it happens to be all one side', () => {
+    // Only 5 reads (below ONE_SIDED_MIN_SAMPLE) — too little to judge the stat's
+    // shape, so it shouldn't get excluded off a small early-season sample.
+    const rows = Array.from({ length: 5 }, (_, i) =>
+      row({ stat: 'hr', side: 'under', player: { fullName: `H${i}`, slug: `h${i}`, teamAbbreviation: 'ATL' } }),
+    );
+    expect(structurallyOneSidedStats(rows)).toEqual(new Set());
+  });
+
+  it('judges each stat independently', () => {
+    const oneSided = Array.from({ length: 20 }, (_, i) =>
+      row({ stat: 'hits', side: 'under', player: { fullName: `H${i}`, slug: `h${i}`, teamAbbreviation: 'ATL' } }),
+    );
+    const mixed = [
+      ...Array.from({ length: 10 }, (_, i) => row({ stat: 'tb', side: 'over', player: { fullName: `O${i}`, slug: `to${i}`, teamAbbreviation: 'ATL' } })),
+      ...Array.from({ length: 10 }, (_, i) => row({ stat: 'tb', side: 'under', player: { fullName: `U${i}`, slug: `tu${i}`, teamAbbreviation: 'ATL' } })),
+    ];
+    expect(structurallyOneSidedStats([...oneSided, ...mixed])).toEqual(new Set(['hits']));
+  });
+});
+
+describe('one-sided de-prioritization (structurallyOneSidedStats + pickDiverse)', () => {
+  it('caps a one-sided stat instead of zeroing it out when it is the only signal available', () => {
+    // MLB's real shape locally: hits/tb were the ONLY two stats that ever settled,
+    // both 100% under. A hard exclude would leave MLB with zero rows; the
+    // composition below (what getYesterdayRecap/getAllSportsAccuracy actually do)
+    // should cap them instead — asserted here at a limit that matches the cap
+    // exactly, so pickDiverse's "still fill the page" backfill (covered by its
+    // own tests above) doesn't mask what the cap by itself does.
+    const mlbRows = [
+      ...Array.from({ length: 9 }, (_, i) =>
+        row({ sport: 'mlb', stat: 'hits', side: 'under', score: 90 - i, player: { fullName: `H${i}`, slug: `h${i}`, teamAbbreviation: 'ATL' } }),
+      ),
+    ].sort((a, b) => b.score - a.score);
+
+    const oneSided = structurallyOneSidedStats(mlbRows);
+    expect(oneSided).toEqual(new Set(['hits']));
+
+    const picked = pickDiverse(mlbRows, 3, [
+      {
+        key: (r) => (oneSided.has(r.stat) ? 'one-sided' : `exempt:${r.player.slug}:${r.stat}`),
+        max: 3,
+      },
+    ]);
+
+    // Capped, not zeroed: MLB still shows content instead of disappearing entirely.
+    expect(picked).toHaveLength(3);
+    expect(picked.every((r) => r.stat === 'hits')).toBe(true);
+  });
+
+  it('lets a genuinely differentiated stat outrank one-sided rows for the limited slots', () => {
+    const oneSidedRows = Array.from({ length: 9 }, (_, i) =>
+      row({ sport: 'mlb', stat: 'hits', side: 'under', score: 70 - i, player: { fullName: `H${i}`, slug: `h${i}`, teamAbbreviation: 'ATL' } }),
+    );
+    const differentiated = [
+      row({ sport: 'mlb', stat: 'hitterFs', side: 'over', score: 55, player: { fullName: 'Star', slug: 'star', teamAbbreviation: 'ATL' } }),
+    ];
+    const allRows = [...oneSidedRows, ...differentiated].sort((a, b) => b.score - a.score);
+
+    const oneSided = structurallyOneSidedStats(allRows);
+    expect(oneSided).toEqual(new Set(['hits']));
+
+    const picked = pickDiverse(allRows, 4, [
+      {
+        key: (r) => (oneSided.has(r.stat) ? 'one-sided' : `exempt:${r.player.slug}:${r.stat}`),
+        max: 3,
+      },
+    ]);
+
+    expect(picked).toHaveLength(4);
+    // The differentiated read makes it in even though it scores below several
+    // one-sided rows, because only 3 of those may fill the 4 slots.
+    expect(picked.some((r) => r.stat === 'hitterFs')).toBe(true);
+    expect(picked.filter((r) => r.stat === 'hits')).toHaveLength(3);
   });
 });
