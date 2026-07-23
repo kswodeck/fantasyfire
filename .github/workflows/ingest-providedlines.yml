@@ -12,16 +12,19 @@ name: Ingest provided lines + injuries (PrizePicks + Underdog + RotoWire + ESPN)
 # NOTE: scheduled + manual runs only fire from the DEFAULT branch (main), so this
 # only starts running once it's on main (it lands there when you merge develop -> main).
 #
-# Time-aware cadence. GitHub cron is UTC-only and can't follow daylight saving, so
-# this is anchored to PDT (UTC-7), the current Pacific offset:
-#   - PEAK 8AM-9PM PDT (15:00-04:00 UTC): every 15 min — from ~2h before the Sunday
-#     early NFL slate (1PM ET) through the latest NBA tip-offs (~8PM PT).
-#   - OFF-PEAK overnight lull: just 07:00 + 13:00 UTC (= midnight + 6AM PDT).
-# ~54 runs/day (~1.6k min/month; under the 2,000 free tier on a PRIVATE repo).
-# When DST ends (early Nov 2026) the wall-clock window shifts to 7AM-8PM PST until
-# spring — bump every UTC hour here +1 to restore 8AM-9PM. GitHub schedules are
-# best-effort: high-frequency crons can slip 5-15 min or skip under load, so 15 min
-# is a ceiling, not a guarantee. Use "Run workflow" for an on-demand refresh.
+# Time-aware, TIERED cadence to control billed Actions minutes. GitHub cron is
+# UTC-only and can't follow daylight saving, so this is anchored to EDT (UTC-4),
+# the current Eastern offset. Wall-clock schedule (Eastern):
+#   - 10:00am-1:00pm ET : hourly        — pre-slate warm-up
+#   - 1:30pm-6:30pm ET  : every 30 min  — afternoon lines firming up
+#   - 6:45pm-11:00pm ET : every 15 min  — peak: evening slates in play
+#   - overnight         : one at 3:00am ET + one at 8:00am ET — cheap keep-warm
+# ~35 runs/day (down from ~54). GitHub schedules are best-effort: high-frequency
+# crons can slip 5-15 min or skip under load, so 15 min is a ceiling, not a
+# guarantee. Use "Run workflow" for an on-demand refresh.
+#
+# DST: when EST begins (early Nov 2026) the whole day shifts an hour earlier in ET.
+# To keep the SAME Eastern wall-clock schedule, bump every UTC hour below +1.
 #
 # Secret (Production environment):
 #   DATABASE_URL  — prod transaction-pooler URL (:6543, sslmode=require)
@@ -32,11 +35,21 @@ name: Ingest provided lines + injuries (PrizePicks + Underdog + RotoWire + ESPN)
 
 on:
   schedule:
-    # PEAK 8AM-9PM PDT = 15:00-04:00 UTC — every 15 min (hours 15-23, then 00-03).
-    - cron: '*/15 15-23 * * *'
-    - cron: '*/15 0-3 * * *'
-    # OFF-PEAK overnight lull — 07:00 + 13:00 UTC (= midnight + 6AM PDT).
-    - cron: '0 7,13 * * *'
+    # Anchored to EDT (UTC-4). See header for the Eastern wall-clock intent and the
+    # DST bump note. Tiers are laid out so no two lines fire in the same minute.
+    # 10:00am-1:00pm ET hourly (14:00-17:00 UTC):
+    - cron: '0 14-17 * * *'
+    # 1:30pm-6:30pm ET every 30 min (17:30, then :00/:30 through 22:30 UTC):
+    - cron: '30 17 * * *'
+    - cron: '0,30 18-22 * * *'
+    # 6:45pm-11:00pm ET every 15 min (22:45, then :00/:15/:30/:45 through 02:45, + 03:00 UTC):
+    - cron: '45 22 * * *'
+    - cron: '*/15 23 * * *'
+    - cron: '*/15 0-2 * * *'
+    - cron: '0 3 * * *'
+    # Overnight keep-warm — 3:00am ET (07:00 UTC) + 8:00am ET (12:00 UTC):
+    - cron: '0 7 * * *'
+    - cron: '0 12 * * *'
   workflow_dispatch: {}
 
 concurrency:
