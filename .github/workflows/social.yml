@@ -1,10 +1,11 @@
 name: Game-aware social publish + push digest
 
 # The outward-facing daily comms (docs/MARKETING.md §3 + §6), timed to the games:
-# the workflow ticks HOURLY through the posting window (10AM–10PM ET — never the
-# middle of the night; the window is computed in America/New_York inside the
-# code, so DST can't shift it) and each sport posts at the first tick where its
-# first game is within 2 hours. Slates whose first game tips before 10am ET
+# the workflow ticks on a TIERED cadence through the posting window (see the
+# schedule below — quiet 2-hourly morning, hourly through the evening; never the
+# middle of the night; the POSTING window itself is computed in America/New_York
+# inside the code, so it can't drift) and each sport posts at the first tick where
+# its first game is within 2 hours. Slates whose first game tips before 10am ET
 # catch up at the window-open tick. The owner content pack + web-push digest go
 # once per day at the window open (10am ET), which is also the fallback for
 # sports whose schedule feed has no start times.
@@ -40,11 +41,21 @@ name: Game-aware social publish + push digest
 
 on:
   schedule:
-    # Hourly ticks covering 10am–10pm ET across BOTH DST offsets (EDT: 14:00–02:00
-    # UTC; EST: 15:00–03:00 UTC). The script itself enforces the exact ET window,
-    # so the out-of-window edge ticks exit at the cheap check job.
-    - cron: '0 14-23 * * *'
-    - cron: '0 0-3 * * *'
+    # Tiered check cadence to trim billed minutes, anchored to EDT (UTC-4):
+    #   10:00am + 12:00pm ET : every 2 hours — quiet morning
+    #   1:00pm-11:00pm ET    : hourly        — slates fill in through the evening
+    #   overnight            : no checks until the next 10:00am ET
+    # The script still enforces the exact ET posting window, and the daily
+    # content-pack + web-push slot fires on the 10:00am ET tick (kept below).
+    # DST: when EST begins (Nov 2026) bump every UTC hour below +1 to preserve the
+    # Eastern wall-clock — this keeps a tick on the 10am ET hour so the daily
+    # content/push is never skipped. (Previously this workflow dual-covered both
+    # offsets; the coarser 2-hourly morning can't, so the seasonal bump is now
+    # required — same as ingest-providedlines.yml.)
+    - cron: '0 14 * * *'    # 10:00am ET — daily content pack + push digest
+    - cron: '0 16 * * *'    # 12:00pm ET
+    - cron: '0 17-23 * * *' # 1:00pm-7:00pm ET hourly
+    - cron: '0 0-3 * * *'   # 8:00pm-11:00pm ET hourly
   workflow_dispatch:
     inputs:
       dry_run:

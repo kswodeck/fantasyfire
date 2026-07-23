@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
 
+# Cancel an in-flight run when a newer commit lands on the same branch/PR — pushing
+# several commits in quick succession no longer runs full lint+typecheck+test on each
+# superseded commit, only the latest. Keyed by ref so main and each PR are independent.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 # Lint + typecheck + unit tests on every push/PR. No build here: the production
 # build runs `generateStaticParams`, which queries Postgres, so it belongs in the
 # deploy pipeline (Vercel) with DB access — not in plain CI.
