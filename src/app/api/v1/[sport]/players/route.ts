@@ -33,8 +33,9 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ sport: 
     const players = await searchPlayers(sport, q, limit);
     // Roster changes at most daily (ingest cadence), so let the CDN coalesce bursts
     // of identical search-box queries and repeat crawls to one origin hit — matching
-    // the sibling hitrate/topreads routes. 30s is invisible for a ~daily dataset.
-    return jsonResponse({ players }, { request, cacheSeconds: 30 });
+    // the sibling hitrate/topreads routes. 5 min is invisible for a ~daily dataset
+    // (with stale-while-revalidate the CDN never blocks on a refresh).
+    return jsonResponse({ players }, { request, cacheSeconds: 300 });
   } catch {
     return jsonResponse({ error: 'Service unavailable' }, { status: 503, request });
   }
