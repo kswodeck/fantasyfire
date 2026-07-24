@@ -35,7 +35,7 @@ export async function generateStaticParams() {
   try {
     const lists = await Promise.all(
       SPORT_LIST.map(async (sport) => {
-        const params = await getPropStatParams(sport, 60);
+        const params = await getPropStatParams(sport, 24);
         return params.map(({ slug, stat }) => ({ sport, playerSlug: slug, stat }));
       }),
     );

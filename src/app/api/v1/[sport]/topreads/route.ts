@@ -33,7 +33,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ sport: 
   const { playerSlug, source } = parsed.data;
   try {
     const rows = await getPlayerTopReads(sport, playerSlug, source);
-    return jsonResponse({ rows }, { request, cacheSeconds: 60 });
+    return jsonResponse({ rows }, { request, cacheSeconds: 300 });
   } catch {
     return jsonResponse({ error: 'Service unavailable' }, { status: 503, request });
   }

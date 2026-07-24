@@ -5,7 +5,6 @@ import { getBoard, getSourcedBoards, getTonightSlate, hasUpcomingGames } from '@
 import { getAvailableSources, providedLinesEnabled } from '@/lib/server/providedLines';
 import { SITE } from '@/lib/site';
 import { SPORT_LIST, SPORTS, type Sport } from '@/lib/sports';
-import { socialDayIso } from '@/lib/social/schedule';
 import type { BoardRow, TonightGame } from '@/lib/types';
 
 export const revalidate = 900; // 15 min — matches the lines ingest cadence, bounding board↔player-page score skew to one cycle
@@ -22,27 +21,30 @@ const TEASER_ROWS = 4;
 async function loadSport(sport: Sport): Promise<{
   boardsBySource: Record<string, BoardRow[]>;
   medianLeans: BoardRow[];
-  /** False when the sport's next slate isn't TODAY — the card is hidden entirely
-   *  (a sport with no games today has nothing actionable to tease). */
-  hasGamesToday: boolean;
+  /** True when the sport has a current slate (getTonightSlate's window — matching
+   *  the /board Heat Check) AND at least one read-worthy row to tease; false hides
+   *  the card (off-season, no slate, or a slate with only "No read" rows). */
+  hasSlate: boolean;
 }> {
   // A taste of each book's top reads, switched by the page-wide site source selector
-  // (our median line only when no book lines are ingested). The teaser defaults to
-  // PLAYERS WITH GAMES TODAY — filtered server-side against the slate, since the
-  // card has no toggle. We pull deeper than the rows we show so the filter still
-  // yields a full teaser.
+  // (our median line only when no book lines are ingested). The teaser shows PLAYERS
+  // ON THE CURRENT SLATE — filtered server-side against the slate, since the card has
+  // no toggle. We pull deeper than the rows we show so the filter still yields a full
+  // teaser.
   const [sources, slate] = await Promise.all([
     getAvailableSources(sport).catch(() => [] as string[]),
     getTonightSlate(sport).catch(() => ({ date: null, games: [] as TonightGame[] })),
   ]);
-  // getTonightSlate anchors on the SOONEST slate on/after today — which can be days
-  // out (a weekend-only league midweek). No games today → skip the card AND the
-  // heavy board scan; the sport is one nav tap away, and an empty teaser sells
-  // nothing. "Today" is the SOCIAL DAY (11pm-ET rollover — schedule.ts), the
-  // same convention getTonightSlate labels with.
-  const todayIso = socialDayIso(new Date());
-  const hasGamesToday = slate.games.length > 0 && slate.date === todayIso;
-  if (!hasGamesToday) return { boardsBySource: {}, medianLeans: [], hasGamesToday };
+  // Use getTonightSlate's OWN slate window — 1 day for daily leagues, 7 for the
+  // weekly ones (NFL/MLS/CFB; see slateWindowDays) — exactly as the /board Heat
+  // Check does via getAllSportsBoard/todayTeamsBySport. Previously the home page
+  // additionally required the slate to be the SOCIAL DAY of "today", so a weekly
+  // league whose next game was later this week showed on the Heat Check (its
+  // "Today only" filter spans the week) but vanished from the home page — the
+  // inconsistency this fixes. No slate at all → skip the card and the heavy board
+  // scan; the sport is one nav tap away, and an empty teaser sells nothing.
+  const hasSlate = slate.games.length > 0;
+  if (!hasSlate) return { boardsBySource: {}, medianLeans: [], hasSlate };
   const teams = slateTeams(slate.games);
   // The teaser sells the strongest reads — a "No read" row on the home page is
   // pure noise (same filter as the per-game page).
@@ -68,19 +70,23 @@ async function loadSport(sport: Sport): Promise<{
     }).catch(() => ({}) as Record<string, BoardRow[]>);
     const boardsBySource: Record<string, BoardRow[]> = {};
     for (const [s, rows] of Object.entries(boards)) boardsBySource[s] = onSlate(rows);
-    return { boardsBySource, medianLeans: [], hasGamesToday };
+    // A slate with only "No read" rows for its teams still sells nothing — gate the
+    // card on there being at least one read-worthy row to tease (the /board Heat
+    // Check surfaces the sport regardless, so this only affects the home teaser).
+    const hasReads = Object.values(boardsBySource).some((r) => r.length > 0);
+    return { boardsBySource, medianLeans: [], hasSlate: hasReads };
   }
   const medianLeans = onSlate(
     await getBoard(sport, { limit: 24, scan: 60 }).catch(() => [] as BoardRow[]),
   );
-  return { boardsBySource: {}, medianLeans, hasGamesToday };
+  return { boardsBySource: {}, medianLeans, hasSlate: medianLeans.length > 0 };
 }
 
 export default async function Home() {
-  // Only surface sports with GAMES TODAY — off-season sports have nothing
-  // actionable, and an in-season sport whose next slate is days away (a
-  // weekend-only league midweek) would render an empty teaser. hasUpcomingGames
-  // is the cheap first gate; loadSport then confirms the slate is today's.
+  // Surface every sport that has a current slate — the SAME set the /board Heat
+  // Check shows (in-season, games in its slate window). off-season sports have
+  // nothing actionable. hasUpcomingGames is the cheap first gate; loadSport then
+  // confirms getTonightSlate returns games and filters the teaser to the slate.
   // DB unavailable → no sports (the no-slate empty state), never a 500.
   const activeSports = (
     await Promise.all(
@@ -90,7 +96,7 @@ export default async function Home() {
 
   const loaded = (
     await Promise.all(activeSports.map(async (s) => [s, await loadSport(s)] as const))
-  ).filter(([, d]) => d.hasGamesToday);
+  ).filter(([, d]) => d.hasSlate);
   const cards: HomeCard[] = loaded.map(([sport, d]) => {
     const cfg = SPORTS[sport];
     return {

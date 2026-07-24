@@ -36,11 +36,14 @@ export async function generateStaticParams() {
   // DB-resilient: with no reachable database (e.g. a Vercel preview, whose env
   // has no DATABASE_URL) prerender nothing — dynamicParams=true renders every
   // player on demand instead, so the BUILD always succeeds. A production build
-  // with a healthy DB still prerenders the busiest players as before.
+  // with a healthy DB prerenders only the busiest players per league; the long
+  // tail renders on first request and is then ISR-cached (revalidate=86400), so
+  // trimming this list cuts build compute + build-time DB egress without any
+  // user-visible change (a not-prebuilt player still resolves, just on demand).
   try {
     const lists = await Promise.all(
       SPORT_LIST.map(async (sport) => {
-        const slugs = await getTopPlayerSlugs(sport, 100);
+        const slugs = await getTopPlayerSlugs(sport, 40);
         return slugs.map((playerSlug) => ({ sport, playerSlug }));
       }),
     );
