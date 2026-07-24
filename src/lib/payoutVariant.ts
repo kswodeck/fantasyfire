@@ -8,11 +8,36 @@
 //   demon     — PrizePicks harder line / boosted payout (red)
 //   goblin    — PrizePicks easier line / reduced payout (green)
 //   alternate — Underdog alternate line, carries a numeric `multiplier` (e.g. 1.31×)
-import type { ProvidedVariant } from './types';
+import type { BoardRow, ProvidedVariant } from './types';
 import { PP_BREAKEVEN_STEPS } from './ppPayouts';
 import { marketImpliedBreakeven, type RungQuote } from './odds/marketBreakeven';
+import { FIREFACTOR_TIER_CUTOFFS } from './stats/fireScore';
 
 export type PayoutKind = 'normal' | 'demon' | 'goblin' | 'alternate';
+
+/** The strongest special (demon/goblin/alternate) rung whose read clears the Slight
+ *  bar AND beats the default line's score — the one a board row's "best payout" hint
+ *  points to (returns its score alongside so callers don't re-narrow the optional
+ *  read). Null when nothing special qualifies. Shared by BoardRowCard (to render the
+ *  hint) and HomeTopLeans (to reserve uniform row space for it across the teaser). */
+export function qualifyingSpecialHint(
+  row: BoardRow,
+): { variant: ProvidedVariant; score: number } | null {
+  const best = (row.variants ?? []).reduce<ProvidedVariant | null>((acc, v) => {
+    if (payoutKind(v.oddsType) === 'normal' || !v.read) return acc;
+    return !acc || v.read.score > (acc.read?.score ?? 0) ? v : acc;
+  }, null);
+  const score = best?.read?.score;
+  if (best && score != null && score >= FIREFACTOR_TIER_CUTOFFS.slight && score > row.fireScore.score) {
+    return { variant: best, score };
+  }
+  return null;
+}
+
+/** Whether the row carries a cross-book line-value hint worth showing (edge ≥ 5pts). */
+export function hasLineValueHint(row: BoardRow): boolean {
+  return !!(row.lineValue?.best && row.lineValue.best.edge >= 0.05);
+}
 
 /** Normalize a source's raw `oddsType` into a display/logic kind. */
 export function payoutKind(oddsType: string | null | undefined): PayoutKind {
