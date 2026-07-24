@@ -12,12 +12,42 @@ import {
   sidedBreakevens,
   sidedMultiplier,
   pickRepresentative,
+  qualifyingSpecialHint,
+  hasLineValueHint,
 } from './payoutVariant';
 import { PP_BREAKEVEN_STEPS } from './ppPayouts';
-import type { ProvidedVariant } from './types';
+import type { BoardRow, ProvidedVariant } from './types';
+import type { FireSide, FireTier } from './stats';
 
 function rung(line: number, oddsType: string | null, multiplier: number | null = null): ProvidedVariant {
   return { source: 'prizepicks', line, oddsType, multiplier, overOdds: null, underOdds: null };
+}
+
+/** A variant carrying a read — for the hint helpers. */
+function scoredRung(oddsType: string | null, score: number, side: FireSide = 'over'): ProvidedVariant {
+  return {
+    ...rung(1.5, oddsType),
+    read: { side, score, tier: 'Lean' as FireTier },
+  };
+}
+
+/** Minimal BoardRow with just the fields the hint helpers read. */
+function boardRow(opts: {
+  score?: number;
+  variants?: ProvidedVariant[];
+  lineValue?: BoardRow['lineValue'];
+}): BoardRow {
+  return {
+    rank: 1,
+    player: {} as BoardRow['player'],
+    stat: 'points' as BoardRow['stat'],
+    statShort: 'PTS',
+    line: 24.5,
+    projection: null,
+    fireScore: { score: opts.score ?? 50 } as BoardRow['fireScore'],
+    lineValue: opts.lineValue ?? null,
+    variants: opts.variants,
+  };
 }
 
 describe('variantBreakeven', () => {
@@ -210,5 +240,53 @@ describe('effectiveOddsType', () => {
     expect(variantBreakeven('alternate', 0.7)).toBeCloseTo(0.5 / 0.7, 10);
     expect(variantBreakeven('alternate', 2.4)).toBeCloseTo(0.5 / 2.4, 10);
     expect(isOverOnly(effectiveOddsType({ oddsType: 'standard', multiplier: 0.7 }))).toBe(true);
+  });
+});
+
+describe('qualifyingSpecialHint', () => {
+  it('returns the strongest special rung that clears Slight AND beats the default score', () => {
+    const row = boardRow({
+      score: 50,
+      variants: [
+        rung(1.5, 'standard'), // no read → ignored
+        scoredRung('goblin', 62),
+        scoredRung('demon', 71),
+      ],
+    });
+    const hint = qualifyingSpecialHint(row);
+    expect(hint?.score).toBe(71); // the higher-scoring special
+    expect(hint?.variant.oddsType).toBe('demon');
+  });
+
+  it('is null when no variants / no special rung has a read', () => {
+    expect(qualifyingSpecialHint(boardRow({}))).toBeNull();
+    expect(qualifyingSpecialHint(boardRow({ variants: [rung(1.5, 'goblin')] }))).toBeNull();
+  });
+
+  it('is null when the best special does not beat the default line score', () => {
+    const row = boardRow({ score: 80, variants: [scoredRung('goblin', 62)] });
+    expect(qualifyingSpecialHint(row)).toBeNull();
+  });
+
+  it('is null when the best special is below the Slight cutoff (20)', () => {
+    const row = boardRow({ score: 10, variants: [scoredRung('goblin', 15)] });
+    expect(qualifyingSpecialHint(row)).toBeNull();
+  });
+
+  it('ignores normal-kind variants even when they carry a read', () => {
+    const row = boardRow({ score: 30, variants: [scoredRung('standard', 90)] });
+    expect(qualifyingSpecialHint(row)).toBeNull();
+  });
+});
+
+describe('hasLineValueHint', () => {
+  it('is true only when a best cross-book edge clears 5 points', () => {
+    expect(hasLineValueHint(boardRow({ lineValue: { edge: 0.08, best: { source: 'dk', line: 1.5, edge: 0.08 } } }))).toBe(true);
+    expect(hasLineValueHint(boardRow({ lineValue: { edge: 0.04, best: { source: 'dk', line: 1.5, edge: 0.04 } } }))).toBe(false);
+  });
+
+  it('is false when there is no line-value comparison', () => {
+    expect(hasLineValueHint(boardRow({}))).toBe(false);
+    expect(hasLineValueHint(boardRow({ lineValue: { edge: 0.1, best: null } }))).toBe(false);
   });
 });

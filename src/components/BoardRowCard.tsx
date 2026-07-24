@@ -14,8 +14,7 @@ import { VariantChips } from './VariantChips';
 import { getTeam } from '@/lib/teams';
 import { tierTextClass, heatLabel, leanTextClass } from '@/lib/tierStyle';
 import { sourceLabel } from '@/lib/providedSources';
-import { payoutKind } from '@/lib/payoutVariant';
-import { FIREFACTOR_TIER_CUTOFFS } from '@/lib/stats';
+import { payoutKind, qualifyingSpecialHint, hasLineValueHint } from '@/lib/payoutVariant';
 
 /**
  * One board row with an inline payout-variant switcher. The main row is a stretched
@@ -40,6 +39,8 @@ export function BoardRowCard({
   source,
   initialLine,
   showSport = false,
+  reserveLineValue = false,
+  reserveSpecial = false,
 }: {
   sport: Sport;
   row: BoardRow;
@@ -48,6 +49,13 @@ export function BoardRowCard({
   initialLine?: number;
   /** Prefix the name with a league chip — for the cross-sport ("All") board. */
   showSport?: boolean;
+  /** Reserve a fixed line of space for the cross-book line-value hint even when THIS
+   *  row has none — so a set of rows (the home teaser) stays uniform height when only
+   *  SOME of them carry the hint. The hint itself is never dropped; absent rows just
+   *  render an invisible placeholder. Set by the caller when any sibling row has it. */
+  reserveLineValue?: boolean;
+  /** Same, for the best-payout-variant ("goblin/demon/alt: FF N") hint. */
+  reserveSpecial?: boolean;
 }) {
   const [line, setLine] = useState(initialLine ?? row.line);
   const variants = row.variants ?? [];
@@ -90,11 +98,10 @@ export function BoardRowCard({
   const team = getTeam(sport, row.player.teamAbbreviation);
   const activeKind = payoutKind(currentRung?.oddsType);
   const hasSwitcher = variants.some((v) => payoutKind(v.oddsType) !== 'normal');
-  // The strongest scored special rung — powers the small board badge on the default view.
-  const bestSpecial = variants.reduce<ProvidedVariant | null>((best, v) => {
-    if (payoutKind(v.oddsType) === 'normal' || !v.read) return best;
-    return !best || v.read.score > (best.read?.score ?? 0) ? v : best;
-  }, null);
+  // The two OPTIONAL right-hand hint lines (shared with the home teaser's uniform-row
+  // reservation): the cross-book line-value edge and the strongest special-rung read.
+  const showLineValue = hasLineValueHint(row);
+  const special = qualifyingSpecialHint(row);
 
   const href = `/${sport}/${row.player.slug}?stat=${row.stat}&line=${line}${source ? `&source=${source}` : ''}`;
 
@@ -161,17 +168,24 @@ export function BoardRowCard({
         {/* The default-line context lines stay MOUNTED (merely invisible) off the
             default rung — losing them would change the row height and re-center the
             chips vertically mid-click. Presence keys off the row's server read so it
-            can't flicker as rungs switch. */}
-        {row.lineValue?.best && row.lineValue.best.edge >= 0.05 && (
-          <div className={`text-[10px] tabular-nums text-muted ${isDefault ? '' : 'invisible'}`}>
-            best: {sourceLabel(row.lineValue.best.source)} +{Math.round(row.lineValue.best.edge * 100)}
+            can't flicker as rungs switch. When a caller sets `reserve*` (the home
+            teaser), the line is ALSO rendered — as an invisible placeholder — on rows
+            that lack the hint, so a set of rows stays uniform height without dropping
+            any hint. */}
+        {(showLineValue || reserveLineValue) && (
+          <div className={`text-[10px] tabular-nums text-muted ${showLineValue && isDefault ? '' : 'invisible'}`}>
+            {showLineValue ? (
+              <>best: {sourceLabel(row.lineValue!.best!.source)} +{Math.round(row.lineValue!.best!.edge * 100)}</>
+            ) : (
+              '\u00A0'
+            )}
           </div>
         )}
         {/* A special rung scoring a real read above the default line — the chips
             funnel straight to it. */}
-        {bestSpecial?.read && bestSpecial.read.score >= FIREFACTOR_TIER_CUTOFFS.slight && bestSpecial.read.score > row.fireScore.score && (
-          <div className={`text-[10px] tabular-nums text-heat-1 ${isDefault ? '' : 'invisible'}`}>
-            {specialWord(bestSpecial)}: FF {bestSpecial.read.score}
+        {(special || reserveSpecial) && (
+          <div className={`text-[10px] tabular-nums text-heat-1 ${special && isDefault ? '' : 'invisible'}`}>
+            {special ? <>{specialWord(special.variant)}: FF {special.score}</> : '\u00A0'}
           </div>
         )}
       </div>

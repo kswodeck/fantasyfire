@@ -7,6 +7,7 @@ import { BoardTable } from './BoardTable';
 import { SourceSelector } from './SourceSelector';
 import { useSelectedSource } from './SelectedSourceProvider';
 import { orderSources, sourceLabel, DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
+import { hasLineValueHint, qualifyingSpecialHint } from '@/lib/payoutVariant';
 
 export interface HomeCard {
   sport: Sport;
@@ -49,6 +50,17 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
 
   const single = cards.length === 1;
 
+  // The rows each card actually shows (one book, top DISPLAY). Computed once here so
+  // the reserve flags below see EVERY card's rows.
+  const rowsFor = (c: HomeCard) =>
+    (liveSources.length > 0 ? (c.boardsBySource[shown] ?? []) : c.medianLeans).slice(0, DISPLAY);
+  // Reserve a hint line across ALL cards' rows when ANY shown row uses it — so every
+  // teaser row shares one height (cards with equal player counts stay flush) without
+  // dropping a hint or padding rows on a slate that has none.
+  const allShownRows = cards.flatMap(rowsFor);
+  const reserveLineValue = allShownRows.some(hasLineValueHint);
+  const reserveSpecial = allShownRows.some((r) => qualifyingSpecialHint(r) !== null);
+
   return (
     <section className={single ? 'mx-auto max-w-md pb-10' : 'pb-10'}>
       {/* Width = the card row's natural width (N cards at their 400px basis + the
@@ -77,12 +89,11 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
           // a sport with no rows on the chosen book gets an honest empty state — never
           // a silent substitution of median-line leans (those aren't that book's
           // lines). Median leans only render when no book is live anywhere.
-          const rows = (liveSources.length > 0 ? (c.boardsBySource[shown] ?? []) : c.medianLeans)
-            .slice(0, DISPLAY);
+          const rows = rowsFor(c);
           return (
             <div
               key={c.sport}
-              className={`overflow-hidden rounded-2xl border border-line bg-surface ${
+              className={`flex flex-col overflow-hidden rounded-2xl border border-line bg-surface ${
                 single ? '' : 'min-w-0 max-w-full shrink grow-0 basis-[400px]'
               }`}
               style={{ borderTop: `3px solid ${c.accent}` }}
@@ -92,22 +103,34 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
                 <p className="mt-1 max-w-xs text-sm text-muted">{c.tagline}</p>
               </div>
 
-              <div className="space-y-2 border-t border-line p-4">
-                <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted">
-                  Top reads right now
-                </h3>
-                {rows.length === 0 ? (
-                  <p className="px-1 py-4 text-sm text-muted">
-                    {liveSources.length > 0
-                      ? `No ${sourceLabel(shown)} lines for ${c.name} on the current slate.`
-                      : 'No data available yet.'}
-                  </p>
-                ) : (
-                  <BoardTable rows={rows} />
-                )}
+              {/* flex-1 so this section fills the card's stretched height and the
+                  button pins to the bottom (mt-auto). The button is a DIRECT flex
+                  child — kept out of the space-y wrapper — so its mt-auto isn't
+                  overridden by space-y's higher-specificity margin. With the uniform
+                  reserved-hint rows, cards holding the same player count end up flush
+                  and their buttons align. */}
+              <div className="flex flex-1 flex-col border-t border-line p-4">
+                <div className="space-y-2 pb-2">
+                  <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted">
+                    Top reads right now
+                  </h3>
+                  {rows.length === 0 ? (
+                    <p className="px-1 py-4 text-sm text-muted">
+                      {liveSources.length > 0
+                        ? `No ${sourceLabel(shown)} lines for ${c.name} on the current slate.`
+                        : 'No data available yet.'}
+                    </p>
+                  ) : (
+                    <BoardTable
+                      rows={rows}
+                      reserveLineValue={reserveLineValue}
+                      reserveSpecial={reserveSpecial}
+                    />
+                  )}
+                </div>
                 <Link
                   href={`/${c.sport}`}
-                  className="mt-2 block rounded-full px-4 py-2.5 text-center text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                  className="mt-auto block rounded-full px-4 py-2.5 text-center text-sm font-semibold text-white transition-opacity hover:opacity-90"
                   style={{ backgroundColor: c.accent }}
                 >
                   Open the full {c.name} Heat Check →

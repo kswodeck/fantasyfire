@@ -14,6 +14,8 @@ export function BoardTable({
   source,
   initialLines,
   showSport = false,
+  reserveLineValue = false,
+  reserveSpecial = false,
 }: {
   rows: BoardRow[];
   /** Book the shown board belongs to — needed for a row's on-click FireFactor recompute. */
@@ -22,6 +24,12 @@ export function BoardTable({
   initialLines?: Map<string, number>;
   /** Add a league chip per row for the cross-sport ("All") board. */
   showSport?: boolean;
+  /** Reserve a uniform line of space across ALL rows for the line-value / best-payout
+   *  hints, so a set of rows stays equal height when only some carry a hint (none is
+   *  dropped). The caller sets each when any row in the set has that hint — see
+   *  BoardRowCard. Used by the home teaser to keep sport cards flush. */
+  reserveLineValue?: boolean;
+  reserveSpecial?: boolean;
 }) {
   return (
     <ol
@@ -38,6 +46,8 @@ export function BoardTable({
             source={source}
             initialLine={initialLine}
             showSport={showSport}
+            reserveLineValue={reserveLineValue}
+            reserveSpecial={reserveSpecial}
           />
         );
       })}
