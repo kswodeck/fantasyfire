@@ -3,6 +3,8 @@
 // banned-token test below locks in the descriptive-never-predictive brand the
 // same way buildWhyText's does.
 import { sourceLabel } from '@/lib/providedSources';
+import { SUBREDDIT_TARGETS, tagLine } from './hashtags';
+import type { Sport } from '@/lib/sports';
 import type { DailyLean } from '@/lib/server/social';
 
 /**
@@ -121,13 +123,19 @@ export function composeDailyPost(opts: {
   const header = `Today's hottest ${sportName} props 🔥`;
   const attribution = linesAttribution(opts.leans);
   const footer = `Full board → ${linkDisplay}${attribution ? ` · ${attribution} lines` : ''}`;
+  // Discovery tags LAST, after the link — and inside the fitting loop below, so a
+  // tight budget (Bluesky's 300) drops a lean rather than truncating the tags.
+  const tags = tagLine(channel, {
+    sports: [sport],
+    sources: opts.leans.map((l) => l.linesSource),
+  });
 
   let leans = [...opts.leans];
   let text = '';
   for (;;) {
-    text = [header, ...leans.map((l) => `• ${leanLine(l)} ${tierFlames(l)}`), footer].join(
-      '\n',
-    );
+    text = [header, ...leans.map((l) => `• ${leanLine(l)} ${tierFlames(l)}`), footer, tags]
+      .filter(Boolean)
+      .join('\n');
     if ([...text].length <= maxChars || leans.length <= 1) break;
     leans = leans.slice(0, -1);
   }
@@ -181,7 +189,12 @@ export function composeMultiSourcePost(opts: {
           b.leans.map((l) => `• ${leanLine(l)} ${tierFlames(l)}`).join('\n'),
       ),
       footer,
-    ].join('\n\n');
+      // Tags last; the books actually in the post drive the book tags, so a
+      // trimmed-down block list tags only what the reader can see.
+      tagLine(channel, { sports: [sport], sources: blocks.map((b) => b.source) }),
+    ]
+      .filter(Boolean)
+      .join('\n\n');
 
   let blocks = opts.blocks.map((b) => ({ source: b.source, leans: [...b.leans] }));
   let text = render(blocks);
@@ -251,13 +264,22 @@ export function composeDailyDigest(opts: {
   let text = '';
   for (;;) {
     const header = `Today's slate — the hottest props across ${entries.length} leagues 🔥`;
+    // Multi-sport: the tags lead with one league tag per sport shown (breadth),
+    // so a dropped sport also drops its tag.
+    const tags = tagLine(channel, {
+      sports: entries.map((e) => e.sport),
+      sources: entries.flatMap((e) => e.leans.map((l) => l.linesSource)),
+    });
     text = [
       header,
       ...entries.map(
         (e) => `• ${e.sportName}: ${leanLine(e.leans[0])} ${tierFlames(e.leans[0])}`,
       ),
       footer,
-    ].join('\n');
+      tags,
+    ]
+      .filter(Boolean)
+      .join('\n');
     if ([...text].length <= maxChars || entries.length <= 2) break;
     entries = entries.slice(0, -1);
   }
@@ -274,6 +296,8 @@ export function composeDailyDigest(opts: {
 
 /** One row of the Sunday streaks recap. */
 export interface StreakEntry {
+  /** URL sport key — drives the league hashtags on the recap. */
+  sport?: string;
   sportName: string;
   firstName: string;
   lastName: string;
@@ -291,9 +315,12 @@ export interface StreakEntry {
 export function composeWeeklyStreaks(opts: {
   streaks: StreakEntry[];
   siteUrl: string;
+  /** Channel the recap is going to — picks its hashtag policy. Defaults to the
+   *  no-tag 'community' voice so a caller that doesn't specify posts clean text. */
+  channel?: SocialChannel;
   maxChars?: number;
 }): { text: string; linkDisplay: string; boardUrl: string } | null {
-  const { siteUrl, maxChars = 290 } = opts;
+  const { siteUrl, channel = 'community', maxChars = 290 } = opts;
   if (opts.streaks.length < 3) return null;
 
   const boardUrl = `${siteUrl}/trends?utm_source=social&utm_medium=social&utm_campaign=weekly-streaks`;
@@ -304,6 +331,9 @@ export function composeWeeklyStreaks(opts: {
   let streaks = [...opts.streaks];
   let text = '';
   for (;;) {
+    const tags = tagLine(channel, {
+      sports: streaks.map((s) => s.sport).filter((s): s is string => !!s),
+    });
     text = [
       header,
       ...streaks.map(
@@ -311,7 +341,10 @@ export function composeWeeklyStreaks(opts: {
           `• ${s.sportName}: ${s.firstName.charAt(0)}. ${s.lastName} — ${s.length} straight ${s.side}s (${s.line} ${s.statShort})`,
       ),
       footer,
-    ].join('\n');
+      tags,
+    ]
+      .filter(Boolean)
+      .join('\n');
     if ([...text].length <= maxChars || streaks.length <= 3) break;
     streaks = streaks.slice(0, -1);
   }
@@ -380,14 +413,24 @@ export function composeContentPack(opts: {
       siteUrl,
       channel: 'x',
     });
+    // Reddit has no hashtags — subreddit routing + post flair is its discovery
+    // surface, and tags there read as spam. Print those instead of a tag block.
+    const subs = SUBREDDIT_TARGETS[e.sport as Sport] ?? [];
     blocks.push(
       [
         `__${e.sportName}__ — board: <${boardUrl}>`,
-        `Social voice:\n\`\`\`\n${social.text}\n\`\`\``,
+        `Social voice (X — hashtags already appended):\n\`\`\`\n${social.text}\n\`\`\``,
         `Community voice (answer a real "is this number good?" — link, don't pitch):\n` +
           `\`\`\`\n${top.firstName} ${top.lastName} ${capSide(top.side).toLowerCase()} ${top.line} ` +
           `${top.statShort} is one of the hottest props on our board today — full game-by-game ` +
           `log with confidence intervals (free, no login): ${playerUrl}\n\`\`\``,
+        ...(subs.length > 0
+          ? [
+              `Reddit — NO hashtags there; use the subreddit + flair instead: ` +
+                `${subs.join(', ')} · flair it as a data/analysis post and follow each sub's ` +
+                `self-promo rule.`,
+            ]
+          : []),
         `Embed (offer it to bloggers/roundups):\n` +
           `\`\`\`\n<iframe src="${siteUrl}/embed/${e.sport}/${top.slug}" width="420" height="280" frameborder="0"></iframe>\n\`\`\``,
       ].join('\n'),

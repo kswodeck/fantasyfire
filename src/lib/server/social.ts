@@ -270,6 +270,8 @@ export async function getWeeklyStreaks(
   limit = 5,
 ): Promise<
   {
+    /** URL sport key — drives the recap's league hashtags. */
+    sport: Sport;
     sportName: string;
     firstName: string;
     lastName: string;
@@ -288,6 +290,7 @@ export async function getWeeklyStreaks(
       if (seen.has(r.player.slug)) continue;
       seen.add(r.player.slug);
       all.push({
+        sport,
         sportName: SPORTS[sport].name,
         firstName: r.player.firstName,
         lastName: r.player.lastName,

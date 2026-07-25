@@ -256,3 +256,99 @@ describe('trackedBoardUrl', () => {
     expect(trackedBoardUrl(SITE_URL, 'mlb', 'telegram')).toContain('utm_source=telegram');
   });
 });
+
+describe('discovery tags in composed posts', () => {
+  const withSource = (s: string) => THREE_LEANS.map((l) => ({ ...l, linesSource: s }));
+
+  it('puts the tag line LAST — after the board link', () => {
+    const c = composeDailyPost({
+      sport: 'nba',
+      sportName: 'NBA',
+      leans: withSource('prizepicks'),
+      siteUrl: SITE_URL,
+      channel: 'bluesky',
+    });
+    const lines = c.text.split('\n');
+    expect(lines[lines.length - 1]).toBe('#NBA #PrizePicks #NBAProps');
+    // The link is above the tags, never after them.
+    expect(c.text.indexOf(c.linkDisplay)).toBeLessThan(c.text.lastIndexOf('#NBA'));
+  });
+
+  it('tags the post’s own league and book', () => {
+    const c = composeDailyPost({
+      sport: 'mlb',
+      sportName: 'MLB',
+      leans: withSource('underdog'),
+      siteUrl: SITE_URL,
+      channel: 'telegram',
+    });
+    expect(c.text).toContain('#MLB');
+    expect(c.text).toContain('#UnderdogFantasy');
+    expect(c.text).not.toContain('#NBA');
+  });
+
+  it('adds no tags on Discord (no hashtag discovery there)', () => {
+    const c = composeDailyPost({
+      sport: 'nba',
+      sportName: 'NBA',
+      leans: withSource('prizepicks'),
+      siteUrl: SITE_URL,
+      channel: 'discord',
+    });
+    expect(c.text).not.toContain('#');
+  });
+
+  it('counts tags INSIDE the budget — a Bluesky post still fits 300', () => {
+    const c = composeDailyPost({
+      sport: 'nba',
+      sportName: 'NBA',
+      leans: withSource('prizepicks'),
+      siteUrl: SITE_URL,
+      channel: 'bluesky',
+      maxChars: 290,
+    });
+    expect([...c.text].length).toBeLessThanOrEqual(290);
+    expect(c.text).toContain('#NBA'); // tags survived the fit, a lean was dropped instead
+  });
+
+  it('keeps the tag line last on the multi-source post too', () => {
+    const c = composeMultiSourcePost({
+      sport: 'nba',
+      sportName: 'NBA',
+      blocks: [
+        { source: 'prizepicks', leans: THREE_LEANS.slice(0, 1) },
+        { source: 'underdog', leans: THREE_LEANS.slice(1, 2) },
+      ],
+      siteUrl: SITE_URL,
+      channel: 'instagram',
+    });
+    expect(c.text.trimEnd().endsWith('#PropBets')).toBe(true);
+    expect(c.text).toContain('#PrizePicks');
+    expect(c.text).toContain('#UnderdogFantasy');
+  });
+
+  it('digest leads with one league tag per sport shown', () => {
+    const c = composeDailyDigest({
+      entries: [
+        { sport: 'nba', sportName: 'NBA', leans: withSource('prizepicks') },
+        { sport: 'mlb', sportName: 'MLB', leans: withSource('prizepicks') },
+      ],
+      siteUrl: SITE_URL,
+      channel: 'instagram',
+    });
+    const last = c.text.split('\n').at(-1)!;
+    expect(last.startsWith('#NBA #MLB')).toBe(true);
+  });
+
+  it('tag lines never contain tout-speak (assertDescriptive runs on the text)', () => {
+    // composeDailyPost already asserts; this documents that the tags are covered.
+    const c = composeDailyPost({
+      sport: 'nba',
+      sportName: 'NBA',
+      leans: withSource('prizepicks'),
+      siteUrl: SITE_URL,
+      channel: 'instagram',
+    });
+    expect(() => assertDescriptive(c.text)).not.toThrow();
+  });
+});
