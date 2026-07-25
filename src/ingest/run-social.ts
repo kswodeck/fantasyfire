@@ -40,6 +40,7 @@ import {
   composeMultiSourcePost,
   composeWeeklyStreaks,
   type ContentPackEntry,
+  type SocialChannel,
   type SourceBlock,
 } from '../lib/social/compose';
 import { CHANNELS, CAPTION_LEANS, cardUrl, type DigestInput } from '../lib/social/channels';
@@ -217,9 +218,17 @@ async function main(): Promise<number> {
         let n = 0;
         for (const channel of configured()) {
           if (channel.postText) {
-            n += await channel.postText(recap.text, {
-              display: recap.linkDisplay,
-              target: recap.boardUrl,
+            // Recomposed PER CHANNEL so each gets its own hashtag policy (and the
+            // tags count against that channel's character budget).
+            const perChannel =
+              composeWeeklyStreaks({
+                streaks,
+                siteUrl: SITE.url,
+                channel: channel.key as SocialChannel,
+              }) ?? recap;
+            n += await channel.postText(perChannel.text, {
+              display: perChannel.linkDisplay,
+              target: perChannel.boardUrl,
             });
           }
         }

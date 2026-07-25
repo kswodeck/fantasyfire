@@ -22,6 +22,14 @@ interface LinkFacet {
   features: { $type: 'app.bsky.richtext.facet#link'; uri: string }[];
 }
 
+interface TagFacet {
+  index: { byteStart: number; byteEnd: number };
+  features: { $type: 'app.bsky.richtext.facet#tag'; tag: string }[];
+}
+
+/** Bluesky's own cap on tags it will index for a post. */
+const MAX_TAGS = 8;
+
 /**
  * Facet turning the FIRST occurrence of `display` inside `text` into a link to
  * `uri`. Byte offsets are UTF-8 (not character indexes). Null when not found.
@@ -36,6 +44,36 @@ export function buildLinkFacet(text: string, display: string, uri: string): Link
     index: { byteStart, byteEnd },
     features: [{ $type: 'app.bsky.richtext.facet#link', uri }],
   };
+}
+
+/**
+ * Facets marking every "#tag" in `text` as a Bluesky tag. WITHOUT these a
+ * hashtag is inert plain text — not clickable, not in tag search, not picked up
+ * by the hashtag-driven custom feeds — so this is what makes the tags we append
+ * actually worth their characters.
+ *
+ * Byte offsets are UTF-8 (the flame emoji earlier in our captions shifts them
+ * vs. character indexes). The stored `tag` value omits the leading '#'. Matches
+ * letters/digits/underscore, so trailing punctuation isn't swallowed.
+ */
+export function buildTagFacets(text: string): TagFacet[] {
+  const enc = new TextEncoder();
+  const facets: TagFacet[] = [];
+  // (^|\s) keeps "C#" or a mid-word '#' from matching; the tag must start a word.
+  const re = /(^|\s)#([A-Za-z0-9_]+)/g;
+  for (const m of text.matchAll(re)) {
+    const tag = m[2];
+    // Offset of the '#' itself: match start + the leading whitespace we captured.
+    const at = (m.index ?? 0) + m[1].length;
+    const byteStart = enc.encode(text.slice(0, at)).length;
+    const byteEnd = byteStart + enc.encode(`#${tag}`).length;
+    facets.push({
+      index: { byteStart, byteEnd },
+      features: [{ $type: 'app.bsky.richtext.facet#tag', tag }],
+    });
+    if (facets.length >= MAX_TAGS) break;
+  }
+  return facets;
 }
 
 /** A created record's address — pass back as reply refs to build threads. */
@@ -111,6 +149,8 @@ export async function postToBluesky(
     post.linkDisplay && post.linkTarget
       ? buildLinkFacet(post.text, post.linkDisplay, post.linkTarget)
       : null;
+  // Link + tag facets ship together; tags are inert without their facets.
+  const facets = [...(facet ? [facet] : []), ...buildTagFacets(post.text)];
 
   const created = await xrpc<{ uri: string; cid: string }>(
     service,
@@ -122,7 +162,7 @@ export async function postToBluesky(
         $type: 'app.bsky.feed.post',
         text: post.text,
         createdAt: new Date().toISOString(),
-        ...(facet ? { facets: [facet] } : {}),
+        ...(facets.length > 0 ? { facets } : {}),
         ...(embed ? { embed } : {}),
         ...(post.reply ? { reply: post.reply } : {}),
       },
