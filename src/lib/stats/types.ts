@@ -2,6 +2,7 @@
 // compute core ports unchanged. Multi-sport: one superset GameStatLine + one
 // combined STAT_DEFS registry; each sport exposes its own ordered key list.
 import type { Sport } from '@/lib/sports';
+import { roundToHundredth } from '@/lib/format';
 
 const n = (x: number | null | undefined): number => x ?? 0;
 
@@ -185,42 +186,50 @@ export interface StatDef {
 //
 // MLB pitcher FS is deliberately absent: PrizePicks scores it on the pitching WIN
 // (a decision we don't store), so we can't compute honest historical values.
+// Each score is rounded to the hundredth: the fractional weights below are exact
+// in decimal but not in binary, so a raw sum surfaces artifacts like
+// 0.19999999999999996 (1 REB ×1.2 − 1 TOV). No weight has more than two decimals,
+// so this only removes the artifact — it never discards a real digit.
 export function nbaFantasyScore(g: GameStatLine): number {
-  return (
+  return roundToHundredth(
     n(g.points) +
-    1.2 * n(g.rebounds) +
-    1.5 * n(g.assists) +
-    3 * n(g.steals) +
-    3 * n(g.blocks) -
-    n(g.turnovers)
+      1.2 * n(g.rebounds) +
+      1.5 * n(g.assists) +
+      3 * n(g.steals) +
+      3 * n(g.blocks) -
+      n(g.turnovers),
   );
 }
 export function mlbHitterFantasyScore(g: GameStatLine): number {
   // Clamped so a data oddity (extra-base hits exceeding hits) can't go negative.
   const singles = Math.max(0, n(g.hits) - n(g.doubles) - n(g.triples) - n(g.homeRuns));
-  return (
+  // Whole-number weights here, so this is already exact — rounded anyway to keep
+  // every fantasy-score key on one contract.
+  return roundToHundredth(
     3 * singles +
-    5 * n(g.doubles) +
-    8 * n(g.triples) +
-    10 * n(g.homeRuns) +
-    2 * n(g.runs) +
-    2 * n(g.rbi) +
-    2 * n(g.walks) +
-    2 * n(g.hbp) +
-    5 * n(g.stolenBases)
+      5 * n(g.doubles) +
+      8 * n(g.triples) +
+      10 * n(g.homeRuns) +
+      2 * n(g.runs) +
+      2 * n(g.rbi) +
+      2 * n(g.walks) +
+      2 * n(g.hbp) +
+      5 * n(g.stolenBases),
   );
 }
 export function nflFantasyScore(g: GameStatLine): number {
-  return (
+  // 0.04/0.1 per yard on whole-yard counts — two decimals at most, so the round
+  // is pure artifact cleanup (e.g. 0.04 × 3 = 0.12000000000000001).
+  return roundToHundredth(
     0.04 * n(g.passYards) +
-    4 * n(g.passTds) -
-    n(g.passInts) +
-    0.1 * n(g.rushYards) +
-    6 * n(g.rushTds) +
-    n(g.receptions) +
-    0.1 * n(g.recYards) +
-    6 * n(g.recTds) -
-    2 * n(g.fumblesLost)
+      4 * n(g.passTds) -
+      n(g.passInts) +
+      0.1 * n(g.rushYards) +
+      6 * n(g.rushTds) +
+      n(g.receptions) +
+      0.1 * n(g.recYards) +
+      6 * n(g.recTds) -
+      2 * n(g.fumblesLost),
   );
 }
 

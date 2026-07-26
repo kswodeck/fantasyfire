@@ -36,6 +36,22 @@ export function roundToHalf(x: number): number {
 }
 
 /**
+ * Round to the nearest hundredth — for stats computed as a WEIGHTED SUM, where
+ * binary floating point leaks artifacts into a value that is exact in decimal.
+ * A fantasy score of 1 rebound (×1.2) minus 1 turnover is 0.2, but evaluates to
+ * 0.19999999999999996 and rendered as that full string.
+ *
+ * This is artifact cleanup, NOT a lossy display rounding: every scoring weight we
+ * use has at most two decimal places (1.2, 1.5, 0.04, 0.1) applied to whole-number
+ * box-score counts, so the true value can never have a third decimal for this to
+ * discard. Applied at the SOURCE (the score functions) rather than per-component,
+ * so the board, player pages, settled ledger, API, captions and OG cards all agree.
+ */
+export function roundToHundredth(x: number): number {
+  return Math.round(x * 100) / 100;
+}
+
+/**
  * Round to the nearest half-POINT line (always x.5), book-style, so a default
  * line never pushes. E.g. 25.3 -> 25.5, 25.7 -> 25.5, 26.0 -> 26.5. Never < 0.5.
  */
