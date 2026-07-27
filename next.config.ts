@@ -8,6 +8,12 @@ import type { NextConfig } from 'next';
 //
 // Allowlist notes:
 //   - script/connect cloud.umami.is + the Umami beacon gateway  -> analytics
+//   - script www.googletagmanager.com                           -> GA4 (gtag.js)
+//   - connect/img *.google-analytics.com, *.analytics.google.com-> the GA4 collector.
+//     Wildcards are required, NOT decoration: GA4 posts hits to a REGIONAL host
+//     (region1.google-analytics.com, …) chosen at runtime, so a bare
+//     www.google-analytics.com entry silently drops most traffic. img-src is the
+//     no-beacon/older-browser fallback path.
 //   - img cdn.nba.com / *.mlbstatic.com / a.espncdn.com         -> player/team art
 //     (a.espncdn.com serves the NFL headshots + team logos)
 //   - img icons.duckduckgo.com                                  -> book/source logos
@@ -17,7 +23,12 @@ const isDev = process.env.NODE_ENV !== 'production';
 function contentSecurityPolicy(): string {
   const directives: Record<string, string[]> = {
     'default-src': ["'self'"],
-    'script-src': ["'self'", "'unsafe-inline'", 'https://cloud.umami.is'],
+    'script-src': [
+      "'self'",
+      "'unsafe-inline'",
+      'https://cloud.umami.is',
+      'https://www.googletagmanager.com',
+    ],
     'style-src': ["'self'", "'unsafe-inline'"],
     'img-src': [
       "'self'",
@@ -28,9 +39,20 @@ function contentSecurityPolicy(): string {
       'https://www.mlbstatic.com',
       'https://a.espncdn.com',
       'https://icons.duckduckgo.com',
+      'https://www.googletagmanager.com',
+      'https://www.google-analytics.com',
+      'https://*.google-analytics.com',
     ],
     'font-src': ["'self'"],
-    'connect-src': ["'self'", 'https://cloud.umami.is', 'https://api-gateway.umami.dev'],
+    'connect-src': [
+      "'self'",
+      'https://cloud.umami.is',
+      'https://api-gateway.umami.dev',
+      'https://www.googletagmanager.com',
+      'https://www.google-analytics.com',
+      'https://*.google-analytics.com',
+      'https://*.analytics.google.com',
+    ],
     'object-src': ["'none'"],
     'base-uri': ["'self'"],
     'form-action': ["'self'"],

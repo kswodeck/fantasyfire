@@ -6,11 +6,11 @@ import { SITE } from '@/lib/site';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy',
-  description: `How ${SITE.name} handles your data — cookieless analytics, no accounts, as little as possible.`,
+  description: `How ${SITE.name} handles your data — what our analytics collect, no accounts, as little as possible.`,
   alternates: { canonical: '/privacy' },
 };
 
-const LAST_UPDATED = 'June 24, 2026';
+const LAST_UPDATED = 'July 26, 2026';
 
 export default function PrivacyPage() {
   return (
@@ -24,9 +24,11 @@ export default function PrivacyPage() {
 
       <Prose>
         <p>
-          The short version: {SITE.name}{' '}collects as little as possible, uses
-          privacy-friendly analytics that set <strong>no cookies</strong>, and never sells
-          or rents your data. Browsing the site does not require an account.
+          The short version: {SITE.name}{' '}collects as little as possible, never sells or
+          rents your data, and does not require an account to browse. We use two analytics
+          tools: a cookieless one (Umami) and Google Analytics, which{' '}
+          <strong>does set cookies</strong> on your device — see{' '}
+          <a href="#analytics">Analytics</a> and <a href="#cookies">Cookies</a> below.
         </p>
 
         <h2>Information we collect</h2>
@@ -38,24 +40,58 @@ export default function PrivacyPage() {
           before those features go live.
         </p>
 
-        <h2>Analytics</h2>
+        <h2 id="analytics">Analytics</h2>
         <p>
-          In production we use{' '}
-          <a href="https://umami.is" target="_blank" rel="noopener noreferrer">
-            Umami
-          </a>
-          , a privacy-friendly analytics tool, to understand aggregate usage — page views,
-          referrers, and a few anonymous interaction counts. It is{' '}
-          <strong>cookieless</strong>: it sets no cookies, stores nothing on your device,
-          builds no cross-site profile, and does not identify you. IP addresses are{' '}
-          <strong>not stored</strong> — they are used only momentarily, in memory, to
-          estimate unique daily visits, then discarded.
+          In production we use two analytics tools, and they behave differently:
         </p>
         <p>
-          Because nothing is stored on or read from your device and no personal profile is
-          built, this processing rests on our legitimate interest in understanding how the
-          site is used, and <strong>no cookie-consent banner is required</strong>. We do not
-          run advertising, ad pixels, or cross-site trackers.
+          <strong>Umami</strong> (
+          <a href="https://umami.is" target="_blank" rel="noopener noreferrer">
+            umami.is
+          </a>
+          ) gives us aggregate usage — page views, referrers, and a few anonymous
+          interaction counts. It is <strong>cookieless</strong>: it sets no cookies, stores
+          nothing on your device, builds no cross-site profile, and does not identify you.
+          IP addresses are <strong>not stored</strong> — they are used only momentarily, in
+          memory, to estimate unique daily visits, then discarded.
+        </p>
+        <p>
+          <strong>Google Analytics 4</strong> (
+          <a
+            href="https://policies.google.com/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Google&rsquo;s privacy policy
+          </a>
+          ) gives us the deeper reports and the Search Console connection. Unlike Umami, it{' '}
+          <strong>does set first-party cookies</strong> on your device (named{' '}
+          <code>_ga</code> and <code>_ga_&lt;id&gt;</code>) so that repeat visits can be
+          recognised as the same browser, and it sends your IP address, page URL, referrer,
+          and device/browser details to Google, which acts as our analytics provider. Google
+          may process this data on servers outside your country. We have{' '}
+          <strong>not</strong> enabled Google Signals, ad personalisation, or Google Ads
+          data sharing, and we do not run advertising or ad pixels on the site.
+        </p>
+        <p>
+          You can opt out of Google Analytics on every site using Google&rsquo;s{' '}
+          <a
+            href="https://tools.google.com/dlpage/gaoptout"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            browser opt-out add-on
+          </a>
+          , or block or clear these cookies in your browser settings — the site works
+          exactly the same either way. Clearing cookies also clears them here.
+        </p>
+
+        <h2 id="cookies">Cookies</h2>
+        <p>
+          We use cookies only for the Google Analytics measurement described above. We set
+          no advertising cookies, and we do not use cookies to build a profile of you or to
+          track you across other websites. Blocking them does not affect any feature of the
+          site.
         </p>
 
         <h2>Information handled automatically</h2>
@@ -93,6 +129,19 @@ export default function PrivacyPage() {
           <li>
             <strong>Umami Cloud</strong> — cookieless analytics (
             <a href="https://umami.is/privacy" target="_blank" rel="noopener noreferrer">
+              privacy
+            </a>
+            ).
+          </li>
+          <li>
+            <strong>Google Analytics</strong> — cookie-based analytics; receives your IP
+            address, page URLs, referrer and device details, and may process them outside
+            your country (
+            <a
+              href="https://policies.google.com/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               privacy
             </a>
             ).
@@ -140,10 +189,12 @@ export default function PrivacyPage() {
         <p>
           You can ask what personal data relates to you and request its deletion at any time
           by emailing <a href={`mailto:${SITE.email}`}>{SITE.email}</a>; we aim to respond
-          within 30 days. Because there are no accounts and our analytics are aggregate and
-          non-identifying, in practice we hold little or no personal data tied to you. This
-          covers the access and deletion rights provided under laws such as the EU/UK GDPR
-          and California&rsquo;s CCPA/CPRA.
+          within 30 days. Because there are no accounts, we hold little personal data tied
+          to you: our own records are aggregate and non-identifying, and the identifiers
+          Google Analytics sets live in your browser&rsquo;s cookies, which you can clear or
+          block at any time (see <a href="#analytics">Analytics</a>). This covers the access
+          and deletion rights provided under laws such as the EU/UK GDPR and
+          California&rsquo;s CCPA/CPRA.
         </p>
 
         <h2>Children</h2>
