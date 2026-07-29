@@ -12,6 +12,7 @@
 //                 a `labels` array per group; one athlete can appear in several
 // No db here — run-ingest-espn.ts resolves teams/players and upserts.
 import type { Sport } from '../lib/sports';
+import { etDateIso } from '../lib/social/schedule';
 
 const SITE = 'https://site.api.espn.com/apis/site/v2/sports';
 const UA = { 'User-Agent': 'FantasyFire/1.0 (+https://fantasyfire.app)' };
@@ -168,6 +169,24 @@ export interface EspnEventRef {
   seasonType?: number;
 }
 
+/**
+ * The slate day an event belongs to, as US EASTERN calendar date.
+ *
+ * ESPN's `date` is the UTC tip-off instant, so slicing it files a 9pm ET game
+ * under TOMORROW (01:00Z) — the whole US evening slate lands a day early. That's
+ * what made the accuracy ledger show a "settled" day for games that hadn't been
+ * played: last night's box scores arrived stamped with today's date. Everything
+ * else on the site buckets on the Eastern betting day, so this does too.
+ *
+ * `queried` (the YYYY-MM-DD the scoreboard was asked for, already Eastern) is the
+ * fallback for an event with no timestamp.
+ */
+export function eventDateIso(raw: string | undefined, queried: string): string {
+  if (!raw) return queried;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? queried : etDateIso(d);
+}
+
 /** Completed events on one date (YYYY-MM-DD). Throws on a failed fetch — the
  *  caller decides how to retry; swallowing it here would leave a silent,
  *  PERMANENT gap in the history (the incremental walk never revisits old dates).
@@ -181,7 +200,7 @@ export async function fetchEspnCompletedEvents(path: string, date: string, extra
     .filter((e) => e.competitions?.[0]?.status?.type?.state === 'post')
     .map((e) => ({
       eventId: String(e.id),
-      dateIso: (e.date ?? `${date}T00:00Z`).slice(0, 10),
+      dateIso: eventDateIso(e.date, date),
       seasonType: e.season?.type,
     }));
 }

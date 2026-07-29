@@ -56,7 +56,7 @@ export default async function AccuracyPage({ params }: PageProps) {
       />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <h1 className="text-3xl font-bold tracking-tight">{cfg.name} FireFactor Accuracy</h1>
-        <SportSelect section="accuracy" value={sport} />
+        <SportSelect section="accuracy" value={sport} includeAll />
       </div>
       <p className="mt-2 max-w-2xl text-sm text-muted">
         The settled ledger: for each of the last {LEDGER_DAYS} completed slate days, the
@@ -75,12 +75,13 @@ export default async function AccuracyPage({ params }: PageProps) {
 
       <p className="mt-6 text-xs leading-relaxed text-muted">
         How to read this honestly: rows are recomputed after the fact from the same public
-        game logs the live board uses, at our book-style half-point line — not a
-        sportsbook&rsquo;s posted number — and without the matchup / Vegas / pace context
-        the live board folds in (that context can&rsquo;t be faithfully reconstructed
-        later). A small sample of settled days proves nothing either way; the point is
-        transparency, not a win-rate claim. Descriptive research — never predictions,
-        picks, or betting advice. See{' '}
+        game logs the live board uses, settled at the line a book actually posted for that
+        slate where we still have it (hover a line to see which) and at our own book-style
+        half-point line otherwise. They omit the matchup / Vegas / pace context the live
+        board folds in, because that context can&rsquo;t be faithfully reconstructed later
+        — so these are conservative reads. A small sample of settled days proves nothing
+        either way; the point is transparency, not a win-rate claim. Descriptive research
+        — never predictions, picks, or betting advice. See{' '}
         <Link href="/methodology" className="text-brand hover:text-brand-strong">
           the methodology
         </Link>{' '}

@@ -6,6 +6,7 @@
 //
 // Everything comes from ESPN: /teams (ids + colors), /teams/{id}/roster
 // (positions + bios), and scoreboard -> summary (completed box scores). No db here.
+import { eventDateIso } from '../espnSports';
 
 const SITE = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl';
 const UA = { 'User-Agent': 'FantasyFire/1.0 (+https://fantasyfire.app)' };
@@ -198,7 +199,9 @@ export async function fetchNflWeekEvents(
   ).catch(() => ({ events: [] }) as ScoreboardApi);
   return (j.events ?? [])
     .filter((e) => e.competitions?.[0]?.status?.type?.state === 'post')
-    .map((e) => ({ eventId: String(e.id), dateIso: (e.date ?? '').slice(0, 10) }));
+    // `date` is the UTC kickoff instant — bucket on the EASTERN calendar date so a
+    // Sunday/Monday night game doesn't file under the next day (see eventDateIso).
+    .map((e) => ({ eventId: String(e.id), dateIso: eventDateIso(e.date, '') }));
 }
 
 const FF = (g: BoxStatGroup): ((athlete: BoxAthlete) => (name: string) => string | undefined) => {

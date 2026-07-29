@@ -12,11 +12,20 @@ import { db } from '../lib/db';
 import { recordIngestRun } from './ingestRun';
 import { normalizeName } from '../lib/slate';
 import { fetchEspnInjuries, type InjuryRow } from './injuries';
+import { shouldIngest, offSeasonReason } from '../lib/seasonWindow';
 import { SPORT_LIST, type Sport } from '../lib/sports';
 
 const SPORTS: Sport[] = SPORT_LIST;
 
 async function ingestSport(sport: Sport): Promise<number> {
+  // Off-season: don't fetch at all. Still clear this sport's rows (a no-op after
+  // the first skipped run) so last season's injuries don't linger all summer.
+  if (!shouldIngest(sport)) {
+    await db.playerInjury.deleteMany({ where: { sport } });
+    console.log(`[injuries:${sport}] ${offSeasonReason(sport)}`);
+    return 0;
+  }
+
   let rows: InjuryRow[] = [];
   try {
     rows = await fetchEspnInjuries(sport);
