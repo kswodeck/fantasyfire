@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pickDiverse, structurallyOneSidedStats } from './recap';
+import { pickDiverse, structurallyOneSidedStats, ledgerDays, LEDGER_DAYS } from './recap';
 import type { RecapRow } from '@/lib/types';
 
 function row(partial: Partial<RecapRow>): RecapRow {
@@ -9,6 +9,7 @@ function row(partial: Partial<RecapRow>): RecapRow {
     stat: 'pts',
     statShort: 'PTS',
     line: 24.5,
+    lineSource: null,
     side: 'over',
     score: 60,
     tier: 'Lean',
@@ -190,5 +191,51 @@ describe('one-sided de-prioritization (structurallyOneSidedStats + pickDiverse)'
     // one-sided rows, because only 3 of those may fill the 4 slots.
     expect(picked.some((r) => r.stat === 'hitterFs')).toBe(true);
     expect(picked.filter((r) => r.stat === 'hits')).toHaveLength(3);
+  });
+});
+
+describe('ledgerDays', () => {
+  // 2026-07-29 18:00Z = 2pm ET on the 29th, so the social day is the 29th and
+  // the newest settleable day is the 28th.
+  const midAfternoonJul29 = new Date('2026-07-29T18:00:00Z');
+
+  it('never settles a day that is still being played', () => {
+    // The reported bug: a "July 29" settled day appears while July 29's games
+    // haven't happened — because a late-evening ET game on the 28th got filed
+    // under the 29th's UTC date, or because one early game finished.
+    const days = ledgerDays(['2026-07-29', '2026-07-28', '2026-07-27'], midAfternoonJul29);
+    expect(days).toEqual(['2026-07-28', '2026-07-27']);
+  });
+
+  it('drops future days outright', () => {
+    expect(ledgerDays(['2026-08-04', '2026-07-28'], midAfternoonJul29)).toEqual(['2026-07-28']);
+  });
+
+  it('settles yesterday as soon as the day rolls over at 11pm ET', () => {
+    // 2026-07-29T03:30Z = 11:30pm ET on the 28th — the social day has rolled to
+    // the 29th, so the 28th is now settleable.
+    const justAfterRollover = new Date('2026-07-29T03:30:00Z');
+    expect(ledgerDays(['2026-07-28', '2026-07-27'], justAfterRollover)).toEqual([
+      '2026-07-28',
+      '2026-07-27',
+    ]);
+    // …but an hour earlier (10:30pm ET on the 28th) the 28th is still in play.
+    const beforeRollover = new Date('2026-07-29T02:30:00Z');
+    expect(ledgerDays(['2026-07-28', '2026-07-27'], beforeRollover)).toEqual(['2026-07-27']);
+  });
+
+  it('drops days older than the max age and caps the window', () => {
+    const many = Array.from({ length: 40 }, (_, i) =>
+      new Date(Date.UTC(2026, 6, 28) - i * 86_400_000).toISOString().slice(0, 10),
+    );
+    const days = ledgerDays(many, midAfternoonJul29);
+    expect(days).toHaveLength(LEDGER_DAYS);
+    expect(days[0]).toBe('2026-07-28');
+    // Nothing older than LEDGER_MAX_AGE_DAYS (21) survives the floor.
+    for (const d of days) expect(d >= '2026-07-08').toBe(true);
+  });
+
+  it('returns nothing when every day is too old', () => {
+    expect(ledgerDays(['2026-01-01', '2026-02-01'], midAfternoonJul29)).toEqual([]);
   });
 });

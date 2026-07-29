@@ -14,6 +14,7 @@ function row(partial: Partial<RecapRow>): RecapRow {
     stat: 'pts',
     statShort: 'PTS',
     line: 24.5,
+    lineSource: null,
     side: 'over',
     score: 60,
     tier: 'Lean',

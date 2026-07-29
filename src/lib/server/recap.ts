@@ -48,6 +48,7 @@ import {
   type StatKey,
 } from '@/lib/stats';
 import { SPORT_LIST, type Sport } from '@/lib/sports';
+import { getHistoricalLineMap } from '@/lib/server/providedLines';
 import { computeBreakdown } from '@/lib/accuracySegments';
 import { previousSocialDayIso, socialDayIso } from '@/lib/social/schedule';
 import type { AccuracyLedger, RecapRow, YesterdayRecap } from '@/lib/types';
@@ -92,11 +93,43 @@ const ONE_SIDED_MIN_SAMPLE = 8;
  *  stat+side combo. */
 const ONE_SIDED_THRESHOLD = 0.92;
 
+/** `${playerId}:${stat}:${YYYY-MM-DD}` → the line a book posted that day. */
+type HistoricalLineMap = Awaited<ReturnType<typeof getHistoricalLineMap>>;
+
+/**
+ * Which of the pool's slate days the ledger settles: newest first, bounded on
+ * BOTH ends.
+ *
+ * The upper bound is the fix for a ledger that showed a "settled" day for games
+ * that hadn't been played. A day only counts once it is OVER, so the newest
+ * eligible day is yesterday on the site's 11pm-ET clock (previousSocialDayIso) —
+ * the same "yesterday" the board strip uses, so the two can never name different
+ * days. Without it, any game whose date bucket lands on today (an early finisher,
+ * or a feed that files a late-evening ET game under the next UTC date) posts a
+ * one-game "settled" day while the rest of the slate is still pending.
+ */
+export function ledgerDays(days: readonly string[], now: Date = new Date()): string[] {
+  const oldest = new Date(now.getTime() - LEDGER_MAX_AGE_DAYS * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  const newest = previousSocialDayIso(now);
+  return [...days]
+    .filter((d) => d >= oldest && d <= newest)
+    .sort()
+    .reverse()
+    .slice(0, LEDGER_DAYS);
+}
+
 /** ALL qualifying (score ≥ Slight) reads for every player who played this day —
  *  one row per (player, stat) that clears the bar. Not collapsed to each
  *  player's single best yet — computeLedger needs the full pool first to know
  *  which stats are structurally one-sided (see below). */
-function candidatesForDay(sport: Sport, pool: BoardPool, day: string): RecapRow[] {
+function candidatesForDay(
+  sport: Sport,
+  pool: BoardPool,
+  day: string,
+  bookLines: HistoricalLineMap,
+): RecapRow[] {
   const out: RecapRow[] = [];
   for (const p of pool.players) {
     const all = pool.gamesByPlayer.get(p.id);
@@ -110,7 +143,16 @@ function candidatesForDay(sport: Sport, pool: BoardPool, day: string): RecapRow[
     const volumeMult = volumeMultiplier(prior.map((g) => opportunityFor(sport, p.posBucket, g)));
 
     for (const stat of boardStatsFor(sport, p.posBucket)) {
-      const line = defaultPropLine(prior, stat);
+      // Settle at the number a BOOK actually posted that day when we still have it
+      // (ProvidedLine, 30d retention). This is the difference between measuring the
+      // leans we feature and measuring a different, weaker signal: defaultPropLine
+      // picks the half-point that splits the player's own history most evenly, so
+      // the hit-rate and projection components sit near neutral by construction and
+      // a recomputed read can't reach the Strong/extreme band no matter how lopsided
+      // the player is. A real book line is free to sit away from that median — which
+      // is exactly where an extreme lean comes from.
+      const book = bookLines.get(`${p.id}:${stat}:${day}`);
+      const line = book?.line ?? defaultPropLine(prior, stat);
       // Same degenerate-line guard as the board: a 0.5 line means the player
       // typically records 0 — any "lean" there is trivial.
       if (line <= 0.5) continue;
@@ -171,6 +213,7 @@ function candidatesForDay(sport: Sport, pool: BoardPool, day: string): RecapRow[
         stat,
         statShort: STAT_DEFS[stat].short,
         line,
+        lineSource: book?.source ?? null,
         side: fs.side,
         score: fs.score,
         tier: fs.tier,
@@ -232,7 +275,12 @@ function settleDay(day: string, dayCandidates: readonly RecapRow[]): YesterdayRe
 }
 
 async function computeLedger(sport: Sport): Promise<AccuracyLedger | null> {
-  const pool = await loadBoardPool(sport, RECAP_SCAN);
+  const [pool, bookLines] = await Promise.all([
+    loadBoardPool(sport, RECAP_SCAN),
+    // One query for the whole window; keys the ledger can't match simply fall back
+    // to the computed line (see candidatesForDay).
+    getHistoricalLineMap(sport, LEDGER_MAX_AGE_DAYS),
+  ]);
 
   // Distinct completed slate days present in the pool, newest first (games are
   // most-recent-first per player; gameDate is an ISO YYYY-MM-DD string).
@@ -240,13 +288,12 @@ async function computeLedger(sport: Sport): Promise<AccuracyLedger | null> {
   for (const games of pool.gamesByPlayer.values()) {
     for (const g of games) daySet.add(g.gameDate);
   }
-  const cutoff = new Date(Date.now() - LEDGER_MAX_AGE_DAYS * 86_400_000)
-    .toISOString()
-    .slice(0, 10);
-  const recentDays = [...daySet].filter((d) => d >= cutoff).sort().reverse().slice(0, LEDGER_DAYS);
+  const recentDays = ledgerDays([...daySet]);
   if (recentDays.length === 0) return null;
 
-  const candidatesByDay = new Map(recentDays.map((day) => [day, candidatesForDay(sport, pool, day)]));
+  const candidatesByDay = new Map(
+    recentDays.map((day) => [day, candidatesForDay(sport, pool, day, bookLines)]),
+  );
   // Measured over the whole window (a single day's candidates are too thin a
   // sample to judge a stat's shape by) and carried on the ledger so the teaser
   // builders below can de-prioritize these stats without recomputing them.

@@ -3,6 +3,7 @@ import type { Sport } from '@/lib/sports';
 import type { RecapRow, YesterdayRecap } from '@/lib/types';
 import { formatIsoDate } from '@/lib/format';
 import { leanTextClass } from '@/lib/tierStyle';
+import { sourceLabel } from '@/lib/providedSources';
 import { SportTag } from './SportTag';
 
 /** One settled-lean row list — shared by the board strip and the accuracy page.
@@ -39,7 +40,16 @@ export function RecapRowList({
           >
             {r.player.fullName}
           </Link>
-          <span className="min-w-0 shrink-0 text-muted">
+          <span
+            className="min-w-0 shrink-0 text-muted"
+            // Where the number came from — a book's posted line for that slate, or
+            // our computed one when no stored line covered it.
+            title={
+              r.lineSource
+                ? `${sourceLabel(r.lineSource)}'s posted line for that slate`
+                : 'Our computed half-point line (no stored book line for that slate)'
+            }
+          >
             <span className={leanTextClass(r.side)}>{r.side === 'over' ? 'O' : 'U'}</span>{' '}
             <span className="tabular-nums">{r.line}</span> {r.statShort}
           </span>
@@ -99,9 +109,9 @@ export function YesterdayRecapStrip({
       </div>
       <p className="mt-3 text-[11px] leading-relaxed text-muted">
         Settled facts, not a track record: each row is the strongest pre-game recent-form
-        read (recomputed from the game logs before that slate, at our half-point line,
-        without matchup/Vegas context) checked against the actual box score. Descriptive
-        only — never a prediction or betting advice.{' '}
+        read (recomputed from the game logs before that slate, at that slate&rsquo;s posted
+        book line where we still have it, without matchup/Vegas context) checked against the
+        actual box score. Descriptive only — never a prediction or betting advice.{' '}
         <Link href={`/${sport}/accuracy`} className="text-brand hover:text-brand-strong">
           Full settled ledger →
         </Link>

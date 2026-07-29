@@ -19,6 +19,7 @@ import { recordIngestRun } from './ingestRun';
 import { slugify } from './nba';
 import { pMap } from './mlb';
 import { currentSeason } from '../lib/season';
+import { shouldIngest, offSeasonReason } from '../lib/seasonWindow';
 import { isSport, type Sport } from '../lib/sports';
 import {
   ESPN_SPORT_PATH,
@@ -258,6 +259,15 @@ async function main() {
   }
   const cfg = CONFIGS[arg]!;
   const SPORT = cfg.sport;
+
+  // Off-season short-circuit: no games to pull, and ESPN routinely 500s on
+  // off-season scoreboard dates — so this would fail loudly for a non-problem.
+  // Set INGEST_IGNORE_SEASON=true to force a run (backfills, schedule shifts).
+  if (!shouldIngest(SPORT)) {
+    console.log(`[${SPORT}] ${offSeasonReason(SPORT)}`);
+    return;
+  }
+
   const season = currentSeason(SPORT);
   console.log(`[${SPORT}] season ${season}`);
 
@@ -305,8 +315,10 @@ async function main() {
     _max: { gameDate: true },
   });
   let startIso: string;
-  const forcedStart = process.env.INGEST_START_DATE?.trim();
-  if (forcedStart && /^\d{4}-\d{2}-\d{2}$/.test(forcedStart)) {
+  const rawForcedStart = process.env.INGEST_START_DATE?.trim();
+  const forcedStart =
+    rawForcedStart && /^\d{4}-\d{2}-\d{2}$/.test(rawForcedStart) ? rawForcedStart : null;
+  if (forcedStart) {
     startIso = forcedStart; // explicit override (tests / partial backfills)
   } else if (newest._max.gameDate) {
     const from = new Date(newest._max.gameDate.getTime() - RECENT_DAYS * 86_400_000);
@@ -611,9 +623,18 @@ async function main() {
       ...cols,
     });
   }
+  // Normally only the last RECENT_DAYS are re-UPSERTED (so corrected box scores
+  // land) and older rows take the fast insert-only path. An EXPLICIT
+  // INGEST_START_DATE means "re-state this range", so everything it covers is
+  // upserted — otherwise a backfill can't correct a value that's already stored
+  // (e.g. re-dating a slate onto the Eastern betting day; see eventDateIso).
   const recentCutoff = new Date();
-  recentCutoff.setUTCDate(recentCutoff.getUTCDate() - RECENT_DAYS);
-  recentCutoff.setUTCHours(0, 0, 0, 0);
+  if (forcedStart) {
+    recentCutoff.setTime(new Date(`${forcedStart}T00:00:00Z`).getTime());
+  } else {
+    recentCutoff.setUTCDate(recentCutoff.getUTCDate() - RECENT_DAYS);
+    recentCutoff.setUTCHours(0, 0, 0, 0);
+  }
   const recentStats = statData.filter((s) => s.gameDate >= recentCutoff);
   const historicalStats = statData.filter((s) => s.gameDate < recentCutoff);
 

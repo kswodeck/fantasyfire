@@ -12,6 +12,7 @@ import { recordIngestRun } from './ingestRun';
 import { fetchMlbSchedule, fetchNbaSchedule, fetchNflSchedule, fetchEspnSchedule, type ScheduleGameRow } from './schedule';
 import { ESPN_SPORT_PATH } from './espnSports';
 import { fetchEspnGameOdds, type GameOddsRow } from './gameOdds';
+import { shouldIngest, offSeasonReason } from '../lib/seasonWindow';
 import type { Sport } from '../lib/sports';
 
 /** The next `days` calendar days as YYYY-MM-DD in US Eastern (the betting day). */
@@ -32,6 +33,10 @@ async function ingestSport(
   resolveTeam: (key: string) => number | undefined,
   dates: string[],
 ): Promise<void> {
+  if (!shouldIngest(sport)) {
+    console.log(`[schedule:${sport}] ${offSeasonReason(sport)}`);
+    return;
+  }
   const rows: ScheduleGameRow[] = [];
   for (const date of dates) {
     try {
@@ -149,6 +154,7 @@ async function ingestGameOdds(
   resolveTeam: (key: string) => number | undefined,
   dates: string[],
 ): Promise<void> {
+  if (!shouldIngest(sport)) return; // the schedule pull already logged the skip
   let fetched = 0;
   let updated = 0;
   for (const date of dates) {

@@ -24,6 +24,15 @@ function pctLanded(rec: WinRecord): string {
   return settled === 0 ? '—' : `${Math.round((rec.hits / settled) * 100)}%`;
 }
 
+/** Tile grid by how many segments survived the empty filter — Tailwind needs the
+ *  class names literal, so they're enumerated rather than built from the count. */
+const SEGMENT_GRID: Record<number, string> = {
+  1: 'grid-cols-1',
+  2: 'grid-cols-2',
+  3: 'grid-cols-1 sm:grid-cols-3',
+  4: 'grid-cols-2 sm:grid-cols-4',
+};
+
 /**
  * Interactive accuracy view: filter the settled-lean records by STRENGTH SEGMENT
  * (all / extreme=Blazing-Frozen / normal=Hot-Cold / slight=Warm-Cool) and by SIDE
@@ -44,8 +53,23 @@ export function AccuracyExplorer({
   showSport?: boolean;
   daysAreSample?: boolean;
 }) {
-  const [tier, setTier] = useState<TierKey>('all');
+  const [selectedTier, setSelectedTier] = useState<TierKey>('all');
   const [side, setSide] = useState<AccuracySideFilter>('both');
+
+  // A strength segment with nothing in it at the current side is hidden outright
+  // rather than rendered as an em-dash tile — an empty "Extreme 0 of 0" reads like
+  // a result (we went 0) when it only means we have no settled rows there yet.
+  // "All leans" always stays: it's the reset control, and the page already falls
+  // back to the off-season panel when the whole ledger is empty.
+  const visibleSegments = TIER_SEGMENT_OPTIONS.filter((o) => {
+    if (o.key === 'all') return true;
+    const rec = recordFor(breakdown, o.key, side);
+    return rec.hits + rec.misses + rec.pushes > 0;
+  });
+  // Switching sides can hide the segment that was selected (a tier with only
+  // unders, viewed on the over) — fall back to "all" instead of filtering the
+  // list down to nothing against a control that's no longer on screen.
+  const tier = visibleSegments.some((o) => o.key === selectedTier) ? selectedTier : 'all';
 
   // Recompute each day's record from the FILTERED rows so the day header matches
   // exactly what's listed below it (not the day's full, unfiltered total).
@@ -94,8 +118,8 @@ export function AccuracyExplorer({
 
       {/* Strength-segment tiles double as the tier selector. Each shows its record
           at the current side filter; clicking sets the active segment. */}
-      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {TIER_SEGMENT_OPTIONS.map((o) => {
+      <div className={`mt-3 grid gap-3 ${SEGMENT_GRID[visibleSegments.length]}`}>
+        {visibleSegments.map((o) => {
           const rec = recordFor(breakdown, o.key, side);
           const settled = rec.hits + rec.misses;
           const active = tier === o.key;
@@ -103,7 +127,7 @@ export function AccuracyExplorer({
             <button
               key={o.key}
               type="button"
-              onClick={() => setTier(o.key)}
+              onClick={() => setSelectedTier(o.key)}
               aria-pressed={active}
               className={`rounded-xl border p-4 text-left transition-colors ${
                 active ? 'border-brand bg-brand/5' : 'border-line bg-surface hover:border-brand/40'
