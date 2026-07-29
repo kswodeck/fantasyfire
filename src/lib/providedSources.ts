@@ -83,6 +83,22 @@ const PROVIDED_SOURCE_DOMAINS: Record<string, string> = {
 // caching once) keeps it correct if the env is swapped, which the tests do.
 let refCache: { raw: string; parsed: Record<string, string> } | null = null;
 
+/**
+ * The live referral deals, keyed by source id. These are PUBLIC by nature — they
+ * ship in the rendered page — so they live in code rather than a secret, and the
+ * site works on a fresh clone/deploy with no env setup.
+ *
+ * NEXT_PUBLIC_REF_LINKS still overrides per book (see configuredRefLinks), so a
+ * link can be rotated or pulled on a single deployment without a code change.
+ * A book absent from BOTH stays plain text — see refLinkFor.
+ */
+const DEFAULT_REF_LINKS: Record<string, string> = {
+  prizepicks: 'https://prizepicks.onelink.me/FjtC/pppbxyu5',
+  pick6: 'https://pick6.draftkings.com/r/psx/kswodeck/US-PSX/US-TX',
+  underdog: 'https://play.underdogsports.com/vgwg/jgfzp0lt',
+  sleeper: 'https://sleeper.onelink.me/s6xz/prgg?promo=RF-HERESJONNY929',
+};
+
 function parseRefLinks(raw: string): Record<string, string> {
   try {
     const parsed: unknown = JSON.parse(raw);
@@ -103,8 +119,12 @@ function parseRefLinks(raw: string): Record<string, string> {
 
 function configuredRefLinks(): Record<string, string> {
   const raw = process.env.NEXT_PUBLIC_REF_LINKS;
-  if (!raw) return {};
-  if (refCache?.raw !== raw) refCache = { raw, parsed: parseRefLinks(raw) };
+  if (!raw) return DEFAULT_REF_LINKS;
+  if (refCache?.raw !== raw) {
+    // Env entries override the baked-in deal for that book; books the env doesn't
+    // mention keep theirs, so a one-book override never silently drops the rest.
+    refCache = { raw, parsed: { ...DEFAULT_REF_LINKS, ...parseRefLinks(raw) } };
+  }
   return refCache.parsed;
 }
 
