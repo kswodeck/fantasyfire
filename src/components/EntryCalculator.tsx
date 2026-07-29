@@ -9,6 +9,8 @@ import { pct } from '@/lib/format';
 import { leanTextClass } from '@/lib/tierStyle';
 import { entryEvs, avgLegProb, type EntryEv } from '@/lib/entryEv';
 import { PP_POWER_PLAY, PP_FLEX_PLAY } from '@/lib/ppPayouts';
+import { BookLink } from './BookLink';
+import { AffiliateDisclosure } from './AffiliateDisclosure';
 
 // The PrizePicks entry-EV calculator on the Playbook: combine saved PrizePicks
 // STANDARD legs into a Power/Flex entry and see what it actually pays. Every
@@ -166,6 +168,15 @@ export function EntryCalculator({ props }: { props: SavedProp[] }) {
                   <EntryEvCard key={e.type} ev={e} avg={avg} />
                 ))}
               </div>
+              {/* The one CTA in the Playbook, and it only appears once the user has
+                  a fully priced entry in front of them — at that point "go build
+                  it" is the actual next step, not an interruption. */}
+              <p className="mt-3 text-xs text-muted">
+                <BookLink source="prizepicks" placement="playbook-entry" className="font-semibold text-brand hover:text-brand-strong">
+                  Build this entry on PrizePicks →
+                </BookLink>
+              </p>
+              <AffiliateDisclosure inline />
             </>
           )}
         </div>

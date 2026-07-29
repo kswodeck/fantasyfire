@@ -64,6 +64,82 @@ const PROVIDED_SOURCE_DOMAINS: Record<string, string> = {
 };
 
 /**
+ * REFERRAL (affiliate) links per source, keyed by source id.
+ *
+ * Empty by default and configured PER DEPLOYMENT via the NEXT_PUBLIC_REF_LINKS env
+ * var — a JSON object like {"prizepicks":"https://prizepicks.com/?ref=…"} — so
+ * adding, changing or pulling a deal never needs a code change or a rebuild of this
+ * file. Values are public by nature (they ship in the page), hence NEXT_PUBLIC_.
+ *
+ * The distinction between a configured referral link and a plain domain link is
+ * load-bearing for compliance, not cosmetic:
+ *   - a REFERRAL link is a paid link -> rel must include "sponsored", and the
+ *     affiliate disclosure must be shown (FTC).
+ *   - a plain domain link earns us nothing -> no "sponsored", no disclosure claim.
+ * See refLinkFor / isSponsoredLink / hasAnyRefLink below, and AffiliateDisclosure.
+ */
+// Memoized on the raw env string: each BookLink calls through here a few times, so
+// re-parsing per render is wasted work — but keying on the value (rather than
+// caching once) keeps it correct if the env is swapped, which the tests do.
+let refCache: { raw: string; parsed: Record<string, string> } | null = null;
+
+function parseRefLinks(raw: string): Record<string, string> {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const out: Record<string, string> = {};
+    for (const [id, url] of Object.entries(parsed as Record<string, unknown>)) {
+      // Only accept absolute https URLs — a malformed entry must never render as
+      // a broken or protocol-relative link.
+      if (typeof url === 'string' && /^https:\/\//i.test(url)) out[id] = url;
+    }
+    return out;
+  } catch {
+    // A malformed env var degrades to "no referral links" rather than breaking
+    // every book mention on the site.
+    return {};
+  }
+}
+
+function configuredRefLinks(): Record<string, string> {
+  const raw = process.env.NEXT_PUBLIC_REF_LINKS;
+  if (!raw) return {};
+  if (refCache?.raw !== raw) refCache = { raw, parsed: parseRefLinks(raw) };
+  return refCache.parsed;
+}
+
+/** True when this source has a real, paid referral link configured. */
+export function isSponsoredLink(id: string): boolean {
+  return !!configuredRefLinks()[id];
+}
+
+/** True when ANY book has a referral link — gates the affiliate disclosure copy. */
+export function hasAnyRefLink(): boolean {
+  return Object.keys(configuredRefLinks()).length > 0;
+}
+
+/**
+ * Where a book's name should link to: its referral URL when one is configured,
+ * otherwise the book's plain homepage. Null when we don't even know the domain
+ * (the caller then renders plain text).
+ */
+export function refLinkFor(id: string): string | null {
+  const ref = configuredRefLinks()[id];
+  if (ref) return ref;
+  const domain = PROVIDED_SOURCE_DOMAINS[id];
+  return domain ? `https://${domain}` : null;
+}
+
+/**
+ * The `rel` for a book link. "sponsored" ONLY on actually-paid links (Google's
+ * spec, and misapplying it is its own problem); "nofollow" on every outbound
+ * commercial link; noopener/noreferrer because they all open in a new tab.
+ */
+export function refLinkRel(id: string): string {
+  return `${isSponsoredLink(id) ? 'sponsored ' : ''}nofollow noopener noreferrer`;
+}
+
+/**
  * Real-logo URL for a source: the book's OWN favicon, served through DuckDuckGo's
  * privacy-respecting icon proxy (no tracking, reliable across all our books). Returns
  * null when the domain is unknown — the caller then shows the monogram badge. We

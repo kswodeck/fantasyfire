@@ -142,6 +142,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: now,
     },
     {
+      url: absoluteUrl('/books'),
+      changeFrequency: 'monthly',
+      priority: 0.4,
+      lastModified: now,
+    },
+    {
       url: absoluteUrl('/responsible-gaming'),
       changeFrequency: 'yearly',
       priority: 0.3,
