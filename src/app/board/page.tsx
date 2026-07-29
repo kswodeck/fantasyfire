@@ -4,11 +4,8 @@ import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { SportSelect } from '@/components/SportSelect';
 import { AllBoardExplorer } from '@/components/AllBoardExplorer';
 import { getAllSportsBoard } from '@/lib/server/allSports';
-import { getYesterdayRecap } from '@/lib/server/recap';
 import { AllSportsNav } from '@/components/AllSportsNav';
-import { YesterdayRecapStrip } from '@/components/YesterdayRecapStrip';
 import { DEFAULT_PROVIDED_SOURCE } from '@/lib/providedSources';
-import { SPORT_LIST } from '@/lib/sports';
 import type { AllSportsBoard } from '@/lib/server/allSports';
 
 export const revalidate = 900; // 15 min — matches the per-sport Heat Check cadence
@@ -40,14 +37,6 @@ export default async function AllBoardPage() {
     : (sources[0] ?? DEFAULT_PROVIDED_SOURCE);
   const hasBoard =
     Object.values(boardsBySource).some((r) => r.length > 0) || medianRows.length > 0;
-
-  // Settled recaps per sport (nulls drop out). getYesterdayRecap is 6h-cached
-  // per sport and never throws, so this is cheap and safe on every render.
-  const recaps = (
-    await Promise.all(
-      SPORT_LIST.map(async (sport) => ({ sport, recap: await getYesterdayRecap(sport) })),
-    )
-  ).filter((r): r is { sport: (typeof SPORT_LIST)[number]; recap: NonNullable<Awaited<ReturnType<typeof getYesterdayRecap>>> } => r.recap !== null);
 
   return (
     <div className="mx-auto w-full max-w-3xl px-2 py-8 sm:px-4">
@@ -88,13 +77,6 @@ export default async function AllBoardPage() {
           />
         </div>
       )}
-
-      {/* Per-sport settled recaps (cached 6h in getYesterdayRecap — shared with the
-          sport pages, so this adds no extra pool scans). Null entries (off-season,
-          nothing settled) simply don't render. */}
-      {recaps.map(({ sport, recap }) => (
-        <YesterdayRecapStrip key={sport} sport={sport} recap={recap} showSport />
-      ))}
 
       <p className="mt-6 text-xs leading-relaxed text-muted">
         Descriptive research from public game logs, ranked by a sample-size–adjusted
