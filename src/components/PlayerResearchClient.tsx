@@ -296,7 +296,10 @@ export function PlayerResearchClient({
       <div className="mb-5 space-y-3 rounded-xl border border-line bg-surface-2 p-4">
         <StatSelector value={stat} keys={statKeys} onChange={handleStat} />
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <div className="flex items-center gap-2">
+          {/* flex-wrap: on a phone this row (label + stepper + variant chips + the
+              payout badge) is wider than the card, and without it the badge had
+              nowhere to go and overflowed the container's right edge. */}
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm text-muted">Line</span>
             <LineInput value={effectiveLine} onCommit={handleLine} />
             {/* One-click variant switcher (same chips as the board rows) — click a
