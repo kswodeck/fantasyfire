@@ -119,15 +119,16 @@ export function hasAnyRefLink(): boolean {
 }
 
 /**
- * Where a book's name should link to: its referral URL when one is configured,
- * otherwise the book's plain homepage. Null when we don't even know the domain
- * (the caller then renders plain text).
+ * Where a book's name should link to — its REFERRAL URL, or null.
+ *
+ * Null deliberately means "render plain text": until a deal exists for this book
+ * there is nothing to gain by sending readers off-site, so we don't. That makes
+ * turning monetization on a per-book switch rather than an all-or-nothing one —
+ * add PrizePicks to NEXT_PUBLIC_REF_LINKS and only PrizePicks starts linking,
+ * while every other book stays exactly as it reads today.
  */
 export function refLinkFor(id: string): string | null {
-  const ref = configuredRefLinks()[id];
-  if (ref) return ref;
-  const domain = PROVIDED_SOURCE_DOMAINS[id];
-  return domain ? `https://${domain}` : null;
+  return configuredRefLinks()[id] ?? null;
 }
 
 /**

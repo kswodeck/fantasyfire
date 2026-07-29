@@ -4,8 +4,13 @@ import { refLinkFor, refLinkRel, sourceLabel, isSponsoredLink } from '@/lib/prov
 import { track } from '@/lib/analytics';
 
 /**
- * A book/source name rendered as an outbound link (referral link when one is
- * configured — see refLinkFor).
+ * A book/source name. Renders as PLAIN TEXT until a referral link exists for that
+ * book, and as an outbound referral link once one does (see refLinkFor).
+ *
+ * That's the switch: drop a book into NEXT_PUBLIC_REF_LINKS and every place its
+ * name appears — player page, ladder, best-price panel, /books — starts linking,
+ * with no code change. It's per-book, so a single deal doesn't turn the other
+ * eighteen into links.
  *
  * Compliance is handled here ONCE rather than at ~15 call sites:
  *  - `rel` carries "sponsored" only on genuinely paid links, plus nofollow +

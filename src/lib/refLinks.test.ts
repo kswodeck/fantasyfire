@@ -14,12 +14,19 @@ describe('refLinkFor', () => {
     expect(refLinkFor('prizepicks')).toBe('https://prizepicks.com/?ref=fantasyfire');
   });
 
-  it('falls back to the book homepage when no deal is configured', () => {
-    expect(refLinkFor('underdog')).toBe('https://underdogfantasy.com');
+  it('is null with no deal — the name stays PLAIN TEXT rather than linking out', () => {
+    expect(refLinkFor('underdog')).toBeNull();
   });
 
-  it('is null for an unknown book, so the caller renders plain text', () => {
+  it('is null for an unknown book', () => {
     expect(refLinkFor('nosuchbook')).toBeNull();
+  });
+
+  it('switches on PER BOOK — one deal does not start linking the others', () => {
+    setLinks(JSON.stringify({ prizepicks: 'https://prizepicks.com/?ref=x' }));
+    expect(refLinkFor('prizepicks')).toBe('https://prizepicks.com/?ref=x');
+    expect(refLinkFor('underdog')).toBeNull();
+    expect(refLinkFor('sleeper')).toBeNull();
   });
 });
 
@@ -66,7 +73,7 @@ describe('malformed config degrades safely', () => {
       }),
     );
     expect(isSponsoredLink('prizepicks')).toBe(false);
-    expect(refLinkFor('prizepicks')).toBe('https://prizepicks.com'); // plain fallback
+    expect(refLinkFor('prizepicks')).toBeNull(); // stays plain text
     expect(hasAnyRefLink()).toBe(false);
   });
 
@@ -75,7 +82,7 @@ describe('malformed config degrades safely', () => {
       setLinks(bad);
       expect(() => hasAnyRefLink()).not.toThrow();
       expect(hasAnyRefLink()).toBe(false);
-      expect(refLinkFor('prizepicks')).toBe('https://prizepicks.com');
+      expect(refLinkFor('prizepicks')).toBeNull();
     }
   });
 });
