@@ -5,6 +5,7 @@ import { getBoard, getSourcedBoards, getTonightSlate, hasUpcomingGames } from '@
 import { getAvailableSources, providedLinesEnabled } from '@/lib/server/providedLines';
 import { SITE } from '@/lib/site';
 import { SPORT_LIST, SPORTS, type Sport } from '@/lib/sports';
+import { selectHomeCards } from '@/lib/homeCards';
 import type { BoardRow, TonightGame } from '@/lib/types';
 
 export const revalidate = 900; // 15 min — matches the lines ingest cadence, bounding board↔player-page score skew to one cycle
@@ -21,10 +22,6 @@ const TEASER_ROWS = 4;
 async function loadSport(sport: Sport): Promise<{
   boardsBySource: Record<string, BoardRow[]>;
   medianLeans: BoardRow[];
-  /** True when the sport has a current slate (getTonightSlate's window — matching
-   *  the /board Heat Check) AND at least one read-worthy row to tease; false hides
-   *  the card (off-season, no slate, or a slate with only "No read" rows). */
-  hasSlate: boolean;
 }> {
   // A taste of each book's top reads, switched by the page-wide site source selector
   // (our median line only when no book lines are ingested). The teaser shows PLAYERS
@@ -43,8 +40,7 @@ async function loadSport(sport: Sport): Promise<{
   // "Today only" filter spans the week) but vanished from the home page — the
   // inconsistency this fixes. No slate at all → skip the card and the heavy board
   // scan; the sport is one nav tap away, and an empty teaser sells nothing.
-  const hasSlate = slate.games.length > 0;
-  if (!hasSlate) return { boardsBySource: {}, medianLeans: [], hasSlate };
+  if (slate.games.length === 0) return { boardsBySource: {}, medianLeans: [] };
   const teams = slateTeams(slate.games);
   // The teaser sells the strongest reads — a "No read" row on the home page is
   // pure noise (same filter as the per-game page).
@@ -70,16 +66,12 @@ async function loadSport(sport: Sport): Promise<{
     }).catch(() => ({}) as Record<string, BoardRow[]>);
     const boardsBySource: Record<string, BoardRow[]> = {};
     for (const [s, rows] of Object.entries(boards)) boardsBySource[s] = onSlate(rows);
-    // A slate with only "No read" rows for its teams still sells nothing — gate the
-    // card on there being at least one read-worthy row to tease (the /board Heat
-    // Check surfaces the sport regardless, so this only affects the home teaser).
-    const hasReads = Object.values(boardsBySource).some((r) => r.length > 0);
-    return { boardsBySource, medianLeans: [], hasSlate: hasReads };
+    return { boardsBySource, medianLeans: [] };
   }
   const medianLeans = onSlate(
     await getBoard(sport, { limit: 24, scan: 60 }).catch(() => [] as BoardRow[]),
   );
-  return { boardsBySource: {}, medianLeans, hasSlate: medianLeans.length > 0 };
+  return { boardsBySource: {}, medianLeans };
 }
 
 export default async function Home() {
@@ -94,9 +86,13 @@ export default async function Home() {
     )
   ).filter((s): s is Sport => s !== null);
 
-  const loaded = (
-    await Promise.all(activeSports.map(async (s) => [s, await loadSport(s)] as const))
-  ).filter(([, d]) => d.hasSlate);
+  const all = await Promise.all(
+    activeSports.map(async (s) => [s, await loadSport(s)] as const),
+  );
+
+  // Card selection mirrors HomeTopLeans' display rule exactly (book-vs-median is a
+  // GLOBAL decision) — see selectHomeCards for why that has to be decided once.
+  const loaded = selectHomeCards(all);
   const cards: HomeCard[] = loaded.map(([sport, d]) => {
     const cfg = SPORTS[sport];
     return {
