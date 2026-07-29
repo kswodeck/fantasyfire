@@ -1,6 +1,6 @@
 import type { MarketConsensus } from '@/lib/odds';
 import { pct, americanOdds } from '@/lib/format';
-import { sourceLabel } from '@/lib/providedSources';
+import { BookLink } from './BookLink';
 
 function signedPct(x: number): string {
   const v = (x * 100).toFixed(1);
@@ -93,7 +93,13 @@ function BestPriceCard({
         Best {side}
       </div>
       <div className="mt-0.5 flex items-baseline justify-between gap-2">
-        <span className="text-sm font-semibold">{sourceLabel(best.source)}</span>
+        {/* This panel names the book with the BEST price for this side — the one
+            moment the user most plausibly wants to go there, so the name links out. */}
+        <BookLink
+          source={best.source}
+          placement="market-edge"
+          className="text-sm font-semibold text-brand hover:text-brand-strong"
+        />
         <span className="tabular-nums">{americanOdds(best.odds)}</span>
       </div>
       {best.evPerDollar != null && (

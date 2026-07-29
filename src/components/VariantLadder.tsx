@@ -6,7 +6,7 @@ import { payoutKind, shownBreakeven } from '@/lib/payoutVariant';
 import { overRateAt } from '@/lib/stats';
 import { pct } from '@/lib/format';
 import { tierTextClass, heatLabel } from '@/lib/tierStyle';
-import { sourceLabel } from '@/lib/providedSources';
+import { BookLink } from './BookLink';
 import { PP_POWER_PLAY, PP_FLEX_PLAY, PP_DEMON_RULE, PP_GOBLIN_RULE } from '@/lib/ppPayouts';
 
 /**
@@ -46,7 +46,7 @@ export function VariantLadder({
   return (
     <div className="mb-5 rounded-xl border border-line bg-surface-2 p-4">
       <h2 className="text-sm font-semibold">
-        {sourceLabel(sourceId)} payout options
+        <BookLink source={sourceId} placement="variant-ladder" /> payout options
         {statLabel && <span className="font-normal text-muted"> — {statLabel} ({statShort})</span>}
       </h2>
       <p className="mb-3 mt-1 text-xs text-muted">

@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   alternates: { canonical: '/terms' },
 };
 
-const LAST_UPDATED = 'June 23, 2026';
+const LAST_UPDATED = 'July 27, 2026';
 
 export default function TermsPage() {
   return (
@@ -65,6 +65,23 @@ export default function TermsPage() {
           Any betting you do is your own responsibility and must comply with the laws of
           your jurisdiction, including minimum-age requirements (generally 21+). The
           Service does not accept wagers and is not a sportsbook.
+        </p>
+
+        <h2>Advertising &amp; referral links</h2>
+        <p>
+          Some links to sportsbooks and DFS apps on this site are referral (affiliate)
+          links. If you create an account through one, we may receive a commission from
+          that operator. This costs you nothing extra, and you are never required to use
+          our links to use anything on {SITE.name}.
+        </p>
+        <p>
+          These arrangements do not influence the research. Leans, hit rates, FireFactor
+          scores and the settled accuracy ledger are computed from public game logs by the
+          same math for every operator; no operator pays for placement, for a better score,
+          or to appear on the board, and which books we show depends only on whose lines we
+          can read. We are not affiliated with, endorsed by, or acting as an agent of any
+          operator, and we are not responsible for their sites, offers, or terms — those are
+          between you and them, and availability varies by jurisdiction.
         </p>
 
         <h2>Intellectual property</h2>

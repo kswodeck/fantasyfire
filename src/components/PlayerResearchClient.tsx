@@ -28,7 +28,7 @@ import { VariantLadder } from './VariantLadder';
 import { VariantChips } from './VariantChips';
 import { PayoutBadge } from './PayoutBadge';
 import { useSelectedSource } from './SelectedSourceProvider';
-import { sourceLabel } from '@/lib/providedSources';
+import { BookLink } from './BookLink';
 import { isOverOnly } from '@/lib/payoutVariant';
 
 // Below-the-fold panels are code-split so the verdict above the fold hydrates
@@ -242,14 +242,21 @@ export function PlayerResearchClient({
   const overOnly = data.oddsType != null && isOverOnly(data.oddsType);
   // Where the shown line comes from: the user's own entry, the chosen book, or our
   // computed line (when that book has no line for this player+stat).
+  // When the number came from a BOOK, its name links out to that book (a referral
+  // link where one is configured). This is the site's highest-intent moment — the
+  // user has drilled to one player, one stat, one line — so it's the one place a
+  // link is genuinely useful rather than an interruption. 'your line' / 'our line'
+  // stay plain text: there's nothing to link to.
   const lineSourceLabel =
-    line !== undefined
-      ? 'your line'
-      : data.lineSource
-        ? `${sourceLabel(data.lineSource)} line`
-        : availableSources.length > 0
-          ? 'our line'
-          : null;
+    line !== undefined ? (
+      'your line'
+    ) : data.lineSource ? (
+      <>
+        <BookLink source={data.lineSource} placement="player-line" /> line
+      </>
+    ) : availableSources.length > 0 ? (
+      'our line'
+    ) : null;
   const seasonWindow = data.windows.find((w) => w.window === 'season');
   const seasonOver = seasonWindow?.hitRate.hitRateOver ?? null;
   // Alt-line table is line-independent (values don't move), so it recomputes on

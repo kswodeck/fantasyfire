@@ -64,6 +64,103 @@ const PROVIDED_SOURCE_DOMAINS: Record<string, string> = {
 };
 
 /**
+ * REFERRAL (affiliate) links per source, keyed by source id.
+ *
+ * Empty by default and configured PER DEPLOYMENT via the NEXT_PUBLIC_REF_LINKS env
+ * var — a JSON object like {"prizepicks":"https://prizepicks.com/?ref=…"} — so
+ * adding, changing or pulling a deal never needs a code change or a rebuild of this
+ * file. Values are public by nature (they ship in the page), hence NEXT_PUBLIC_.
+ *
+ * The distinction between a configured referral link and a plain domain link is
+ * load-bearing for compliance, not cosmetic:
+ *   - a REFERRAL link is a paid link -> rel must include "sponsored", and the
+ *     affiliate disclosure must be shown (FTC).
+ *   - a plain domain link earns us nothing -> no "sponsored", no disclosure claim.
+ * See refLinkFor / isSponsoredLink / hasAnyRefLink below, and AffiliateDisclosure.
+ */
+// Memoized on the raw env string: each BookLink calls through here a few times, so
+// re-parsing per render is wasted work — but keying on the value (rather than
+// caching once) keeps it correct if the env is swapped, which the tests do.
+let refCache: { raw: string; parsed: Record<string, string> } | null = null;
+
+/**
+ * The live referral deals, keyed by source id. These are PUBLIC by nature — they
+ * ship in the rendered page — so they live in code rather than a secret, and the
+ * site works on a fresh clone/deploy with no env setup.
+ *
+ * NEXT_PUBLIC_REF_LINKS still overrides per book (see configuredRefLinks), so a
+ * link can be rotated or pulled on a single deployment without a code change.
+ * A book absent from BOTH stays plain text — see refLinkFor.
+ */
+const DEFAULT_REF_LINKS: Record<string, string> = {
+  prizepicks: 'https://prizepicks.onelink.me/FjtC/pppbxyu5',
+  pick6: 'https://pick6.draftkings.com/r/psx/kswodeck/US-PSX/US-TX',
+  underdog: 'https://play.underdogsports.com/vgwg/jgfzp0lt',
+  sleeper: 'https://sleeper.onelink.me/s6xz/prgg?promo=RF-HERESJONNY929',
+};
+
+function parseRefLinks(raw: string): Record<string, string> {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const out: Record<string, string> = {};
+    for (const [id, url] of Object.entries(parsed as Record<string, unknown>)) {
+      // Only accept absolute https URLs — a malformed entry must never render as
+      // a broken or protocol-relative link.
+      if (typeof url === 'string' && /^https:\/\//i.test(url)) out[id] = url;
+    }
+    return out;
+  } catch {
+    // A malformed env var degrades to "no referral links" rather than breaking
+    // every book mention on the site.
+    return {};
+  }
+}
+
+function configuredRefLinks(): Record<string, string> {
+  const raw = process.env.NEXT_PUBLIC_REF_LINKS;
+  if (!raw) return DEFAULT_REF_LINKS;
+  if (refCache?.raw !== raw) {
+    // Env entries override the baked-in deal for that book; books the env doesn't
+    // mention keep theirs, so a one-book override never silently drops the rest.
+    refCache = { raw, parsed: { ...DEFAULT_REF_LINKS, ...parseRefLinks(raw) } };
+  }
+  return refCache.parsed;
+}
+
+/** True when this source has a real, paid referral link configured. */
+export function isSponsoredLink(id: string): boolean {
+  return !!configuredRefLinks()[id];
+}
+
+/** True when ANY book has a referral link — gates the affiliate disclosure copy. */
+export function hasAnyRefLink(): boolean {
+  return Object.keys(configuredRefLinks()).length > 0;
+}
+
+/**
+ * Where a book's name should link to — its REFERRAL URL, or null.
+ *
+ * Null deliberately means "render plain text": until a deal exists for this book
+ * there is nothing to gain by sending readers off-site, so we don't. That makes
+ * turning monetization on a per-book switch rather than an all-or-nothing one —
+ * add PrizePicks to NEXT_PUBLIC_REF_LINKS and only PrizePicks starts linking,
+ * while every other book stays exactly as it reads today.
+ */
+export function refLinkFor(id: string): string | null {
+  return configuredRefLinks()[id] ?? null;
+}
+
+/**
+ * The `rel` for a book link. "sponsored" ONLY on actually-paid links (Google's
+ * spec, and misapplying it is its own problem); "nofollow" on every outbound
+ * commercial link; noopener/noreferrer because they all open in a new tab.
+ */
+export function refLinkRel(id: string): string {
+  return `${isSponsoredLink(id) ? 'sponsored ' : ''}nofollow noopener noreferrer`;
+}
+
+/**
  * Real-logo URL for a source: the book's OWN favicon, served through DuckDuckGo's
  * privacy-respecting icon proxy (no tracking, reliable across all our books). Returns
  * null when the domain is unknown — the caller then shows the monogram badge. We
