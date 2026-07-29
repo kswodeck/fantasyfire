@@ -49,18 +49,23 @@ export function AccuracyExplorer({
 
   // Recompute each day's record from the FILTERED rows so the day header matches
   // exactly what's listed below it (not the day's full, unfiltered total).
-  const filteredDays = days
-    .map((d) => {
-      const rows = d.rows.filter((r) => rowMatches(r, tier, side));
-      return {
-        date: d.date,
-        rows,
-        hits: rows.filter((r) => r.result === 'hit').length,
-        misses: rows.filter((r) => r.result === 'miss').length,
-        pushes: rows.filter((r) => r.result === 'push').length,
-      };
-    })
-    .filter((d) => d.rows.length > 0);
+  const filteredDays = [];
+
+  for (const d of days) {
+    const rows = d.rows.filter((r) => rowMatches(r, tier, side));
+  
+    if (rows.length === 0) continue;
+  
+    filteredDays.push({
+      date: d.date,
+      rows,
+      hits: rows.filter((r) => r.result === "hit").length,
+      misses: rows.filter((r) => r.result === "miss").length,
+      pushes: rows.filter((r) => r.result === "push").length,
+    });
+  
+    if (filteredDays.length === 30) break;
+  }
 
   const headline = recordFor(breakdown, tier, side);
   const headlineSettled = headline.hits + headline.misses;
