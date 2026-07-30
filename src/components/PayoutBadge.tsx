@@ -52,7 +52,12 @@ export function PayoutGlyph({
   );
 }
 
-const PILL = 'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none';
+// whitespace-nowrap + shrink-0: the badge is a unit. Without them a narrow row
+// squeezes it until "pays more" stacks into two lines inside the pill and the pill
+// itself clips at the container edge — it must wrap to the next LINE, never break
+// apart in place. Callers put it in a flex-wrap row so there is somewhere to go.
+const PILL =
+  'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none';
 
 /**
  * The payout badge for a line. `showLabel` adds the "pays more/less" words next to

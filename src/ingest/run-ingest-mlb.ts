@@ -7,6 +7,7 @@
 // and per-game stat lines (hitting for position players, pitching for pitchers).
 import 'dotenv/config';
 import { db } from '../lib/db';
+import { shouldIngest, offSeasonReason } from '../lib/seasonWindow';
 import { recordIngestRun } from './ingestRun';
 import { slugify } from './nba';
 import {
@@ -32,6 +33,11 @@ function chunk<T>(arr: T[], size: number): T[][] {
 }
 
 async function main() {
+  // Off-season short-circuit (see seasonWindow.ts). INGEST_IGNORE_SEASON=true forces it.
+  if (!shouldIngest('mlb')) {
+    console.log(`[mlb] ${offSeasonReason('mlb')}`);
+    return;
+  }
   const override = process.env.MLB_SEASON ? Number(process.env.MLB_SEASON) : null;
   let season = override ?? mlbSeason();
   console.log(`[mlb] season ${season}`);

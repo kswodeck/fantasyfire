@@ -398,6 +398,9 @@ export interface RecapRow {
   stat: StatKey;
   statShort: string;
   line: number;
+  /** The book whose posted line this settled at, or null when no stored line
+   *  covered that (player, stat, day) and it fell back to our computed line. */
+  lineSource: string | null;
   side: FireSide;
   /** FireFactor the lean would have carried pre-game (no matchup/Vegas context —
    *  those aren't reconstructable after the fact — so it's the conservative read). */

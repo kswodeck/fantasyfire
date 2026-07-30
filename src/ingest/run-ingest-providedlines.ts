@@ -27,6 +27,7 @@ import type { ProvidedLineRow } from './providedTypes';
 import { staleRows, normalizeClubName, RETIRED_SOURCE_TAGS, type RowKey } from './providedSync';
 import { normalizeName } from '../lib/slate';
 import type { Sport } from '../lib/sports';
+import { shouldIngest } from '../lib/seasonWindow';
 import { isPropStat } from '../lib/propStats';
 import { SITE } from '../lib/site';
 import { submitRevalidate } from '../lib/revalidate';
@@ -72,6 +73,20 @@ async function main(): Promise<number> {
     } catch (e) {
       console.warn(`[providedlines:${s.id}] fetch failed: ${(e as Error).message}`);
     }
+  }
+  // Drop off-season sports. The books post season-long futures months out (NFL
+  // props in June), and we have no current-season game logs to project them from —
+  // so they'd render as a board full of lines with no FireFactor behind them.
+  const offSeason = new Set(rows.map((r) => r.sport).filter((s) => !shouldIngest(s)));
+  if (offSeason.size) {
+    const before = rows.length;
+    const kept = rows.filter((r) => !offSeason.has(r.sport));
+    rows.length = 0;
+    rows.push(...kept);
+    console.log(
+      `[providedlines] dropped ${before - rows.length} off-season lines ` +
+        `(${[...offSeason].join(', ')})`,
+    );
   }
   if (rows.length === 0) {
     console.log('[providedlines] no lines fetched — nothing to write.');

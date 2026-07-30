@@ -25,6 +25,7 @@ import { recordIngestRun } from './ingestRun';
 import { NbaStatsClient, NbaLikelyBlockedError, slugify } from './nba';
 import type { PlayerGameLogRow, PlayerIndexRow } from './nba';
 import { configuredSeason, previousNbaSeason } from '../lib/season';
+import { shouldIngest, offSeasonReason } from '../lib/seasonWindow';
 import { ingestEspnNbaFallback, cleanupEspnDuplicates } from './espn-fallback';
 
 const SPORT = 'nba';
@@ -53,6 +54,12 @@ async function fetchSeason(
 }
 
 async function main() {
+  // Off-season short-circuit — no games to pull all summer. INGEST_IGNORE_SEASON=true
+  // forces a run (backfills, or a season that shifted off the typical calendar).
+  if (!shouldIngest('nba')) {
+    console.log(`[ingest] ${offSeasonReason('nba')}`);
+    return;
+  }
   // Season is computed from today's date (NBA_SEASON can still override it).
   let season = configuredSeason();
   console.log(`[ingest] season ${season}`);

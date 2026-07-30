@@ -344,3 +344,61 @@ export async function getProvidedLineMap(
   }
   return map;
 }
+
+/**
+ * HISTORICAL lines for the settled ledger, keyed `${playerId}:${stat}:${YYYY-MM-DD}`
+ * → the line a book actually posted for that slate day. Unlike the maps above (which
+ * answer "what's the line right now"), this is per-DAY: the accuracy ledger settles
+ * each past day at the number that was really on the board, instead of a line derived
+ * from the player's own median — which is balanced near 50/50 by construction and so
+ * can never produce a strong read (see recap.ts).
+ *
+ * Any book counts. The ledger doesn't care WHICH book posted the number, only that a
+ * real one did, so a player whose usual book is missing a day still settles; ties on
+ * (player, stat, day) prefer a STANDARD two-sided rung over a demon/goblin/alternate,
+ * then the newest fetch — the same "grade the plain line" rule the board uses.
+ *
+ * Bounded by ProvidedLine retention (PROVIDED_LINE_KEEP_DAYS = 30d, run-prune.ts),
+ * comfortably wider than the ledger's window. Empty when the feature is off — the
+ * caller then falls back to its computed line.
+ */
+export async function getHistoricalLineMap(
+  sport: Sport,
+  days: number,
+): Promise<Map<string, { line: number; source: string }>> {
+  const map = new Map<string, { line: number; source: string }>();
+  if (!providedLinesEnabled()) return map;
+  try {
+    const rows = await db.providedLine.findMany({
+      where: { sport, gameDate: { gte: recentCutoff(days) } },
+      orderBy: [{ fetchedAt: 'desc' }],
+      select: {
+        playerId: true,
+        stat: true,
+        source: true,
+        line: true,
+        oddsType: true,
+        multiplier: true,
+        overOdds: true,
+        underOdds: true,
+        gameDate: true,
+      },
+    });
+    // Rows arrive newest-first, so the first sighting already wins the recency
+    // tiebreak; only a STANDARD rung may displace a variant recorded before it.
+    const normalByKey = new Map<string, boolean>();
+    for (const r of rows) {
+      const key = `${r.playerId}:${r.stat}:${r.gameDate.toISOString().slice(0, 10)}`;
+      const normal = isNormalKind(effectiveOddsType(r) ?? r.oddsType);
+      if (map.has(key) && !(normal && !normalByKey.get(key))) continue;
+      map.set(key, { line: r.line, source: r.source });
+      normalByKey.set(key, normal);
+    }
+  } catch (e) {
+    console.warn(
+      '[providedLines] getHistoricalLineMap failed; ledger falls back to computed lines:',
+      e instanceof Error ? e.message : e,
+    );
+  }
+  return map;
+}

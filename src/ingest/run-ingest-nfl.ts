@@ -9,6 +9,7 @@
 // Teams (ids + names) and positions/bios come from /teams and /teams/{id}/roster.
 import 'dotenv/config';
 import { db } from '../lib/db';
+import { shouldIngest, offSeasonReason } from '../lib/seasonWindow';
 import { recordIngestRun } from './ingestRun';
 import { slugify } from './nba';
 import { pMap } from './mlb';
@@ -40,6 +41,11 @@ function chunk<T>(arr: T[], size: number): T[][] {
 }
 
 async function main() {
+  // Off-season short-circuit (see seasonWindow.ts). INGEST_IGNORE_SEASON=true forces it.
+  if (!shouldIngest('nfl')) {
+    console.log(`[nfl] ${offSeasonReason('nfl')}`);
+    return;
+  }
   const season = process.env.NFL_SEASON ? Number(process.env.NFL_SEASON) : nflSeason();
   console.log(`[nfl] season ${season}`);
 
