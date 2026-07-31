@@ -11,7 +11,7 @@ import type { BoardRow, TrendRow } from '@/lib/types';
 import {
   getBoard,
   getSourcedBoards,
-  getTonightSlate,
+  getTodaySlateTeams,
   getTrendBoard,
   getSourcedTrends,
   hasUpcomingGames,
@@ -103,7 +103,10 @@ export async function getAllSportsBoard(): Promise<AllSportsBoard> {
             median,
           };
         })(),
-        getTonightSlate(sport).catch(() => ({ games: [] as { home: { abbr: string | null }; away: { abbr: string | null } }[] })),
+        // TODAY, not "the next slate": the merged board's switch says "Today only",
+        // so a weekly league whose next kickoff is days away must contribute no
+        // teams rather than its whole upcoming week (see getTodaySlateTeams).
+        getTodaySlateTeams(sport).catch((): string[] => []),
       ]);
       return { sport, ...boards, slate };
     }),
@@ -116,15 +119,11 @@ export async function getAllSportsBoard(): Promise<AllSportsBoard> {
   }
   const medianRows = rankBoard(perSport.flatMap((p) => p.median));
 
-  // Each sport's slate teams (today; this week for NFL) for the "Today only" switch.
+  // Each sport's teams playing TODAY for the "Today only" switch. A sport with
+  // nothing on today is simply absent, so its rows drop out under the filter.
   const todayTeamsBySport: Record<string, string[]> = {};
   for (const { sport, slate } of perSport) {
-    const teams = [
-      ...new Set(
-        slate.games.flatMap((g) => [g.home.abbr, g.away.abbr]).filter((a): a is string => !!a),
-      ),
-    ];
-    if (teams.length > 0) todayTeamsBySport[sport] = teams;
+    if (slate.length > 0) todayTeamsBySport[sport] = slate;
   }
 
   return { boardsBySource, sources, medianRows, todayTeamsBySport, anyUpcoming: true };

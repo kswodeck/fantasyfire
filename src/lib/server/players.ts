@@ -3327,6 +3327,48 @@ export const getTonightSlate = cache(async (
   return { date: dayStart.toISOString().slice(0, 10), games };
 });
 
+/**
+ * Team abbreviations playing TODAY — strictly the current social day, for the
+ * ALL-SPORTS board's "Today only" switch.
+ *
+ * Deliberately NOT getTonightSlate. That one answers "what's the next slate", so it
+ * (a) anchors on the soonest upcoming game, which can be days out, and (b) widens to
+ * slateWindowDays for the weekly-cadence leagues. Both are right on a single-sport
+ * page — NFL's toggle even says "This week only" — but merged into one cross-sport
+ * board under a switch labelled "Today only" they let a team whose next kickoff is a
+ * week away sit alongside teams playing tonight.
+ *
+ * A sport with nothing on today returns [] and drops out of the filter entirely,
+ * which is the point: an off-day league shouldn't be on a "today" board at all.
+ *
+ * cache(): asked once per sport per render by the all-sports aggregator.
+ */
+export const getTodaySlateTeams = cache(async (sport: Sport): Promise<string[]> => {
+  const now = new Date();
+  const start = socialDayStart(now);
+  const end = new Date(start.getTime() + 86_400_000);
+  // Untimed feeds store only a date bucket (UTC midnight of the slate day); match it
+  // against the social day's LABEL so both paths mean the same calendar day.
+  const bucket = new Date(`${socialDayIso(now)}T00:00:00Z`);
+  const rows = await db.scheduledGame.findMany({
+    where: {
+      sport,
+      OR: [{ startTime: { gte: start, lt: end } }, { startTime: null, date: bucket }],
+    },
+    select: {
+      homeTeam: { select: { abbreviation: true } },
+      awayTeam: { select: { abbreviation: true } },
+    },
+  });
+  return [
+    ...new Set(
+      rows
+        .flatMap((r) => [r.homeTeam.abbreviation, r.awayTeam.abbreviation])
+        .filter((a): a is string => !!a),
+    ),
+  ];
+});
+
 /** One scheduled game by its external id — for the per-game page reached from a player's
  *  "next matchup" card. Upcoming only (date >= today); past/unknown ids return null so
  *  the game page shows its "not on the slate" fallback. */
