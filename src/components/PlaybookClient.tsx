@@ -16,6 +16,7 @@ import { SideArrow } from './SideArrow';
 import { BookLogo } from './BookLogo';
 import { PayoutBadge } from './PayoutBadge';
 import { orderSources, sourceLabel } from '@/lib/providedSources';
+import { lineMovement, movementLabel } from '@/lib/lineMovement';
 import { normalizeName } from '@/lib/slate';
 import { EntryCalculator } from './EntryCalculator';
 
@@ -306,6 +307,7 @@ function PlayerCard({ entry }: { entry: PlayerEntry }) {
                   {p.line}
                 </span>
                 <PayoutBadge oddsType={p.oddsType} multiplier={p.multiplier} showLabel={false} glyphSize={10} />
+                <MovementFlag prop={p} />
               </span>
             ))}
             {props.length > 4 && (
@@ -348,6 +350,42 @@ function PlayerCard({ entry }: { entry: PlayerEntry }) {
 }
 
 /**
+ * The line-move marker on a COLLAPSED prop chip.
+ *
+ * A move the reader has to expand a card to find isn't an alert, and cards are
+ * collapsed by default — so this sits in the at-a-glance row. It costs no extra
+ * network: the query key is identical to PropRow's (and to the entry calculator's
+ * for eligible legs), so React Query serves all three from one cache entry, and
+ * expanding the card fetches nothing new.
+ */
+function MovementFlag({ prop }: { prop: SavedProp }) {
+  const { sport, slug, stat, line, source } = prop;
+  const { data } = useHitRate({ sport, slug, stat, line, source });
+  const moved = data ? lineMovement(prop, data.variants) : null;
+  if (!moved) return null;
+  return (
+    <span
+      className={`font-semibold tabular-nums ${
+        moved.status === 'unlisted'
+          ? 'text-muted'
+          : moved.favorable
+            ? 'text-sig-green'
+            : 'text-sig-amber'
+      }`}
+      title={
+        moved.status === 'unlisted'
+          ? `${sourceLabel(source)} no longer posts this rung.`
+          : `${sourceLabel(source)} moved this line to ${moved.currentLine} — ${
+              moved.favorable ? 'in favor of' : 'against'
+            } your ${prop.side}.`
+      }
+    >
+      {moved.status === 'unlisted' ? '✕' : `→${moved.currentLine}`}
+    </span>
+  );
+}
+
+/**
  * A single saved prop with a live read fetched on demand (only while expanded).
  * Laid out like a Heat Check board row so the Playbook reads in the site's one
  * visual language: the whole row is a stretched link to the prop's full read
@@ -368,6 +406,9 @@ function PropRow({ prop }: { prop: SavedProp }) {
   const sideRate = overRate === null ? null : side === 'over' ? overRate : 1 - overRate;
   const fs = research?.verdict.fireScore;
   const fsIsLean = fs ? fs.tier !== 'No lean' && fs.tier !== 'Pass' : false;
+  // Has the book re-priced this rung since the save? The research payload already
+  // carries the source's live ladder, so this costs no extra request.
+  const moved = research ? lineMovement(prop, research.variants) : null;
 
   return (
     <li className="relative flex items-center gap-3 border-b border-line px-4 py-3 transition-colors last:border-0 hover:bg-surface-2">
@@ -386,10 +427,40 @@ function PropRow({ prop }: { prop: SavedProp }) {
           </span>
           <PayoutBadge oddsType={prop.oddsType} multiplier={prop.multiplier} showLabel={false} />
         </div>
-        <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted">
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-muted">
           <BookLogo source={source} size={13} />
           <span>{sourceLabel(source)}</span>
           <span>· Saved {relativeTime(savedAt)}</span>
+          {moved && (
+            <span
+              // border-current (not an /opacity modifier): these tokens are
+              // light-dark() values, and the rest of the app never color-mixes them.
+              className={`rounded-full border px-1.5 py-px font-medium tabular-nums ${
+                moved.status === 'unlisted'
+                  ? 'border-line text-muted'
+                  : moved.favorable
+                    ? 'border-current text-sig-green'
+                    : 'border-current text-sig-amber'
+              }`}
+              title={
+                moved.status === 'unlisted'
+                  ? `${sourceLabel(source)} no longer posts this rung — your saved number is stale.`
+                  : `${sourceLabel(source)} moved this line from ${moved.savedLine} to ${moved.currentLine} since you saved it — ${
+                      moved.favorable ? 'in favor of' : 'against'
+                    } your ${side}.`
+              }
+            >
+              {/* The arrow is the LINE's direction; the color says whether that
+                  direction helps the saved side (an under wants the number up). */}
+              {moved.status === 'unlisted' ? (
+                'line pulled'
+              ) : (
+                <>
+                  {moved.delta > 0 ? '↑' : '↓'} {movementLabel(moved)}
+                </>
+              )}
+            </span>
+          )}
         </div>
       </div>
 

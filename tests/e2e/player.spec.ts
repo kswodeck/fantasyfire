@@ -57,7 +57,10 @@ test('players search filters the grid by name', async ({ page }) => {
   // Search for the LAST NAME of the first listed player — data-agnostic.
   const name = (await cards.first().innerText()).trim().split('\n')[0];
   const lastName = name.split(' ').pop()!;
-  await page.getByLabel(/search .*players/i).fill(lastName);
+  // The page-level grid filter, named for its league — NOT the site-wide header
+  // typeahead ("Search players across all leagues"), which navigates instead of
+  // filtering and would otherwise also match a loose /search .*players/ regex.
+  await page.getByLabel('Search MLB players').fill(lastName);
 
   await expect(cards.first()).toContainText(new RegExp(lastName, 'i'));
 });

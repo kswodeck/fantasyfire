@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { SPORTS, type Sport } from '@/lib/sports';
 import { NAV_SPORT_ORDER, sectionHref, sportSections } from '@/lib/sportNav';
+import { SiteSearch } from './SiteSearch';
 
 /**
  * Mobile (sub-sm) site navigation: a hamburger button that opens a full-width panel
@@ -51,7 +52,7 @@ export function MobileNav() {
       // so walking out into the dimmed background strands keyboard users.
       if (e.key === 'Tab' && panelRef.current) {
         const focusables = panelRef.current.querySelectorAll<HTMLElement>(
-          'a[href], button:not([disabled])',
+          'a[href], button:not([disabled]), input:not([disabled])',
         );
         if (focusables.length === 0) return;
         const first = focusables[0];
@@ -142,6 +143,12 @@ export function MobileNav() {
               className="fixed inset-x-0 top-14 z-40 max-h-[calc(100dvh-3.5rem)] overflow-y-auto border-b border-line bg-background shadow-xl shadow-black/20 outline-none"
             >
               <ul className="mx-auto w-full max-w-5xl px-2 py-2">
+                {/* First thing in the panel: on a phone, tapping the hamburger to
+                    find a player is the most common reason it was opened. Picking a
+                    result navigates, and the pathname effect above closes the panel. */}
+                <li className="px-1 pb-2">
+                  <SiteSearch />
+                </li>
                 <li>
                   <Link
                     href="/"

@@ -50,14 +50,28 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
 
   const single = cards.length === 1;
 
-  // The rows each card actually shows (one book, top DISPLAY). Computed once here so
-  // the reserve flags below see EVERY card's rows.
-  const rowsFor = (c: HomeCard) =>
-    (liveSources.length > 0 ? (c.boardsBySource[shown] ?? []) : c.medianLeans).slice(0, DISPLAY);
+  // The rows each card actually shows (top DISPLAY), decided PER CARD.
+  //
+  // Book rows win when the selected book carries this sport. When it doesn't, the
+  // card falls back to that sport's own median-line leans rather than going blank —
+  // no book covers every league (MLS/CFB/CBB are routinely uncarried), and dropping
+  // those sports made the home page claim they were off-season. `usingMedian` drives
+  // a caption so the substitution is stated on the card, never silent: these are our
+  // lines, not the book's.
+  const rowsFor = (
+    c: HomeCard,
+  ): { rows: BoardRow[]; usingMedian: boolean } => {
+    const bookRows = liveSources.length > 0 ? (c.boardsBySource[shown] ?? []) : [];
+    if (bookRows.length > 0) return { rows: bookRows.slice(0, DISPLAY), usingMedian: false };
+    return {
+      rows: c.medianLeans.slice(0, DISPLAY),
+      usingMedian: liveSources.length > 0 && c.medianLeans.length > 0,
+    };
+  };
   // Reserve a hint line across ALL cards' rows when ANY shown row uses it — so every
   // teaser row shares one height (cards with equal player counts stay flush) without
   // dropping a hint or padding rows on a slate that has none.
-  const allShownRows = cards.flatMap(rowsFor);
+  const allShownRows = cards.flatMap((c) => rowsFor(c).rows);
   const reserveLineValue = allShownRows.some(hasLineValueHint);
   const reserveSpecial = allShownRows.some((r) => qualifyingSpecialHint(r) !== null);
 
@@ -85,11 +99,7 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
             the container's width on phones. A single card keeps the section's max-w-md. */}
         <div className={single ? '' : 'flex flex-wrap justify-center gap-5'}>
         {cards.map((c) => {
-          // The one selector governs EVERY card: when any book is live on this page,
-          // a sport with no rows on the chosen book gets an honest empty state — never
-          // a silent substitution of median-line leans (those aren't that book's
-          // lines). Median leans only render when no book is live anywhere.
-          const rows = rowsFor(c);
+          const { rows, usingMedian } = rowsFor(c);
           return (
             <div
               key={c.sport}
@@ -111,9 +121,21 @@ export function HomeTopLeans({ cards }: { cards: HomeCard[] }) {
                   and their buttons align. */}
               <div className="flex flex-1 flex-col border-t border-line p-4">
                 <div className="space-y-2 pb-2">
-                  <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted">
-                    Top reads right now
-                  </h3>
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-2 px-1">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">
+                      Top reads right now
+                    </h3>
+                    {/* States the substitution on the card: the selected book doesn't
+                        list this league tonight, so these are OUR lines. */}
+                    {usingMedian && (
+                      <span
+                        className="text-[11px] text-muted"
+                        title={`${sourceLabel(shown)} doesn't list ${c.name} on the current slate, so these leans are priced against our own median line.`}
+                      >
+                        no {sourceLabel(shown)} lines — our line
+                      </span>
+                    )}
+                  </div>
                   {rows.length === 0 ? (
                     <p className="px-1 py-4 text-sm text-muted">
                       {liveSources.length > 0

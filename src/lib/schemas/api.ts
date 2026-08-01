@@ -44,6 +44,15 @@ export const playersQuerySchema = z.object({
 });
 export type PlayersQuery = z.infer<typeof playersQuerySchema>;
 
+/** Query for GET /api/v1/search?q=&limit= — the site-wide (all leagues) typeahead.
+ *  `q` is REQUIRED and needs 2+ characters: this endpoint exists to answer a typed
+ *  query, and a bare/1-char call would scan for a result set nobody asked for. */
+export const siteSearchQuerySchema = z.object({
+  q: z.string().trim().min(2).max(100),
+  limit: z.coerce.number().int().min(1).max(20).default(8),
+});
+export type SiteSearchQuery = z.infer<typeof siteSearchQuerySchema>;
+
 /** Optional stat/line/source query for the per-player REST endpoint (slug in path). */
 export const playerResearchQuerySchema = z.object({
   stat: statKeySchema.optional(),

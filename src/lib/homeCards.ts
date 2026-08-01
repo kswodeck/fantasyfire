@@ -12,22 +12,21 @@ export interface HomeSportData {
  * Which sports get a card on the home page.
  *
  * This mirrors HomeTopLeans' display rule EXACTLY, and that is the whole point of
- * the function existing: the component decides book-vs-median GLOBALLY (one live
- * book anywhere on the page puts every card into book mode), so a per-sport gate
- * silently disagrees with it. That mismatch is what rendered an empty
- * "No PrizePicks lines for MLS on the current slate" card — MLS is carried by no
- * book, so it passed a per-sport median check and then rendered in book mode with
- * an empty board.
+ * the function existing: a card must never render with nothing in it.
  *
- * Deciding it once, here, guarantees the invariant the home page actually needs:
- * a card is shown only if it has rows to show.
+ * The rule is deliberately PER-SPORT, not global. An earlier version decided
+ * book-vs-median once for the whole page (one live book anywhere put every card in
+ * book mode), which dropped any sport no book carries — in summer that deleted WNBA
+ * and MLS from the home page while MLB had PrizePicks lines, and the "between slates
+ * / off-season" strip below then labelled two in-season leagues as dormant. A sport
+ * with a slate and leans of its own always deserves a card; HomeTopLeans falls back
+ * to that sport's median-line leans and captions them as ours, so the fallback is
+ * visible rather than silent.
  */
 export function selectHomeCards<T>(
   entries: readonly (readonly [T, HomeSportData])[],
 ): (readonly [T, HomeSportData])[] {
   const hasBookRows = (d: HomeSportData) =>
     Object.values(d.boardsBySource).some((rows) => rows.length > 0);
-  // One book live anywhere puts every card in book mode (HomeTopLeans' liveSources).
-  const anyBookLive = entries.some(([, d]) => hasBookRows(d));
-  return entries.filter(([, d]) => (anyBookLive ? hasBookRows(d) : d.medianLeans.length > 0));
+  return entries.filter(([, d]) => hasBookRows(d) || d.medianLeans.length > 0);
 }

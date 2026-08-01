@@ -52,6 +52,7 @@ import type {
   PlayerBio,
   PlayerGame,
   PlayerListItem,
+  PlayerSearchResult,
   CardAvailability,
   ChartPoint,
   WindowResult,
@@ -758,6 +759,119 @@ export async function searchPlayers(
     gamesPlayed: p._count.gameStats,
     availability: toCardAvailability(p.injury),
   }));
+}
+
+/** How many name matches we pull before ranking them in memory. Deliberately
+ *  bounded: the ranking below is O(n) over this slice, not over the roster. */
+const SEARCH_CANDIDATES = 60;
+
+/**
+ * Relevance bucket for a search hit (lower is better). Ranked in memory rather
+ * than in SQL because the useful ordering — exact name, then prefix, then
+ * substring — isn't expressible in a single indexable ORDER BY, and the candidate
+ * set is already bounded to SEARCH_CANDIDATES.
+ */
+function searchRelevance(first: string, last: string, q: string): number {
+  const f = first.toLowerCase();
+  const l = last.toLowerCase();
+  const full = `${f} ${l}`;
+  if (full === q) return 0;
+  if (l === q) return 1;
+  if (full.startsWith(q)) return 2;
+  if (l.startsWith(q)) return 3;
+  if (f.startsWith(q)) return 4;
+  if (l.includes(q) || f.includes(q)) return 5;
+  return 6;
+}
+
+/**
+ * Site-wide player search across every league — the header typeahead.
+ *
+ * Runs over all sports at once (never a per-sport fan-out), and pointedly avoids
+ * Prisma's `gameStats._count` — in either `select` or `orderBy` it compiles to a
+ * LEFT JOIN over an UNFILTERED `GROUP BY playerId` across the whole
+ * PlayerGameStat table, no matter how narrow the name filter is. That table is
+ * never pruned and grows every season across eight leagues, so it is the last
+ * thing that belongs behind a keystroke.
+ *
+ * Instead: take a bounded, index-ordered candidate slice, then rank it in memory
+ * by name relevance, breaking ties with a game count fetched in a second query
+ * scoped to just those ids (`playerId IN (…)` plans as an index-only scan).
+ *
+ * Multi-word queries ("aaron judge") require EVERY token to hit a name field, so
+ * adding a word narrows rather than widens.
+ */
+export async function searchPlayersAllSports(
+  q: string,
+  limit = 8,
+): Promise<PlayerSearchResult[]> {
+  const query = q.trim();
+  if (query.length < 2) return [];
+  const tokens = query.split(/\s+/).filter(Boolean).slice(0, 3);
+  const slugQuery = query.toLowerCase().replace(/\s+/g, '-');
+
+  const rows = await db.player.findMany({
+    where: {
+      OR: [
+        {
+          AND: tokens.map((t) => ({
+            OR: [
+              { firstName: { contains: t, mode: 'insensitive' as const } },
+              { lastName: { contains: t, mode: 'insensitive' as const } },
+            ],
+          })),
+        },
+        { slug: { contains: slugQuery } },
+      ],
+    },
+    select: {
+      id: true,
+      sport: true,
+      slug: true,
+      firstName: true,
+      lastName: true,
+      position: true,
+      team: { select: { abbreviation: true } },
+    },
+    // An indexed ordering (Player has [sport, lastName]) purely to make the slice
+    // deterministic — real ordering happens below.
+    orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+    take: SEARCH_CANDIDATES,
+  });
+  if (rows.length === 0) return [];
+
+  // Popularity tie-break, bounded to the candidates. Skipped when a single hit
+  // makes ordering moot, and never allowed to fail the search.
+  const games = new Map<number, number>();
+  if (rows.length > 1) {
+    const counts = await db.playerGameStat
+      .groupBy({
+        by: ['playerId'],
+        where: { playerId: { in: rows.map((r) => r.id) } },
+        _count: { _all: true },
+      })
+      .catch(() => []);
+    for (const c of counts) games.set(c.playerId, c._count._all);
+  }
+
+  const lower = query.toLowerCase();
+  return rows
+    .map((row) => ({
+      row,
+      rel: searchRelevance(row.firstName, row.lastName, lower),
+      games: games.get(row.id) ?? 0,
+    }))
+    // Relevance first; among equally relevant names the player with more logged
+    // games is the one a reader almost always means.
+    .sort((a, b) => a.rel - b.rel || b.games - a.games)
+    .slice(0, limit)
+    .map(({ row }) => ({
+      sport: row.sport as Sport,
+      slug: row.slug,
+      fullName: `${row.firstName} ${row.lastName}`.trim(),
+      teamAbbreviation: row.team?.abbreviation ?? null,
+      position: row.position ?? null,
+    }));
 }
 
 /** Lightweight per-sport counts for the cross-sport dashboard. */
