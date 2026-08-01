@@ -8,6 +8,7 @@ import { STAT_DEFS } from '@/lib/stats';
 import { pct } from '@/lib/format';
 import { leanTextClass } from '@/lib/tierStyle';
 import { entryEvs, avgLegProb, type EntryEv } from '@/lib/entryEv';
+import { correlationWarning, hasCorrelation, correlatedLegKeys } from '@/lib/correlation';
 import { PP_POWER_PLAY, PP_FLEX_PLAY } from '@/lib/ppPayouts';
 import { BookLink } from './BookLink';
 import { AffiliateDisclosure } from './AffiliateDisclosure';
@@ -31,6 +32,9 @@ interface Leg {
   /** Model P(the saved side hits); null while loading or unavailable. */
   pHit: number | null;
   loading: boolean;
+  /** The scheduled game this leg is for — drives same-game correlation detection.
+   *  Null until the read loads, or when the player has no upcoming game. */
+  gameId: string | null;
 }
 
 export function EntryCalculator({ props }: { props: SavedProp[] }) {
@@ -69,7 +73,11 @@ export function EntryCalculator({ props }: { props: SavedProp[] }) {
     const r = results[i];
     const over = r.data?.verdict.modelProbOver ?? null;
     const pHit = over === null ? null : prop.side === 'over' ? over : 1 - over;
-    return { prop, pHit, loading: r.isPending };
+    // Only an UPCOMING game identifies the slate this entry is for; the off-season
+    // last-completed-game fallback would group legs from unrelated past games.
+    const m = r.data?.matchupOpponent ?? null;
+    const gameId = m?.isUpcoming ? (m.gameExternalId ?? null) : null;
+    return { prop, pHit, loading: r.isPending, gameId };
   });
 
   // Selection: legs the user has ticked into the entry (keyed by prop identity).
@@ -91,6 +99,15 @@ export function EntryCalculator({ props }: { props: SavedProp[] }) {
   const ps = priced.map((l) => l.pHit);
   const evs = ps.length >= MIN_LEGS && ps.length <= MAX_LEGS ? entryEvs(ps) : [];
   const avg = avgLegProb(ps);
+
+  // Correlation among the PRICED legs — the ones the EV above actually multiplies
+  // together as if they were independent.
+  const correlation = correlationWarning(
+    priced.map((l) => ({ slug: l.prop.slug, sport: l.prop.sport, gameId: l.gameId })),
+  );
+  const showCorrelation = hasCorrelation(correlation);
+  const samePlayerSlugs = correlatedLegKeys({ ...correlation, sameGame: [] }, (l) => l.slug);
+  const sameGameSlugs = correlatedLegKeys({ ...correlation, samePlayer: [] }, (l) => l.slug);
 
   if (eligibleProps.length < MIN_LEGS) {
     return null; // not enough PrizePicks standard legs to build any entry
@@ -119,6 +136,14 @@ export function EntryCalculator({ props }: { props: SavedProp[] }) {
           const k = legKey(l.prop);
           const on = selected.has(k);
           const def = STAT_DEFS[l.prop.stat];
+          // Only mark a leg that is actually in the entry being priced.
+          const tag = !on
+            ? null
+            : samePlayerSlugs.has(l.prop.slug)
+              ? { label: 'same player', title: 'Another selected leg is on this same player — the two move together.' }
+              : sameGameSlugs.has(l.prop.slug)
+                ? { label: 'same game', title: 'Another selected leg is in this same game — the two move together.' }
+                : null;
           return (
             <li key={k}>
               <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition-colors hover:bg-surface-2">
@@ -137,6 +162,14 @@ export function EntryCalculator({ props }: { props: SavedProp[] }) {
                     </span>{' '}
                     <span className="tabular-nums">{l.prop.line}</span> {def.short}
                   </span>
+                  {tag && (
+                    <span
+                      title={tag.title}
+                      className="ml-1.5 whitespace-nowrap rounded-full border border-current px-1.5 py-px text-[10px] font-medium text-sig-amber"
+                    >
+                      {tag.label}
+                    </span>
+                  )}
                 </span>
                 <span className="shrink-0 tabular-nums text-muted">
                   {l.loading ? '…' : l.pHit == null ? 'no read' : `${pct(l.pHit)} hit`}
@@ -168,6 +201,39 @@ export function EntryCalculator({ props }: { props: SavedProp[] }) {
                   <EntryEvCard key={e.type} ev={e} avg={avg} />
                 ))}
               </div>
+              {/* Sits directly under the EV cards, because it is a caveat ON those
+                  numbers: they multiply the legs as if independent, and these ones
+                  aren't. We flag it rather than re-price it — a joint model built
+                  from public game logs would be a guess dressed up as precision. */}
+              {showCorrelation && (
+                <div
+                  role="note"
+                  className="mt-2 rounded-lg border border-line bg-surface-2 p-2.5 text-[11px] leading-relaxed"
+                >
+                  <span className="font-semibold text-sig-amber">Correlated legs</span>
+                  <span className="text-muted">
+                    {' — '}
+                    {[
+                      correlation.samePlayer.length === 1
+                        ? 'two or more legs are on the same player'
+                        : correlation.samePlayer.length > 1
+                          ? `${correlation.samePlayer.length} players each carry more than one leg`
+                          : null,
+                      correlation.sameGame.length === 1
+                        ? 'two or more legs share a game'
+                        : correlation.sameGame.length > 1
+                          ? `${correlation.sameGame.length} games each carry more than one leg`
+                          : null,
+                    ]
+                      .filter(Boolean)
+                      .join(', and ')}
+                    . The EV above multiplies every leg as an independent event, so a
+                    sweep is <strong>less likely</strong> than it shows (and a partial-pay
+                    Flex miss is more likely to come in bunches). Spreading across games
+                    keeps the math above closer to the truth.
+                  </span>
+                </div>
+              )}
               {/* The one CTA in the Playbook, and it only appears once the user has
                   a fully priced entry in front of them — at that point "go build
                   it" is the actual next step, not an interruption. */}
@@ -185,7 +251,8 @@ export function EntryCalculator({ props }: { props: SavedProp[] }) {
       <p className="mt-3 text-[11px] leading-relaxed text-muted">
         Model math, not advice. Legs are treated as <strong>independent</strong> — same-game
         or same-player legs are correlated in reality, which makes a sweep less certain than
-        shown. Win probabilities are estimates from historical game logs, and payout multiples
+        shown (we flag those legs above, but the EV is not adjusted for them). Win
+        probabilities are estimates from historical game logs, and payout multiples
         are typical PrizePicks values (they vary by state/promo). Descriptive research — never a
         prediction or a bet recommendation.
       </p>

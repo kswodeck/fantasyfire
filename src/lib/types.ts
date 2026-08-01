@@ -46,6 +46,19 @@ export interface CardAvailability {
   returnDate: string | null;
 }
 
+/**
+ * One row of the site-wide search typeahead. Deliberately NOT a PlayerListItem:
+ * this payload is fetched on (debounced) keystrokes across every league, so it
+ * carries only what the dropdown draws — no bio, no injury, no game counts.
+ */
+export interface PlayerSearchResult {
+  sport: Sport;
+  slug: string;
+  fullName: string;
+  teamAbbreviation: string | null;
+  position: string | null;
+}
+
 export interface PlayerListItem extends PlayerSummary {
   gamesPlayed: number;
   /** Current injury designation for the row badge; absent/null when the player is clear. */

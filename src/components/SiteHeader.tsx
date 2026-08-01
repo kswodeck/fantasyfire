@@ -3,6 +3,7 @@ import { FlameMark } from './FlameMark';
 import { SportsMenu } from './SportsMenu';
 import { ThemeToggle } from './ThemeToggle';
 import { MobileNav } from './MobileNav';
+import { SiteSearch } from './SiteSearch';
 
 // Site chrome. Data-agnostic; safe to reuse in any build.
 export function SiteHeader() {
@@ -36,6 +37,9 @@ export function SiteHeader() {
           <Link href="/accuracy" className="transition-colors hover:text-foreground">
             Accuracy
           </Link>
+          {/* Cross-league player lookup. Hidden below md so the nav links don't
+              collide on tablets; the mobile panel carries its own copy. */}
+          <SiteSearch className="hidden w-44 md:block lg:w-52" />
           <Link
             href="/playbook"
             className="transition-colors hover:text-foreground"

@@ -17,15 +17,17 @@ const empty = (): HomeSportData => ({ boardsBySource: {}, medianLeans: [] });
 const names = (out: readonly (readonly [string, HomeSportData])[]) => out.map(([n]) => n);
 
 describe('selectHomeCards', () => {
-  it('drops a median-only sport once ANY book is live (the MLS empty-card bug)', () => {
-    // MLB/WNBA carry PrizePicks rows, so HomeTopLeans puts every card in book
-    // mode — MLS has no book rows and would render "No PrizePicks lines…".
+  it('keeps a median-only sport even when another sport IS book-carried', () => {
+    // The bug this replaces: MLB carrying PrizePicks put the whole page in book
+    // mode, so WNBA/MLS — which no book lists — were dropped from the home page
+    // and then labelled "between slates / off-season" by the strip below, despite
+    // having a slate and leans. HomeTopLeans now falls back per card.
     const out = selectHomeCards([
       ['mlb', withBook()],
-      ['wnba', withBook()],
+      ['wnba', medianOnly()],
       ['mls', medianOnly()],
     ]);
-    expect(names(out)).toEqual(['mlb', 'wnba']);
+    expect(names(out)).toEqual(['mlb', 'wnba', 'mls']);
   });
 
   it('keeps median-only sports when NO book is live anywhere', () => {
@@ -64,14 +66,12 @@ describe('selectHomeCards', () => {
       ['cbb', withBook('underdog')],
     ] as const;
     const out = selectHomeCards(entries);
-    const anyBookLive = out.some(([, d]) =>
-      Object.values(d.boardsBySource).some((r) => r.length > 0),
-    );
+    // Mirrors HomeTopLeans' per-card rule: book rows for the shown source, else
+    // that sport's median leans.
     for (const [name, d] of out) {
-      const shown = anyBookLive
-        ? Object.values(d.boardsBySource).flat().length
-        : d.medianLeans.length;
+      const shown = Object.values(d.boardsBySource).flat().length || d.medianLeans.length;
       expect(shown, `${name} renders rows`).toBeGreaterThan(0);
     }
+    expect(names(out)).not.toContain('nhl');
   });
 });
