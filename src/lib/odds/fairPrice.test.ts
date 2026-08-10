@@ -5,6 +5,7 @@ import {
   deVigTwoWay,
   edge,
   fairPriceReadout,
+  isAmericanOdds,
 } from './fairPrice';
 
 describe('americanToImplied', () => {
@@ -98,5 +99,29 @@ describe('fairPriceReadout', () => {
     const r = fairPriceReadout({ overOdds: -110, underOdds: -110 });
     expect(r.fairOver).toBeCloseTo(0.5, 10);
     expect(r.edge).toBeNull();
+  });
+});
+
+describe('isAmericanOdds', () => {
+  it('accepts real prices on both sides of the scale', () => {
+    for (const odds of [-10000, -250, -110, -100, 100, 105, 150, 25000]) {
+      expect(isAmericanOdds(odds), String(odds)).toBe(true);
+    }
+  });
+
+  it('rejects the hole in the middle of the scale', () => {
+    // American odds are quoted against a 100-unit stake, so nothing lands strictly
+    // inside (-100, 100). A number in there is a decimal payout or a pick'em
+    // multiplier that a feed labelled "over"/"under" — not a price we can de-vig.
+    for (const notOdds of [0, 1, 1.9, 2.5, 3, 99, -1.9, -99]) {
+      expect(isAmericanOdds(notOdds), String(notOdds)).toBe(false);
+    }
+  });
+
+  it('rejects absent and non-finite values', () => {
+    expect(isAmericanOdds(null)).toBe(false);
+    expect(isAmericanOdds(undefined)).toBe(false);
+    expect(isAmericanOdds(NaN)).toBe(false);
+    expect(isAmericanOdds(Infinity)).toBe(false);
   });
 });

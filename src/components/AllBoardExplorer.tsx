@@ -39,14 +39,20 @@ export function AllBoardExplorer({
   /** Teams on each sport's current slate (today; this week for NFL). */
   todayTeamsBySport?: Record<string, string[]>;
 }) {
-  const hasSources = sources.length > 0;
-  const sourced = useSourced(boardsBySource, sources, defaultSource);
   // Keep rows where SOME line (shown or any scored rung) reaches at least a faint
   // read — chance-floored single digits are "almost certainly not" territory and
-  // would flood the board with noise.
-  const rows = (hasSources ? sourced.rows : medianRows).filter(
-    (r) => bestVariantScore(r.fireScore.score, r.variants) >= FIREFACTOR_TIER_CUTOFFS.none,
-  );
+  // would flood the board with noise. This is also what makes a book "live": pass it
+  // to useSourced so a book whose every row is below the bar is never offered or
+  // auto-selected (it would render an empty board under its own name).
+  const readable = (r: BoardRow) =>
+    bestVariantScore(r.fireScore.score, r.variants) >= FIREFACTOR_TIER_CUTOFFS.none;
+  const sourced = useSourced(boardsBySource, sources, defaultSource, readable);
+  const hasSources = sourced.liveSources.length > 0;
+  // No book has a readable row (all off-slate, all Passes, or a scrape gap) — show the
+  // median-line board rather than an empty page, and say so below. Same substitution
+  // the home cards make per league, for the same reason: our own line is a real read.
+  const rows = (hasSources ? sourced.rows : medianRows).filter(readable);
+  const usingMedian = !hasSources && sources.length > 0 && rows.length > 0;
 
   // "Today only" (site-synced, default on) — a row is on the slate when its player's
   // team appears under its OWN sport's slate teams. No slate data → always all.
@@ -139,9 +145,24 @@ export function AllBoardExplorer({
         </div>
       )}
 
+      {/* State the substitution rather than passing our own line off as a book's. */}
+      {usingMedian && (
+        <p className="mb-3 rounded-xl border border-line bg-surface px-4 py-3 text-xs text-muted">
+          No book has lines on the board right now, so these reads are priced against{' '}
+          <strong className="text-foreground">our own median line</strong> instead of a
+          book&rsquo;s number.
+        </p>
+      )}
+
       {filtered.length === 0 ? (
-        <p className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
-          No reads match right now.
+        <p role="status" className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
+          {/* Never a bare "nothing matches" — say which of the three it is, since the
+              reader can act on the first two and only wait out the third. */}
+          {nq !== '' || lean !== '' || payout.active
+            ? 'No reads match these filters.'
+            : effectiveMode === 'today'
+              ? 'Nothing on today’s slate clears a read yet. Switch off "Today only" to see every active player.'
+              : 'No reads on the board right now — every line we have is too close to a coin flip to call. New lines land as the books post them.'}
         </p>
       ) : (
         <>

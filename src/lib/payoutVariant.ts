@@ -11,6 +11,7 @@
 import type { BoardRow, ProvidedVariant } from './types';
 import { PP_BREAKEVEN_STEPS } from './ppPayouts';
 import { marketImpliedBreakeven, type RungQuote } from './odds/marketBreakeven';
+import { isAmericanOdds } from './odds/fairPrice';
 import { FIREFACTOR_TIER_CUTOFFS } from './stats/fireScore';
 
 export type PayoutKind = 'normal' | 'demon' | 'goblin' | 'alternate';
@@ -200,7 +201,14 @@ export function sidedBreakevens(v: {
   overOdds?: number | null;
   underOdds?: number | null;
 }): { over: number; under: number } | null {
-  if (v.overOdds == null || v.underOdds == null) return null;
+  // Both sides must be REAL American odds. A feed that quotes decimal payouts
+  // (1.90) or pick'em multipliers in the same fields would otherwise imply a ~98%
+  // breakeven on both sides, clamp to 0.95, and drive every read on that book below
+  // the boards' no-read cutoff — see isAmericanOdds. Rejecting here (rather than
+  // only at ingest) also repairs rows already stored, exactly as effectiveOddsType
+  // does for mis-tagged rungs: a book with no usable prices falls back to the flat
+  // 0.5 anchor, which is the right bar for a fixed-payout book anyway.
+  if (!isAmericanOdds(v.overOdds) || !isAmericanOdds(v.underOdds)) return null;
   const clamp = (x: number) => Math.max(0.05, Math.min(0.95, x));
   return {
     over: clamp(1 / decimalFromAmerican(v.overOdds)),
@@ -219,9 +227,8 @@ export function sidedMultiplier(
   v: { multiplier: number | null; overOdds?: number | null; underOdds?: number | null },
   side: 'over' | 'under',
 ): number | null {
-  if (v.multiplier != null && v.overOdds != null && v.underOdds != null) {
-    const odds = side === 'over' ? v.overOdds : v.underOdds;
-    if (odds != null) return decimalFromAmerican(odds);
+  if (v.multiplier != null && isAmericanOdds(v.overOdds) && isAmericanOdds(v.underOdds)) {
+    return decimalFromAmerican(side === 'over' ? v.overOdds : v.underOdds);
   }
   return v.multiplier;
 }

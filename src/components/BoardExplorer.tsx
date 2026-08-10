@@ -41,14 +41,19 @@ export function BoardExplorer({
   slateWord: string;
   slateDate: string | null;
 }) {
-  const hasSources = sources.length > 0;
-  const sourced = useSourced(boardsBySource, sources, defaultSource);
   // Keep rows where SOME line (shown or any scored rung) reaches at least a faint
   // read — chance-floored single digits are "almost certainly not" territory and
-  // would flood the board with noise.
-  const rows = (hasSources ? sourced.rows : medianRows).filter(
-    (r) => bestVariantScore(r.fireScore.score, r.variants) >= FIREFACTOR_TIER_CUTOFFS.none,
-  );
+  // would flood the board with noise. This is also what makes a book "live": pass it
+  // to useSourced so a book whose every row is below the bar is never offered or
+  // auto-selected (it would render an empty board under its own name).
+  const readable = (r: BoardRow) =>
+    bestVariantScore(r.fireScore.score, r.variants) >= FIREFACTOR_TIER_CUTOFFS.none;
+  const sourced = useSourced(boardsBySource, sources, defaultSource, readable);
+  const hasSources = sourced.liveSources.length > 0;
+  // No book has a readable row (a scrape gap, or a board of pure Passes) — fall back
+  // to the median-line board rather than an empty page, and say so below.
+  const rows = (hasSources ? sourced.rows : medianRows).filter(readable);
+  const usingMedian = !hasSources && sources.length > 0 && rows.length > 0;
 
   const hasSlate = games.length > 0;
   const { mode, setMode } = useSelectedSlate();
@@ -108,13 +113,22 @@ export function BoardExplorer({
         )}
       </div>
 
+      {/* State the substitution rather than passing our own line off as a book's. */}
+      {usingMedian && (
+        <p className="mb-3 rounded-xl border border-line bg-surface px-4 py-3 text-xs text-muted">
+          No book has lines for {sport.toUpperCase()} right now, so these reads are priced
+          against <strong className="text-foreground">our own median line</strong> instead
+          of a book&rsquo;s number.
+        </p>
+      )}
+
       {filteredRows.length === 0 ? (
-        <p className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
+        <p role="status" className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-muted">
           {allStarted
             ? 'Every game today has already started. Use Choose games above to include one, or switch off the slate filter for all players.'
             : effectiveMode === 'today'
               ? 'No reads for this selection right now.'
-              : 'No props for this book right now.'}
+              : 'No reads on the board right now — every line we have is too close to a coin flip to call. New lines land as the books post them.'}
         </p>
       ) : (
         <FilterableBoard
