@@ -211,14 +211,20 @@ export async function fetchSleeperLines(): Promise<ProvidedLineRow[]> {
   const out: ProvidedLineRow[] = [];
   // Merge the standard + alternate feeds (either may fail independently).
   const lines: SleeperLine[] = [];
+  const failures: string[] = [];
   for (const url of LINES_URLS) {
     try {
       const res = await scrapeFetch(url, { headers: HEADERS });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       lines.push(...((await res.json()) as SleeperLine[]));
     } catch (e) {
+      failures.push(`${url}: ${(e as Error).message}`);
       console.warn(`[sleeper] ${url} failed: ${(e as Error).message}`);
     }
+  }
+  // Both feeds down → an outage, not an empty board. See the note in prizepicks.ts.
+  if (failures.length === LINES_URLS.length) {
+    throw new Error(`Sleeper: all ${failures.length} line feeds failed — ${failures.join('; ')}`);
   }
   if (lines.length === 0) return out;
 

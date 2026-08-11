@@ -302,7 +302,10 @@ export function parseCategory(sport: Sport, body: P6CategoryResponse, out: Provi
 export async function fetchPick6Lines(): Promise<ProvidedLineRow[]> {
   const out: ProvidedLineRow[] = [];
   const main = await getJson<P6MainResponse>(`${API}/pickgroups/main`);
-  if (!main) return out;
+  // The entry point is unreachable → an outage, not an empty board. Everything else
+  // hangs off this response, so a silent [] here reads downstream as "Pick6 posted
+  // nothing today" and records a green run with no lines. See prizepicks.ts.
+  if (!main) throw new Error(`Pick6: ${API}/pickgroups/main unreachable (see the warning above)`);
 
   // Which of our sports the site is currently offering, and their league keys.
   const targets: Array<{ sport: Sport; key: string }> = [];

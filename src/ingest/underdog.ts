@@ -227,6 +227,7 @@ function parseUdBody(body: UdResponse, out: ProvidedLineRow[]): void {
 
 export async function fetchUnderdogLines(): Promise<ProvidedLineRow[]> {
   const out: ProvidedLineRow[] = [];
+  const failures: string[] = [];
   for (let i = 0; i < UD_SPORT_IDS.length; i++) {
     if (i > 0) await new Promise((r) => setTimeout(r, 1500)); // space requests to be polite
     const sportId = UD_SPORT_IDS[i];
@@ -235,8 +236,14 @@ export async function fetchUnderdogLines(): Promise<ProvidedLineRow[]> {
       if (!res.ok) throw new Error(`Underdog HTTP ${res.status} (${sportId})`);
       parseUdBody((await res.json()) as UdResponse, out);
     } catch (e) {
+      failures.push(`${sportId}: ${(e as Error).message}`);
       console.warn(`[underdog] ${sportId} fetch failed: ${(e as Error).message}`);
     }
+  }
+  // Every request failed → an outage, not an empty board. See the note in
+  // prizepicks.ts: a silent [] here reads downstream as "the book posted nothing".
+  if (failures.length > 0 && failures.length === UD_SPORT_IDS.length) {
+    throw new Error(`Underdog: all ${failures.length} sport requests failed — ${failures.join('; ')}`);
   }
   return out;
 }

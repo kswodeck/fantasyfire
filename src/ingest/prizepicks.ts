@@ -259,14 +259,23 @@ async function fetchLeague(leagueId: number): Promise<PpResponse> {
 export async function fetchPrizePicksLines(): Promise<ProvidedLineRow[]> {
   const out: ProvidedLineRow[] = [];
   const leagueIds = Object.values(PP_LEAGUE_IDS);
+  const failures: string[] = [];
   for (let i = 0; i < leagueIds.length; i++) {
     if (i > 0) await sleep(6000); // space requests WELL apart — PP rate-limits more than bursts
     const leagueId = leagueIds[i];
     try {
       parsePpBody(await fetchLeague(leagueId), out);
     } catch (e) {
+      failures.push(`${leagueId}: ${(e as Error).message}`);
       console.warn(`[prizepicks] league ${leagueId} fetch failed: ${(e as Error).message}`);
     }
+  }
+  // EVERY league failed — that is an outage (a 403 IP block is the documented risk
+  // here), not a quiet slate. Returning [] would make it indistinguishable from
+  // "PrizePicks posted nothing today", and the runner would record a green run with
+  // no lines; throwing puts the cause in the run's error and turns the job red.
+  if (failures.length > 0 && failures.length === leagueIds.length) {
+    throw new Error(`PrizePicks: all ${failures.length} league requests failed — ${failures.join('; ')}`);
   }
   return out;
 }

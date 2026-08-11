@@ -87,3 +87,32 @@ export function staleRows<T extends RowKey>(existing: T[], written: RowKey[]): T
     return types !== undefined && !types.has(e.oddsType); // touched this line, other tag
   });
 }
+
+/**
+ * Why a run that fetched NOTHING from any source should fail — or null when the
+ * drought is legitimate.
+ *
+ * This is the check that was missing. A total drought used to `return 0` as a
+ * SUCCESS: every scraper swallowed its own request errors, the runner swallowed what
+ * was left, and "no book has a single line" was recorded as a healthy run that simply
+ * had nothing to write. The board silently fell back to our own median lines and
+ * stayed there for days behind a green ingest.
+ *
+ * Zero lines is only credible when every sport is off-season. While anything is
+ * playing the books post props, so an empty result is an outage and the job must exit
+ * non-zero — which is what actually notifies (the workflow has no continue-on-error,
+ * and its injuries step runs `if: always()`, so it is unaffected).
+ */
+export function droughtFailure(
+  inSeasonSports: readonly string[],
+  failed: ReadonlyMap<string, string>,
+): string | null {
+  if (inSeasonSports.length === 0) return null;
+  const why = failed.size
+    ? `failed: ${[...failed].map(([id, msg]) => `${id} (${msg})`).join('; ')}`
+    : 'no source even reported a failure — every book returned an empty board, which is not credible mid-season';
+  return (
+    `No lines from ANY source while ${inSeasonSports.join('/')} ` +
+    `${inSeasonSports.length === 1 ? 'is' : 'are'} in season. ${why}`
+  );
+}
