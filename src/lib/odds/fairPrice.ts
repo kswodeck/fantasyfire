@@ -4,6 +4,27 @@
 // an edge calculator. Label results honestly in the UI: "based on recent history
 // vs. the price you entered — not a guarantee."
 
+/**
+ * Is this number actually American odds?
+ *
+ * American odds are defined relative to a 100-unit stake, so the scale has a hole in
+ * it: the shortest price expressible is ±100 (an even-money coin flip), and nothing
+ * lands strictly inside (-100, 100). A number in that hole is therefore NOT American
+ * odds — overwhelmingly it is a DECIMAL payout (1.90) or a pick'em multiplier (2.5)
+ * that a feed labelled "over"/"under" and we took at face value.
+ *
+ * Why this matters enough to have its own guard: a decimal payout read as American
+ * odds implies a ~98% payout probability, so `sidedBreakevens` clamps the rung's
+ * breakeven to 0.95 and FireFactor scores every read on that book against an
+ * impossible bar. A 70%-over player that grades a 68 (Lean) on a flat line grades an
+ * 8 (Pass) instead — below the boards' no-read cutoff, so the ENTIRE book silently
+ * filters out of the Heat Check while still appearing in the book selector.
+ * Cheap to check, and the failure it prevents is invisible from the outside.
+ */
+export function isAmericanOdds(odds: number | null | undefined): odds is number {
+  return odds != null && Number.isFinite(odds) && Math.abs(odds) >= 100;
+}
+
 /** American odds -> implied probability. Throws on 0 (not valid American odds). */
 export function americanToImplied(odds: number): number {
   if (!Number.isFinite(odds) || odds === 0) {

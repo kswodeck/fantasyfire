@@ -1,6 +1,10 @@
 // RotoWire "picks" aggregator ingest — ONE public endpoint that carries many books'
-// player-prop lines with American odds already normalized:
+// player-prop lines, each book's own price alongside it:
 //   GET https://www.rotowire.com/picks/api/lines.php   (no auth; Cloudflare-fronted)
+//
+// The `over`/`under` fields are NOT guaranteed to be American odds — the payload mixes
+// sportsbooks (which quote odds) with pick'em products (which quote payout multipliers),
+// so every price is validated before it is stored. See americanOrNull.
 //
 // This is how we reach books we don't scrape directly — a single proxy-free request
 // yields RT Sports plus the major sportsbooks (DraftKings/FanDuel/BetMGM/Caesars/Hard
@@ -21,6 +25,7 @@ import type { Sport } from '../lib/sports';
 import type { StatKey } from '../lib/stats';
 import type { ProvidedLineRow } from './providedTypes';
 import { scrapeFetch } from './scrapeFetch';
+import { isAmericanOdds } from '../lib/odds/fairPrice';
 
 const URL = 'https://www.rotowire.com/picks/api/lines.php';
 const HEADERS = {
@@ -183,11 +188,28 @@ interface RwProp {
   entities?: number[];
   lines?: RwLine[];
 }
-interface RwResponse {
+export interface RwResponse {
   entities?: RwEntity[];
   markets?: RwMarket[];
   events?: RwEvent[];
   props?: RwProp[];
+}
+
+/**
+ * A quoted price, kept only when it really is American odds.
+ *
+ * This is the ONE ingest that writes a feed's price fields through untouched —
+ * sleeper.ts converts its decimal multipliers and underdog.ts parses an explicitly
+ * American field, so both are American by construction. RotoWire carries pick'em
+ * books (RT Sports) alongside true sportsbooks (…-sb) in one payload, and a pick'em
+ * product quotes payout multipliers, not odds. Storing a 1.90 multiplier as American
+ * odds anchors every read on that book at a clamped 0.95 breakeven, which drops its
+ * whole board below the Heat Check's no-read cutoff while the book still shows up in
+ * the selector — an empty board with no visible cause. Keep the line, drop the price:
+ * a book with no usable odds scores against the flat 0.5 anchor, same as PrizePicks.
+ */
+function americanOrNull(v: unknown): number | null {
+  return typeof v === 'number' && isAmericanOdds(v) ? v : null;
 }
 
 function dateOnlyUtc(unixSeconds?: number): Date {
@@ -196,7 +218,14 @@ function dateOnlyUtc(unixSeconds?: number): Date {
   return new Date(Date.UTC(v.getUTCFullYear(), v.getUTCMonth(), v.getUTCDate()));
 }
 
-function parseRwBody(body: RwResponse, out: ProvidedLineRow[]): void {
+export function parseRwBody(
+  body: RwResponse,
+  out: ProvidedLineRow[],
+  /** Per-book count of prices dropped by americanOrNull — surfaced by the caller so a
+   *  book that switches price format is loud in the run log instead of quietly
+   *  turning into a board of un-scoreable lines. */
+  nonAmerican: Map<string, number> = new Map(),
+): void {
   const entById = new Map<number, RwEntity>();
   for (const e of body.entities ?? []) entById.set(e.entityID, e);
   const mktById = new Map<number, RwMarket>();
@@ -227,6 +256,11 @@ function parseRwBody(body: RwResponse, out: ProvidedLineRow[]): void {
       const line = typeof ln.line === 'number' ? ln.line : parseFloat(String(ln.line));
       if (!Number.isFinite(line)) continue;
       seen.add(source);
+      const overOdds = americanOrNull(ln.over);
+      const underOdds = americanOrNull(ln.under);
+      if ((ln.over != null && overOdds === null) || (ln.under != null && underOdds === null)) {
+        nonAmerican.set(source, (nonAmerican.get(source) ?? 0) + 1);
+      }
       out.push({
         sport,
         source,
@@ -234,8 +268,8 @@ function parseRwBody(body: RwResponse, out: ProvidedLineRow[]): void {
         externalPlayerName: name,
         stat,
         line,
-        overOdds: typeof ln.over === 'number' ? ln.over : null,
-        underOdds: typeof ln.under === 'number' ? ln.under : null,
+        overOdds,
+        underOdds,
         gameDate,
       });
     }
@@ -244,12 +278,21 @@ function parseRwBody(body: RwResponse, out: ProvidedLineRow[]): void {
 
 export async function fetchRotowireLines(): Promise<ProvidedLineRow[]> {
   const out: ProvidedLineRow[] = [];
+  const nonAmerican = new Map<string, number>();
   try {
     const res = await scrapeFetch(URL, { headers: HEADERS });
     if (!res.ok) throw new Error(`RotoWire HTTP ${res.status}`);
-    parseRwBody((await res.json()) as RwResponse, out);
+    parseRwBody((await res.json()) as RwResponse, out, nonAmerican);
   } catch (e) {
     console.warn(`[rotowire] fetch failed: ${(e as Error).message}`);
+  }
+  if (nonAmerican.size) {
+    const summary = [...nonAmerican.entries()].map(([s, n]) => `${s}=${n}`).join(', ');
+    console.warn(
+      `[rotowire] dropped non-American prices (kept the lines): ${summary}. ` +
+        'Those books quote a payout format we do not read as odds — their reads ' +
+        'score against the flat 0.5 anchor.',
+    );
   }
   return out;
 }

@@ -9,7 +9,7 @@
 //
 // Pure (no React/Next/db). Builds on the per-book de-vig math in fairPrice.ts. We only
 // compare books quoting the SAME line — odds at different lines aren't commensurable.
-import { americanToImplied, deVigTwoWay, evPerDollar } from './fairPrice';
+import { americanToImplied, deVigTwoWay, evPerDollar, isAmericanOdds } from './fairPrice';
 
 /** One book's quote for a prop (a single line + optional two-sided American odds). */
 export interface BookQuote {
@@ -47,9 +47,13 @@ function median(xs: number[]): number {
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
-/** No-vig fair P(over) from one book's two-sided odds; null if either side is missing. */
+/** No-vig fair P(over) from one book's two-sided odds; null if either side is missing
+ *  or isn't really American odds (a decimal payout in an "over"/"under" field would
+ *  otherwise cast a garbage vote into the consensus median — and this consensus is
+ *  what every OTHER book's variant rungs get their market-implied breakeven from,
+ *  so one mislabelled feed must not be able to move everyone's bar). */
 export function noVigOver(overOdds: number | null, underOdds: number | null): number | null {
-  if (overOdds == null || underOdds == null) return null;
+  if (!isAmericanOdds(overOdds) || !isAmericanOdds(underOdds)) return null;
   const dv = deVigTwoWay(americanToImplied(overOdds), americanToImplied(underOdds));
   return dv.fairOver;
 }
@@ -62,7 +66,10 @@ export function noVigOver(overOdds: number | null, underOdds: number | null): nu
 function marketLine(quotes: BookQuote[], preferredLine?: number): number | null {
   const counts = new Map<number, number>();
   for (const q of quotes) {
-    if (q.overOdds != null && q.underOdds != null) {
+    // Only quotes we can actually de-vig count as votes — otherwise a book whose
+    // "odds" aren't American could carry a line to modal and then contribute no
+    // probability there, leaving the consensus null at a line nobody really quotes.
+    if (isAmericanOdds(q.overOdds) && isAmericanOdds(q.underOdds)) {
       counts.set(q.line, (counts.get(q.line) ?? 0) + 1);
     }
   }
@@ -125,7 +132,10 @@ function bestPrice(
   let best: { source: string; odds: number } | null = null;
   for (const q of quotes) {
     const odds = side === 'over' ? q.overOdds : q.underOdds;
-    if (odds == null) continue;
+    // "Higher pays more" only holds on the American scale — an un-validated decimal
+    // payout (1.90) beats every real price here (1.90 > −110) and would be crowned
+    // best price at a wildly wrong EV. Reject it rather than rank it.
+    if (!isAmericanOdds(odds)) continue;
     // Higher American odds always pay more for the same $1 stake (+150 > +120 > −110 > −130).
     if (!best || odds > best.odds) best = { source: q.source, odds };
   }
