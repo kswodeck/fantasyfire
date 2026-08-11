@@ -51,8 +51,13 @@ export function AllBoardExplorer({
   // No book has a readable row (all off-slate, all Passes, or a scrape gap) — show the
   // median-line board rather than an empty page, and say so below. Same substitution
   // the home cards make per league, for the same reason: our own line is a real read.
+  //
+  // The caption covers "no books at ALL" too, not just "books exist, none readable".
+  // A row never says whose number it is, so the selector disappearing was the only
+  // signal that the whole board had switched from a book's lines to ours — which
+  // reads as the site quietly changing its mind rather than a stated substitution.
   const rows = (hasSources ? sourced.rows : medianRows).filter(readable);
-  const usingMedian = !hasSources && sources.length > 0 && rows.length > 0;
+  const usingMedian = !hasSources && rows.length > 0;
 
   // "Today only" (site-synced, default on) — a row is on the slate when its player's
   // team appears under its OWN sport's slate teams. No slate data → always all.
