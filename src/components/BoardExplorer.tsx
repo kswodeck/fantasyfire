@@ -51,9 +51,11 @@ export function BoardExplorer({
   const sourced = useSourced(boardsBySource, sources, defaultSource, readable);
   const hasSources = sourced.liveSources.length > 0;
   // No book has a readable row (a scrape gap, or a board of pure Passes) — fall back
-  // to the median-line board rather than an empty page, and say so below.
+  // to the median-line board rather than an empty page, and say so below. Covers "no
+  // books at ALL" too: a row never says whose number it is, so without the caption the
+  // vanishing selector is the only hint that the board switched to our own lines.
   const rows = (hasSources ? sourced.rows : medianRows).filter(readable);
-  const usingMedian = !hasSources && sources.length > 0 && rows.length > 0;
+  const usingMedian = !hasSources && rows.length > 0;
 
   const hasSlate = games.length > 0;
   const { mode, setMode } = useSelectedSlate();

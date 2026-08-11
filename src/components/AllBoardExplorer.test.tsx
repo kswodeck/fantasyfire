@@ -107,6 +107,20 @@ describe('AllBoardExplorer book selection', () => {
     expect(screen.getByText(/our own median line/i)).toBeInTheDocument();
   });
 
+  it('states whose line it is when no book is ingested at all', () => {
+    // The selector hides itself when there are zero books, and a row never says whose
+    // number it is — so without this caption the whole board silently switches from a
+    // book's lines to ours with nothing on screen to say so.
+    renderBoard({ boardsBySource: {}, sources: [], medianRows: realReads });
+    expect(screen.getByText('Real Read')).toBeInTheDocument();
+    expect(screen.getByText(/our own median line/i)).toBeInTheDocument();
+  });
+
+  it('does not caption a board that IS showing a book’s lines', () => {
+    renderBoard({ boardsBySource: { prizepicks: realReads }, sources: ['prizepicks'] });
+    expect(screen.queryByText(/our own median line/i)).not.toBeInTheDocument();
+  });
+
   it('explains an empty board instead of a bare "no reads match"', () => {
     renderBoard({ boardsBySource: { rtsports: allPasses }, sources: ['rtsports'] });
     const empty = screen.getByRole('status');
