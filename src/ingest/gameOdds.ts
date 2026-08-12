@@ -4,6 +4,7 @@
 // matches each line back to its ScheduledGame by team + date. No db here.
 import type { Sport } from '../lib/sports';
 import { normalizeNbaAbbr, normalizeNflAbbr } from './schedule';
+import { ESPN_HEADERS } from './espnHttp';
 
 export interface GameOddsRow {
   /** YYYY-MM-DD slate date (the queried date — the game's local day, matching how the
@@ -36,7 +37,7 @@ const ESPN_PATH: Record<Sport, string> = {
 
 async function getJson(url: string): Promise<unknown> {
   const res = await fetch(url, {
-    headers: { 'User-Agent': 'FantasyFire/1.0 (+https://fantasyfire.app)' },
+    headers: ESPN_HEADERS,
   });
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
   return res.json();
