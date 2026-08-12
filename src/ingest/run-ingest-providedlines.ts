@@ -24,9 +24,9 @@ import { fetchSleeperLines } from './sleeper';
 import { fetchPick6Lines } from './pick6';
 import { fetchRotowireLines } from './rotowire';
 import type { ProvidedLineRow } from './providedTypes';
-import { staleRows, normalizeClubName, RETIRED_SOURCE_TAGS, type RowKey } from './providedSync';
+import { staleRows, normalizeClubName, droughtFailure, RETIRED_SOURCE_TAGS, type RowKey } from './providedSync';
 import { normalizeName } from '../lib/slate';
-import type { Sport } from '../lib/sports';
+import { SPORT_LIST, type Sport } from '../lib/sports';
 import { shouldIngest } from '../lib/seasonWindow';
 import { isPropStat } from '../lib/propStats';
 import { SITE } from '../lib/site';
@@ -65,15 +65,27 @@ async function playerIndex(sport: Sport): Promise<Map<string, number | null>> {
 
 async function main(): Promise<number> {
   const rows: ProvidedLineRow[] = [];
+  const fetched = new Map<string, number>();
+  const failed = new Map<string, string>();
   for (const s of SOURCES) {
     try {
       const r = await s.fetch();
+      fetched.set(s.id, r.length);
       console.log(`[providedlines:${s.id}] fetched ${r.length} mapped lines`);
       rows.push(...r);
     } catch (e) {
+      failed.set(s.id, (e as Error).message);
       console.warn(`[providedlines:${s.id}] fetch failed: ${(e as Error).message}`);
     }
   }
+  // The per-source scoreboard, logged BEFORE any early return. The old code only
+  // printed per-source counts in the final summary, which the no-rows path returned
+  // past — so the one run you most needed to read said nothing about which book
+  // broke. A source at 0 that did NOT fail is a book with a genuinely empty board.
+  console.log(
+    `[providedlines] source scoreboard: ` +
+      SOURCES.map((s) => `${s.id}=${failed.has(s.id) ? 'FAILED' : (fetched.get(s.id) ?? 0)}`).join(', '),
+  );
   // Drop off-season sports. The books post season-long futures months out (NFL
   // props in June), and we have no current-season game logs to project them from —
   // so they'd render as a board full of lines with no FireFactor behind them.
@@ -89,7 +101,9 @@ async function main(): Promise<number> {
     );
   }
   if (rows.length === 0) {
-    console.log('[providedlines] no lines fetched — nothing to write.');
+    const drought = droughtFailure(SPORT_LIST.filter((s) => shouldIngest(s)), failed);
+    if (drought) throw new Error(drought);
+    console.log('[providedlines] no lines fetched — every sport is off-season, nothing to write.');
     return 0;
   }
 
@@ -220,6 +234,19 @@ async function main(): Promise<number> {
   console.log(
     `[providedlines] upserted ${ops.length} (${summary}); ${unmatched} skipped; ${clubRejected} non-MLS soccer row(s) club-gated; ${pruned.removed} stale + ${retired.removed} retired-tag row(s) removed.`,
   );
+  // A PARTIAL failure is loud but not fatal. These books rate-limit and blip
+  // constantly (hence the 429 backoff in prizepicks.ts), and this job runs ~35×/day
+  // — failing the run on any single blip would train the owner to ignore a red
+  // ingest, which is exactly how the total outage went unnoticed. The drought check
+  // above is the one unambiguous, actionable signal, so it alone fails the job.
+  if (failed.size) {
+    console.warn(
+      `[providedlines] ${failed.size} of ${SOURCES.length} sources failed this run — ` +
+        `${[...failed.keys()].join(', ')}. Lines from the rest were still written; a book ` +
+        "stays on the site for 3 days after its last good scrape (the board's recency " +
+        'window), so repeated failures here are what silently empty it.',
+    );
+  }
 
   // Revalidate the changed pages — best-effort, only when the site actually shows
   // these lines (PROVIDED_LINES_ENABLED). Removed lines count as changes too: the

@@ -279,13 +279,12 @@ export function parseRwBody(
 export async function fetchRotowireLines(): Promise<ProvidedLineRow[]> {
   const out: ProvidedLineRow[] = [];
   const nonAmerican = new Map<string, number>();
-  try {
-    const res = await scrapeFetch(URL, { headers: HEADERS });
-    if (!res.ok) throw new Error(`RotoWire HTTP ${res.status}`);
-    parseRwBody((await res.json()) as RwResponse, out, nonAmerican);
-  } catch (e) {
-    console.warn(`[rotowire] fetch failed: ${(e as Error).message}`);
-  }
+  // The aggregator is one request, so a failure here is a total outage for every book
+  // it carries — surfaced rather than swallowed, so it can't read downstream as "none
+  // of these books posted anything today". See the note in prizepicks.ts.
+  const res = await scrapeFetch(URL, { headers: HEADERS });
+  if (!res.ok) throw new Error(`RotoWire HTTP ${res.status}`);
+  parseRwBody((await res.json()) as RwResponse, out, nonAmerican);
   if (nonAmerican.size) {
     const summary = [...nonAmerican.entries()].map(([s, n]) => `${s}=${n}`).join(', ');
     console.warn(

@@ -3,6 +3,10 @@
 import 'server-only';
 import { db } from '@/lib/db';
 import { SPORT_LIST, type Sport } from '@/lib/sports';
+// Pure freshness rules live in a DB-free module so they can be unit-tested
+// (this file is server-only). Re-exported so existing importers are unaffected.
+import { runIsStale, STALE_AFTER_MS, ZERO_ROWS_IS_STALE } from '@/lib/ingestHealth';
+export { runIsStale, STALE_AFTER_MS, ZERO_ROWS_IS_STALE };
 
 /** Jobs we expect to run nightly, in pipeline order. */
 export const KNOWN_JOBS = ['nba', 'mlb', 'nfl', 'nhl', 'wnba', 'mls', 'cfb', 'cbb', 'schedule', 'injuries', 'indexnow'] as const;
@@ -12,9 +16,6 @@ export const KNOWN_JOBS = ['nba', 'mlb', 'nfl', 'nhl', 'wnba', 'mls', 'cfb', 'cb
 export const OPTIONAL_JOBS = ['providedlines', 'social', 'push', 'metrics', 'prune'] as const;
 export type JobName = (typeof KNOWN_JOBS)[number] | (typeof OPTIONAL_JOBS)[number];
 
-/** A daily job is "stale" if its last successful run is older than this. */
-export const STALE_AFTER_MS = 30 * 60 * 60 * 1000; // 30h = daily cadence + margin
-
 export interface JobStatus {
   job: JobName;
   lastStatus: 'success' | 'failure' | null;
@@ -23,7 +24,8 @@ export interface JobStatus {
   durationMs: number | null;
   rowsWritten: number | null;
   error: string | null;
-  /** Last successful run missing or older than the cadence. */
+  /** Last successful run missing, older than the cadence, or (for jobs in
+   *  ZERO_ROWS_IS_STALE) successful but empty-handed. See runIsStale. */
   stale: boolean;
   /** True for a sport pull whose sport has no upcoming slate or recent games —
    *  staleness is expected and shouldn't read as a problem. */
@@ -84,8 +86,7 @@ export async function getIngestStatus(now: Date = new Date()): Promise<IngestSta
         stale: true,
       };
     }
-    const stale =
-      r.status !== 'success' || now.getTime() - r.startedAt.getTime() > STALE_AFTER_MS;
+    const stale = runIsStale(job, r, now);
     return {
       job,
       lastStatus: r.status === 'success' ? 'success' : 'failure',
