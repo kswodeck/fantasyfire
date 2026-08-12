@@ -1,8 +1,9 @@
 // Free schedule feed for the "tonight" slate.
 //   MLB: statsapi.mlb.com/api/v1/schedule  (team ids === our Team.externalId)
 //   NBA: ESPN scoreboard                   (matched by team abbreviation)
-// Both are keyless and generally NOT IP-blocked. No db here — the orchestrator
-// (run-schedule.ts) resolves teams and upserts.
+// Both are keyless. No db here — the orchestrator (run-schedule.ts) resolves teams
+// and upserts.
+import { ESPN_HEADERS } from './espnHttp';
 
 export interface ScheduleGameRow {
   externalId: string;
@@ -20,7 +21,9 @@ export interface ScheduleGameRow {
 
 async function getJson(url: string): Promise<unknown> {
   const res = await fetch(url, {
-    headers: { 'User-Agent': 'FantasyFire/1.0 (+https://fantasyfire.app)' },
+    // Two hosts share this helper: statsapi.mlb.com (fine with anything) and
+    // site.api.espn.com (403s a bot UA from a datacenter IP — see espnHttp.ts).
+    headers: ESPN_HEADERS,
   });
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
   return res.json();

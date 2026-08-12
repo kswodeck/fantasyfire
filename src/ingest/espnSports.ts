@@ -13,9 +13,9 @@
 // No db here — run-ingest-espn.ts resolves teams/players and upserts.
 import type { Sport } from '../lib/sports';
 import { etDateIso } from '../lib/social/schedule';
+import { ESPN_HEADERS, ESPN_RETRY_STATUS } from './espnHttp';
 
 const SITE = 'https://site.api.espn.com/apis/site/v2/sports';
-const UA = { 'User-Agent': 'FantasyFire/1.0 (+https://fantasyfire.app)' };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -25,9 +25,9 @@ async function getJson<T = unknown>(url: string, attempts = 4, timeoutMs = 20000
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
-      const res = await fetch(url, { headers: UA, signal: ctrl.signal });
+      const res = await fetch(url, { headers: ESPN_HEADERS, signal: ctrl.signal });
       clearTimeout(timer);
-      if (res.status === 429 || res.status >= 500) {
+      if (ESPN_RETRY_STATUS(res.status)) {
         lastErr = new Error(`ESPN HTTP ${res.status}`);
       } else if (!res.ok) {
         throw new Error(`ESPN HTTP ${res.status}: ${url}`);

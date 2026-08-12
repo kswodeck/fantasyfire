@@ -4,6 +4,7 @@
 // players by name+team and games by matchup key (see espn-fallback.ts). No db
 // here.
 import { normalizeNbaAbbr } from './schedule';
+import { ESPN_HEADERS } from './espnHttp';
 
 export interface EspnBoxRow {
   playerName: string;
@@ -38,7 +39,7 @@ const SUMMARY = (id: string) =>
 
 async function getJson(url: string): Promise<unknown> {
   const res = await fetch(url, {
-    headers: { 'User-Agent': 'FantasyFire/1.0 (+https://fantasyfire.app)' },
+    headers: ESPN_HEADERS,
   });
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
   return res.json();

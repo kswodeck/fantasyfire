@@ -4,6 +4,7 @@
 //          type{description}, shortComment } ] } ] }. No db here — the runner matches
 // athlete names to our players and upserts PlayerInjury.
 import type { Sport } from '../lib/sports';
+import { ESPN_HEADERS } from './espnHttp';
 
 /** Normalized availability buckets. `out` covers every flavor of not-playing (IL,
  *  suspension, paternity, …); the rest are game-time-decision tiers. */
@@ -48,7 +49,7 @@ export function normalizeInjuryStatus(raw: string): InjuryStatus {
 
 async function getJson(url: string): Promise<unknown> {
   const res = await fetch(url, {
-    headers: { 'User-Agent': 'FantasyFire/1.0 (+https://fantasyfire.app)' },
+    headers: ESPN_HEADERS,
   });
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
   return res.json();
