@@ -67,9 +67,20 @@ on:
         type: boolean
         default: false
 
+# NEWEST RUN WINS — same reasoning as ingest-providedlines.yml, where queueing let a
+# single run stuck on the environment gate block ~135 later runs over 8 days without
+# ever failing. Queued ticks have no value here either: the poster recomputes what is
+# due from the live schedule on each tick, so a backlog would only replay decisions
+# already superseded.
+#
+# This cannot interrupt a post. The two jobs cap at 3 + 15 minutes, far inside the
+# 1-hour cron gap, so a run that is progressing normally has always finished before
+# the next tick — the only run this can cancel is one that is stuck rather than
+# posting. And even in the worst case the per-sport once-per-day markers on IngestRun
+# make a re-run a no-op, so a cancelled tick cannot cause a double post.
 concurrency:
   group: social
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   # Cheap hourly gate — no checkout, no install. Manual dispatches skip it.

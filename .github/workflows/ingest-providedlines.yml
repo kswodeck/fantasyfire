@@ -12,19 +12,29 @@ name: Ingest provided lines + injuries (PrizePicks + Underdog + RotoWire + ESPN)
 # NOTE: scheduled + manual runs only fire from the DEFAULT branch (main), so this
 # only starts running once it's on main (it lands there when you merge develop -> main).
 #
-# Time-aware, TIERED cadence to control billed Actions minutes. GitHub cron is
-# UTC-only and can't follow daylight saving, so this is anchored to EDT (UTC-4),
-# the current Eastern offset. Wall-clock schedule (Eastern):
-#   - 10:00am-1:00pm ET : hourly        — pre-slate warm-up
-#   - 1:30pm-6:30pm ET  : every 30 min  — afternoon lines firming up
-#   - 6:45pm-11:00pm ET : every 15 min  — peak: evening slates in play
-#   - overnight         : one at 3:00am ET + one at 8:00am ET — cheap keep-warm
-# ~35 runs/day (down from ~54). GitHub schedules are best-effort: high-frequency
-# crons can slip 5-15 min or skip under load, so 15 min is a ceiling, not a
-# guarantee. Use "Run workflow" for an on-demand refresh.
+# Cadence: every 30 minutes through the US sports day, plus two overnight
+# keep-warms. ~32 runs/day. GitHub cron is UTC-only and can't follow daylight
+# saving, so this is anchored to EDT (UTC-4), the current Eastern offset:
+#   - 10:00am-12:30am ET : every 30 min
+#   - overnight          : 4:00am ET + 8:00am ET — cheap keep-warm
+#
+# This replaced a four-tier schedule across NINE cron lines whose peak asked for
+# every 15 minutes. The run history says that peak was never delivered: through a
+# healthy stretch (Aug 3-5) the gaps between actual runs ranged from ~15 minutes to
+# over two hours, averaging far nearer 30. GitHub schedules are best-effort and
+# high-frequency crons on a private repo are throttled hardest, so the fine-grained
+# tiers bought complexity — nine lines to keep consistent, nine to shift twice a
+# year — for a cadence the platform was already collapsing to roughly this one.
+# A uniform 30 minutes is what actually happens, stated honestly.
+#
+# If lines during peak evening slates turn out to need finer resolution, add a
+# single `*/15` line for those hours rather than rebuilding the tiers — but check
+# the run history first to confirm the extra ticks are actually being honoured.
+# Use "Run workflow" for an on-demand refresh at any time.
 #
 # DST: when EST begins (early Nov 2026) the whole day shifts an hour earlier in ET.
-# To keep the SAME Eastern wall-clock schedule, bump every UTC hour below +1.
+# To keep the SAME Eastern wall-clock schedule, bump every UTC hour below +1 —
+# three lines to edit now instead of nine.
 #
 # Secret (Production environment):
 #   DATABASE_URL  — prod transaction-pooler URL (:6543, sslmode=require)
@@ -35,21 +45,11 @@ name: Ingest provided lines + injuries (PrizePicks + Underdog + RotoWire + ESPN)
 
 on:
   schedule:
-    # Anchored to EDT (UTC-4). See header for the Eastern wall-clock intent and the
-    # DST bump note. Tiers are laid out so no two lines fire in the same minute.
-    # 10:00am-1:00pm ET hourly (14:00-17:00 UTC):
-    - cron: '0 14-17 * * *'
-    # 1:30pm-6:30pm ET every 30 min (17:30, then :00/:30 through 22:30 UTC):
-    - cron: '30 17 * * *'
-    - cron: '0,30 18-22 * * *'
-    # 6:45pm-11:00pm ET every 15 min (22:45, then :00/:15/:30/:45 through 02:45, + 03:00 UTC):
-    - cron: '45 22 * * *'
-    - cron: '*/15 23 * * *'
-    - cron: '*/15 0-2 * * *'
-    - cron: '0 3 * * *'
-    # Overnight keep-warm — 3:00am ET (07:00 UTC) + 8:00am ET (12:00 UTC):
-    - cron: '0 7 * * *'
-    - cron: '0 12 * * *'
+    # Anchored to EDT (UTC-4). See the header for the Eastern wall-clock intent
+    # and the DST bump note.
+    - cron: '0,30 14-23 * * *' # 10:00am-7:30pm ET, every 30 min
+    - cron: '0,30 0-4 * * *'   # 8:00pm-12:30am ET, every 30 min
+    - cron: '0 8,12 * * *'     # overnight keep-warm — 4:00am + 8:00am ET
   workflow_dispatch: {}
 
 # NEWEST RUN WINS. This was `cancel-in-progress: false`, and that queued rather than
