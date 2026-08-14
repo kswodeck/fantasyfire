@@ -52,9 +52,28 @@ on:
     - cron: '0 12 * * *'
   workflow_dispatch: {}
 
+# NEWEST RUN WINS. This was `cancel-in-progress: false`, and that queued rather than
+# replaced — which let a SINGLE stuck run wedge the whole pipeline silently for 8 days:
+#
+#   run #509 (2026-08-06 16:05Z) entered `waiting` on the Production environment gate
+#   and never came out. Holding the group, it blocked runs #510-#644 — about 135 of
+#   them — each created `pending`, never allocated a job, and cancelled the moment the
+#   next schedule fired. No book lines were written after run #508, the ProvidedLine
+#   rows aged out of the board's 3-day window, and the site fell back to its own median
+#   lines with every ingest "cancelled" rather than failed.
+#
+# Queueing is the wrong policy for this job regardless of that incident. It is
+# idempotent and it re-scrapes the CURRENT slate every time, so a backlog of stale runs
+# has no value — if one is somehow still going when the next fires, the newer scrape is
+# strictly better. Cancelling in progress also makes the wedge self-healing: whatever
+# leaves a run stuck, the next schedule clears it instead of piling up behind it.
+#
+# Safe against cancelling healthy work: the job's timeout-minutes is 10 and the tightest
+# cron gap is 15 minutes, so a run that is progressing normally has always finished
+# before its successor arrives.
 concurrency:
   group: ingest-providedlines
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   ingest:
