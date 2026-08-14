@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { runIsStale, STALE_AFTER_MS } from './ingestHealth';
+import { affectsHealthBanner, runIsStale, STALE_AFTER_MS } from './ingestHealth';
 
 const NOW = new Date('2026-08-10T18:00:00Z');
 const minutesAgo = (m: number) => new Date(NOW.getTime() - m * 60_000);
@@ -43,5 +43,55 @@ describe('runIsStale', () => {
     expect(
       runIsStale('providedlines', { status: 'success', startedAt: minutesAgo(5), rowsWritten: null }, NOW),
     ).toBe(false);
+  });
+});
+
+describe('affectsHealthBanner', () => {
+  const inSeasonPull = { isSportPull: true, sportInSeason: true, anySportInSeason: true };
+  const offSeasonPull = { isSportPull: true, sportInSeason: false, anySportInSeason: true };
+
+  it('counts a sport pull while its own sport is in season', () => {
+    expect(affectsHealthBanner('mlb', inSeasonPull)).toBe(true);
+  });
+
+  it('ignores a sport pull that is off-season', () => {
+    // An amber dot on the NBA ingest in July is the calendar, not a fault.
+    expect(affectsHealthBanner('nba', offSeasonPull)).toBe(false);
+  });
+
+  it('counts provided lines — the boards depend on it', () => {
+    // The regression: this sat dead for 8 days behind a green banner because every
+    // optional job was excluded from the health calculation.
+    expect(
+      affectsHealthBanner('providedlines', {
+        isSportPull: false,
+        sportInSeason: false,
+        anySportInSeason: true,
+      }),
+    ).toBe(true);
+  });
+
+  it('spares provided lines when nothing at all is playing', () => {
+    // Books post nothing when nothing is on — same gate the sport pulls get.
+    expect(
+      affectsHealthBanner('providedlines', {
+        isSportPull: false,
+        sportInSeason: false,
+        anySportInSeason: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('leaves the genuinely best-effort jobs out of the banner', () => {
+    for (const job of ['social', 'push', 'metrics', 'prune', 'schedule', 'injuries', 'indexnow']) {
+      expect(
+        affectsHealthBanner(job, {
+          isSportPull: false,
+          sportInSeason: false,
+          anySportInSeason: true,
+        }),
+        job,
+      ).toBe(false);
+    }
   });
 });

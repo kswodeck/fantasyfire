@@ -30,3 +30,34 @@ export function runIsStale(
   if (ZERO_ROWS_IS_STALE.has(job) && run.rowsWritten === 0) return true;
   return now.getTime() - run.startedAt.getTime() > STALE_AFTER_MS;
 }
+
+/** Best-effort jobs that nonetheless flip the top-line health indicator once they
+ *  have actually run. The book lines ARE the product on every board — the site
+ *  silently degrades to its own median line without them — so an outage there is
+ *  not the "inert until configured" case the optional bucket was built for. */
+export const HEALTH_CRITICAL_OPTIONAL = new Set<string>(['providedlines']);
+
+/**
+ * Does this job's staleness flip the top-line health indicator?
+ *
+ * Sport pulls count while their own sport is in season — a paused off-season
+ * workflow is the calendar, not a fault.
+ *
+ * Optional jobs were all excluded, on the reasoning that each is inert until its
+ * env and secrets are configured. That holds for social/push/metrics/prune, but it
+ * let the provided-lines pipeline sit dead for 8 days behind a green banner: a run
+ * stuck on the environment gate blocked ~135 later runs, no book lines were
+ * written, and every board quietly fell back to our own median numbers. A job only
+ * reaches this function once it has run at least once, which is exactly the
+ * evidence that it IS configured — so from that point on, its silence is a fault
+ * worth showing. Gated on some sport being in season, for the same reason the
+ * sport pulls are: books post nothing when nothing is playing.
+ */
+export function affectsHealthBanner(
+  job: string,
+  ctx: { isSportPull: boolean; sportInSeason: boolean; anySportInSeason: boolean },
+): boolean {
+  if (ctx.isSportPull) return ctx.sportInSeason;
+  if (HEALTH_CRITICAL_OPTIONAL.has(job)) return ctx.anySportInSeason;
+  return false;
+}
