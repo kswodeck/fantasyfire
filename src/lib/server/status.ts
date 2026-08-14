@@ -5,14 +5,21 @@ import { db } from '@/lib/db';
 import { SPORT_LIST, type Sport } from '@/lib/sports';
 // Pure freshness rules live in a DB-free module so they can be unit-tested
 // (this file is server-only). Re-exported so existing importers are unaffected.
-import { runIsStale, STALE_AFTER_MS, ZERO_ROWS_IS_STALE } from '@/lib/ingestHealth';
-export { runIsStale, STALE_AFTER_MS, ZERO_ROWS_IS_STALE };
+import {
+  affectsHealthBanner,
+  runIsStale,
+  HEALTH_CRITICAL_OPTIONAL,
+  STALE_AFTER_MS,
+  ZERO_ROWS_IS_STALE,
+} from '@/lib/ingestHealth';
+export { affectsHealthBanner, runIsStale, HEALTH_CRITICAL_OPTIONAL, STALE_AFTER_MS, ZERO_ROWS_IS_STALE };
 
 /** Jobs we expect to run nightly, in pipeline order. */
 export const KNOWN_JOBS = ['nba', 'mlb', 'nfl', 'nhl', 'wnba', 'mls', 'cfb', 'cbb', 'schedule', 'injuries', 'indexnow'] as const;
 /** Best-effort / opt-in jobs (provided lines, social, push, metrics, prune): shown
- *  when they've ever run so the page reflects the whole pipeline, but they never
- *  flip the health banner — each is inert until its env/secrets are configured. */
+ *  when they've ever run so the page reflects the whole pipeline. Most never flip
+ *  the health banner — each is inert until its env/secrets are configured — but see
+ *  HEALTH_CRITICAL_OPTIONAL: provided lines does, because the boards depend on it. */
 export const OPTIONAL_JOBS = ['providedlines', 'social', 'push', 'metrics', 'prune'] as const;
 export type JobName = (typeof KNOWN_JOBS)[number] | (typeof OPTIONAL_JOBS)[number];
 
@@ -46,7 +53,8 @@ export interface IngestStatus {
   generatedAt: string;
   jobs: JobStatus[];
   sports: SportFreshness[];
-  /** True when every data-pull job ran successfully within the cadence. */
+  /** True when every job that gates the banner ran successfully within the cadence:
+   *  the in-season sport pulls, plus provided lines. See affectsHealthBanner. */
   healthy: boolean;
 }
 
@@ -120,8 +128,9 @@ export async function getIngestStatus(now: Date = new Date()): Promise<IngestSta
     }),
   );
 
-  // "Healthy" tracks the data-pull jobs — schedule/indexnow/injuries and the
-  // optional jobs are best-effort and shouldn't flip the top-line indicator red.
+  // "Healthy" tracks the data-pull jobs plus provided lines — schedule/indexnow/
+  // injuries and the remaining optional jobs are best-effort and shouldn't flip the
+  // top-line indicator red.
   // A pull only counts while its sport is IN SEASON (an upcoming slate, or a
   // completed game within the last 10 days): a paused off-season workflow is not
   // a data problem, and without this gate the banner would warn all summer.
@@ -144,8 +153,15 @@ export async function getIngestStatus(now: Date = new Date()): Promise<IngestSta
       ? { ...j, stale: false, offSeason: true }
       : j,
   );
+  const anySportInSeason = SPORT_LIST.some(inSeason);
   const healthy = displayJobs
-    .filter((j) => pulls.includes(j.job) && inSeason(j.job as Sport))
+    .filter((j) =>
+      affectsHealthBanner(j.job, {
+        isSportPull: pulls.includes(j.job),
+        sportInSeason: pulls.includes(j.job) && inSeason(j.job as Sport),
+        anySportInSeason,
+      }),
+    )
     .every((j) => !j.stale);
 
   return { generatedAt: now.toISOString(), jobs: displayJobs, sports, healthy };
