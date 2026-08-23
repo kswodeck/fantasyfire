@@ -17,11 +17,18 @@ name: Ingest provided lines + injuries (PrizePicks + Underdog + RotoWire + ESPN)
 # the current Eastern offset. Wall-clock schedule (Eastern):
 #   - 10:00am-1:00pm ET : hourly        — pre-slate warm-up
 #   - 1:30pm-6:30pm ET  : every 30 min  — afternoon lines firming up
-#   - 6:45pm-11:00pm ET : every 15 min  — peak: evening slates in play
+#   - 7:00pm-11:00pm ET : every 20 min  — peak: evening slates in play
 #   - overnight         : one at 3:00am ET + one at 8:00am ET — cheap keep-warm
-# ~35 runs/day (down from ~54). GitHub schedules are best-effort: high-frequency
-# crons can slip 5-15 min or skip under load, so 15 min is a ceiling, not a
-# guarantee. Use "Run workflow" for an on-demand refresh.
+# ~30 runs/day (down from ~54, then ~35). GitHub schedules are best-effort:
+# high-frequency crons can slip 5-15 min or skip under load, so 20 min is a
+# ceiling, not a guarantee. Use "Run workflow" for an on-demand refresh.
+#
+# The peak tier was every 15 min (18 of the day's 35 runs sat between 22:45 and
+# 03:00 UTC). Actions minutes on this private repo are billed, and in Aug 2026 the
+# account hit its billing cap and STOPPED ALLOCATING RUNNERS entirely — every job
+# failed in seconds with "recent account payments have failed or your spending
+# limit needs to be increased". Provided-lines was ~90% of the burn. Peak coverage
+# at 20 min still lands 3 scrapes an hour into the evening slate.
 #
 # DST: when EST begins (early Nov 2026) the whole day shifts an hour earlier in ET.
 # To keep the SAME Eastern wall-clock schedule, bump every UTC hour below +1.
@@ -42,10 +49,12 @@ on:
     # 1:30pm-6:30pm ET every 30 min (17:30, then :00/:30 through 22:30 UTC):
     - cron: '30 17 * * *'
     - cron: '0,30 18-22 * * *'
-    # 6:45pm-11:00pm ET every 15 min (22:45, then :00/:15/:30/:45 through 02:45, + 03:00 UTC):
-    - cron: '45 22 * * *'
-    - cron: '*/15 23 * * *'
-    - cron: '*/15 0-2 * * *'
+    # 7:00pm-11:00pm ET every 20 min (:00/:20/:40 from 23:00 through 02:40, + 03:00 UTC).
+    # Starts on the hour rather than bridging at :40 — a :40 entry would sit only 10 min
+    # after the 22:30 tick above, inside the job's own 10-minute timeout, and
+    # cancel-in-progress would let the bridge kill a healthy 22:30 run:
+    - cron: '0,20,40 23 * * *'
+    - cron: '0,20,40 0-2 * * *'
     - cron: '0 3 * * *'
     # Overnight keep-warm — 3:00am ET (07:00 UTC) + 8:00am ET (12:00 UTC):
     - cron: '0 7 * * *'
@@ -69,8 +78,11 @@ on:
 # leaves a run stuck, the next schedule clears it instead of piling up behind it.
 #
 # Safe against cancelling healthy work: the job's timeout-minutes is 10 and the tightest
-# cron gap is 15 minutes, so a run that is progressing normally has always finished
-# before its successor arrives.
+# cron gap is 20 minutes, so a run that is progressing normally has always finished
+# before its successor arrives. That margin used to be thin in practice — the scrape hit
+# all five books sequentially and took ~9.5 min, so runs were dying ON the timeout (some
+# after their work had already succeeded, billing the full 10 min for a red X). The
+# sources are fetched concurrently now, so a healthy run lands in a couple of minutes.
 concurrency:
   group: ingest-providedlines
   cancel-in-progress: true
