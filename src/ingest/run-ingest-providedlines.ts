@@ -67,17 +67,25 @@ async function main(): Promise<number> {
   const rows: ProvidedLineRow[] = [];
   const fetched = new Map<string, number>();
   const failed = new Map<string, string>();
-  for (const s of SOURCES) {
-    try {
-      const r = await s.fetch();
-      fetched.set(s.id, r.length);
-      console.log(`[providedlines:${s.id}] fetched ${r.length} mapped lines`);
-      rows.push(...r);
-    } catch (e) {
-      failed.set(s.id, (e as Error).message);
-      console.warn(`[providedlines:${s.id}] fetch failed: ${(e as Error).message}`);
+  // Scraped CONCURRENTLY: five independent endpoints on five different hosts, so the
+  // run costs the slowest source rather than their sum. Sequentially this stacked to
+  // ~9.5 min and brushed the workflow's 10-minute timeout — runs were being killed at
+  // the boundary (some after the work had actually finished) and every one of those
+  // minutes is billed. `allSettled`, not `all`, so one dead book still can't take the
+  // others down; the per-source failure bookkeeping below is unchanged.
+  const settled = await Promise.allSettled(SOURCES.map((s) => s.fetch()));
+  settled.forEach((res, i) => {
+    const s = SOURCES[i];
+    if (res.status === 'fulfilled') {
+      fetched.set(s.id, res.value.length);
+      console.log(`[providedlines:${s.id}] fetched ${res.value.length} mapped lines`);
+      rows.push(...res.value);
+    } else {
+      const msg = (res.reason as Error)?.message ?? String(res.reason);
+      failed.set(s.id, msg);
+      console.warn(`[providedlines:${s.id}] fetch failed: ${msg}`);
     }
-  }
+  });
   // The per-source scoreboard, logged BEFORE any early return. The old code only
   // printed per-source counts in the final summary, which the no-rows path returned
   // past — so the one run you most needed to read said nothing about which book
