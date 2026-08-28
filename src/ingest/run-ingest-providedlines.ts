@@ -23,8 +23,18 @@ import { fetchUnderdogLines } from './underdog';
 import { fetchSleeperLines } from './sleeper';
 import { fetchPick6Lines } from './pick6';
 import { fetchRotowireLines } from './rotowire';
+import { pMap } from './mlb';
 import type { ProvidedLineRow } from './providedTypes';
-import { staleRows, normalizeClubName, droughtFailure, RETIRED_SOURCE_TAGS, type RowKey } from './providedSync';
+import {
+  staleRows,
+  normalizeClubName,
+  droughtFailure,
+  dedupeUpsertRows,
+  buildUpsertChunk,
+  UPSERT_CHUNK,
+  RETIRED_SOURCE_TAGS,
+  type RowKey,
+} from './providedSync';
 import { normalizeName } from '../lib/slate';
 import { SPORT_LIST, type Sport } from '../lib/sports';
 import { shouldIngest } from '../lib/seasonWindow';
@@ -64,7 +74,7 @@ async function playerIndex(sport: Sport): Promise<Map<string, number | null>> {
 }
 
 async function main(): Promise<number> {
-  const rows: ProvidedLineRow[] = [];
+  let rows: ProvidedLineRow[] = [];
   const fetched = new Map<string, number>();
   const failed = new Map<string, string>();
   // Scraped CONCURRENTLY: five independent endpoints on five different hosts, so the
@@ -79,7 +89,12 @@ async function main(): Promise<number> {
     if (res.status === 'fulfilled') {
       fetched.set(s.id, res.value.length);
       console.log(`[providedlines:${s.id}] fetched ${res.value.length} mapped lines`);
-      rows.push(...res.value);
+      // Appended in a loop, not `push(...res.value)`: spreading pushes every element
+      // onto the argument stack, which caps out around 125k args on this Node before
+      // it throws RangeError. A multi-sport board is comfortably under that today, so
+      // this is headroom rather than a live bug — but the loop costs nothing and the
+      // board only grows as sports and books are added.
+      for (const r of res.value) rows.push(r);
     } else {
       const msg = (res.reason as Error)?.message ?? String(res.reason);
       failed.set(s.id, msg);
@@ -100,9 +115,9 @@ async function main(): Promise<number> {
   const offSeason = new Set(rows.map((r) => r.sport).filter((s) => !shouldIngest(s)));
   if (offSeason.size) {
     const before = rows.length;
-    const kept = rows.filter((r) => !offSeason.has(r.sport));
-    rows.length = 0;
-    rows.push(...kept);
+    // Rebind rather than truncate-and-respread: identical result, and it drops the
+    // second pass that pushed the whole kept board back through the argument stack.
+    rows = rows.filter((r) => !offSeason.has(r.sport));
     console.log(
       `[providedlines] dropped ${before - rows.length} off-season lines ` +
         `(${[...offSeason].join(', ')})`,
@@ -115,11 +130,13 @@ async function main(): Promise<number> {
     return 0;
   }
 
-  // Per-sport name→id index (built once).
-  const indexBySport = new Map<Sport, Map<string, number | null>>();
-  for (const sport of new Set(rows.map((r) => r.sport))) {
-    indexBySport.set(sport, await playerIndex(sport));
-  }
+  // Per-sport name→id index (built once). One independent query per sport, so they
+  // go out together rather than one-after-another — an evening slate spans up to
+  // eight sports, which was eight serial round trips to a remote pooler for nothing.
+  const sportsInPlay = [...new Set(rows.map((r) => r.sport))];
+  const indexBySport = new Map<Sport, Map<string, number | null>>(
+    await pMap(sportsInPlay, async (sport) => [sport, await playerIndex(sport)] as const, 4),
+  );
 
   // MLS rows come from COMBINED soccer feeds (PP folds MLS/NWSL/EPL/… into one
   // SOCCER league), so name matching alone could attach another competition's
@@ -186,39 +203,29 @@ async function main(): Promise<number> {
   // whose number changed (the whole point: don't regenerate identical HTML).
   const changed = await changedPlayerStats(resolved);
 
-  const ops = resolved.map((d) => () => {
-    // Keyed by line AND oddsType, so a source's variant rungs (PrizePicks demon/
-    // goblin, Underdog alternates) coexist instead of overwriting the standard
-    // line — even when a variant shares the standard line's number.
-    const data = {
-      overOdds: d.overOdds,
-      underOdds: d.underOdds,
-      multiplier: d.multiplier,
-      fetchedAt: new Date(),
-    };
-    return db.providedLine.upsert({
-      where: {
-        sport_playerId_stat_source_gameDate_line_oddsType: {
-          sport: d.sport,
-          playerId: d.playerId,
-          stat: d.stat,
-          source: d.source,
-          gameDate: d.gameDate,
-          line: d.line,
-          oddsType: d.oddsType,
-        },
-      },
-      create: { sport: d.sport, playerId: d.playerId, stat: d.stat, source: d.source, gameDate: d.gameDate, line: d.line, oddsType: d.oddsType, ...data },
-      update: data,
-    });
-  });
-
-  // Concurrent batches (no $transaction — it times out over a remote pooler).
-  // Each batch retries transient pooler blips so one ETIMEDOUT doesn't fail the run.
-  const BATCH = 20;
-  for (let i = 0; i < ops.length; i += BATCH) {
-    const batch = ops.slice(i, i + BATCH);
-    await withDbRetry(() => Promise.all(batch.map((fn) => fn())), `upsert batch ${i / BATCH}`);
+  // BULK upsert. Prisma has no multi-row upsert, so this was one `providedLine
+  // .upsert()` per line — a round trip each, run in waves of 20 against a remote
+  // transaction pooler. On a full evening slate that is thousands of sequential
+  // waves and it dominated the job's wall clock, which is what the billed Actions
+  // minute is actually measuring. One `INSERT … ON CONFLICT DO UPDATE` per 1000
+  // rows collapses the same work into a handful of statements.
+  //
+  // Rows are keyed by line AND oddsType, so a source's variant rungs (PrizePicks
+  // demon/goblin, Underdog alternates) coexist instead of overwriting the standard
+  // line — even when a variant shares the standard line's number.
+  //
+  // Deduped last-wins before writing — see dedupeUpsertRows for why Postgres makes
+  // that mandatory rather than cosmetic. The SQL assembly is pure and unit-tested in
+  // providedSync.ts; only the execution loop lives here.
+  const toWrite = dedupeUpsertRows(resolved);
+  const collapsed = resolved.length - toWrite.length;
+  const fetchedAt = new Date();
+  for (let i = 0; i < toWrite.length; i += UPSERT_CHUNK) {
+    const { sql, values } = buildUpsertChunk(toWrite.slice(i, i + UPSERT_CHUNK), fetchedAt);
+    await withDbRetry(
+      () => db.$executeRawUnsafe(sql, ...values),
+      `upsert chunk ${i / UPSERT_CHUNK}`,
+    );
   }
 
   // Authoritative sync: a successful scrape returns a source's ENTIRE current board for
@@ -229,7 +236,13 @@ async function main(): Promise<number> {
   // no deletes), and a suspiciously thin slate falls back to the narrow
   // re-classification-only prune (see providedSync.ts), so a half-broken scraper can't
   // erase a valid board.
-  const pruned = await pruneStaleRows(resolved);
+  // Deduped rows, deliberately — not `resolved`. staleRows() switches from the narrow
+  // thin-board prune to the destructive authoritative one at AUTHORITATIVE_MIN_ROWS
+  // written rows, so counting the same rung twice could carry a genuinely thin board
+  // over that line and let it delete every stored row it failed to re-fetch — the
+  // exact "half-broken scraper erases a valid board" case the threshold exists to
+  // stop. The distinct-key count is the honest board size.
+  const pruned = await pruneStaleRows(toWrite);
 
   // Retired tag vocabularies (see RETIRED_SOURCE_TAGS): rows tagged with a kind a
   // source's scraper no longer emits are definitionally stale, and the slate-scoped
@@ -240,7 +253,8 @@ async function main(): Promise<number> {
 
   const summary = [...perSource.entries()].map(([s, n]) => `${s}=${n}`).join(', ');
   console.log(
-    `[providedlines] upserted ${ops.length} (${summary}); ${unmatched} skipped; ${clubRejected} non-MLS soccer row(s) club-gated; ${pruned.removed} stale + ${retired.removed} retired-tag row(s) removed.`,
+    `[providedlines] upserted ${toWrite.length} (${summary}); ${unmatched} skipped; ${clubRejected} non-MLS soccer row(s) club-gated; ` +
+      `${collapsed} duplicate key(s) collapsed; ${pruned.removed} stale + ${retired.removed} retired-tag row(s) removed.`,
   );
   // A PARTIAL failure is loud but not fatal. These books rate-limit and blip
   // constantly (hence the 429 backoff in prizepicks.ts), and this job runs ~35×/day
@@ -263,7 +277,7 @@ async function main(): Promise<number> {
   for (const key of retired.changedKeys) changed.add(key);
   await revalidateChanged(changed);
 
-  return ops.length;
+  return toWrite.length;
 }
 
 /** Delete rows whose oddsType a source's scraper has retired (RETIRED_SOURCE_TAGS).
@@ -272,23 +286,35 @@ async function main(): Promise<number> {
 async function sweepRetiredTags(): Promise<{ removed: number; changedKeys: Set<string> }> {
   const changedKeys = new Set<string>();
   let removed = 0;
-  for (const [source, tags] of Object.entries(RETIRED_SOURCE_TAGS)) {
-    try {
-      const where = { source, oddsType: { in: [...tags] } };
-      const stale = await withDbRetry(
-        () => db.providedLine.findMany({ where, select: { sport: true, playerId: true, stat: true } }),
-        `retired-tag scan ${source}`,
-      );
-      if (stale.length === 0) continue;
-      await withDbRetry(
-        () => db.providedLine.deleteMany({ where }),
-        `retired-tag delete ${source}`,
-      );
-      for (const r of stale) changedKeys.add(`${r.sport}|${r.playerId}|${r.stat}`);
-      removed += stale.length;
-    } catch (e) {
-      console.warn(`[providedlines] retired-tag sweep failed for ${source}: ${(e as Error).message}`);
-    }
+  // One independent scan+delete per retired source, run together instead of in
+  // series. Normally every one of these comes back empty (the backlog is cleared),
+  // so this is pure round-trip latency on the critical path of every single run.
+  const perSource = await pMap(
+    Object.entries(RETIRED_SOURCE_TAGS),
+    async ([source, tags]) => {
+      try {
+        const where = { source, oddsType: { in: [...tags] } };
+        const stale = await withDbRetry(
+          () => db.providedLine.findMany({ where, select: { sport: true, playerId: true, stat: true } }),
+          `retired-tag scan ${source}`,
+        );
+        if (stale.length === 0) return null;
+        await withDbRetry(
+          () => db.providedLine.deleteMany({ where }),
+          `retired-tag delete ${source}`,
+        );
+        return stale;
+      } catch (e) {
+        console.warn(`[providedlines] retired-tag sweep failed for ${source}: ${(e as Error).message}`);
+        return null;
+      }
+    },
+    4,
+  );
+  for (const stale of perSource) {
+    if (!stale) continue;
+    for (const r of stale) changedKeys.add(`${r.sport}|${r.playerId}|${r.stat}`);
+    removed += stale.length;
   }
   return { removed, changedKeys };
 }
@@ -325,31 +351,46 @@ async function pruneStaleRows(
     written.push({ playerId: d.playerId, stat: d.stat, line: d.line, oddsType: d.oddsType });
   }
 
+  // Slates are independent, so they are swept with bounded concurrency rather than
+  // one after another. A full evening can span ~5 sources × 8 sports × a few game
+  // days — well over a hundred serial scan+delete round trips, all of them waiting
+  // on network rather than work. The cap keeps us from opening more pooler
+  // connections than the transaction pooler will hand out; each slate keeps its own
+  // try/catch so one bad slate still cannot fail the run.
   let removed = 0;
-  for (const [slate, { source, sport, gameDate }] of slates) {
-    try {
-      const existing = await withDbRetry(
-        () =>
-          db.providedLine.findMany({
-            where: { source, sport, gameDate },
-            select: { id: true, playerId: true, stat: true, line: true, oddsType: true },
-          }),
-        `stale scan ${slate}`,
-      );
-      const stale = staleRows(existing, writtenBySlate.get(slate)!);
-      const staleIds = stale.map((e) => e.id);
-      for (let i = 0; i < staleIds.length; i += 200) {
-        const chunk = staleIds.slice(i, i + 200);
-        await withDbRetry(
-          () => db.providedLine.deleteMany({ where: { id: { in: chunk } } }),
-          `stale delete ${slate}`,
+  const perSlate = await pMap(
+    [...slates.entries()],
+    async ([slate, { source, sport, gameDate }]) => {
+      try {
+        const existing = await withDbRetry(
+          () =>
+            db.providedLine.findMany({
+              where: { source, sport, gameDate },
+              select: { id: true, playerId: true, stat: true, line: true, oddsType: true },
+            }),
+          `stale scan ${slate}`,
         );
+        const stale = staleRows(existing, writtenBySlate.get(slate)!);
+        const staleIds = stale.map((e) => e.id);
+        for (let i = 0; i < staleIds.length; i += 200) {
+          const chunk = staleIds.slice(i, i + 200);
+          await withDbRetry(
+            () => db.providedLine.deleteMany({ where: { id: { in: chunk } } }),
+            `stale delete ${slate}`,
+          );
+        }
+        return { stale, sport, count: staleIds.length };
+      } catch (e) {
+        console.warn(`[providedlines] stale prune failed for ${slate}: ${(e as Error).message}`);
+        return null;
       }
-      for (const e of stale) changedKeys.add(`${sport}|${e.playerId}|${e.stat}`);
-      removed += staleIds.length;
-    } catch (e) {
-      console.warn(`[providedlines] stale prune failed for ${slate}: ${(e as Error).message}`);
-    }
+    },
+    6,
+  );
+  for (const r of perSlate) {
+    if (!r) continue;
+    for (const e of r.stale) changedKeys.add(`${r.sport}|${e.playerId}|${e.stat}`);
+    removed += r.count;
   }
   return { removed, changedKeys };
 }

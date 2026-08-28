@@ -116,3 +116,86 @@ export function droughtFailure(
     `${inSeasonSports.length === 1 ? 'is' : 'are'} in season. ${why}`
   );
 }
+
+// ---------------------------------------------------------------------------
+// Bulk upsert SQL. Pure string/param assembly so the shape below is unit-tested
+// without a database — the execution loop lives in run-ingest-providedlines.ts.
+//
+// Prisma has no multi-row upsert, so writing a slate used to mean one
+// `providedLine.upsert()` per line: a round trip each, in waves of 20, against a
+// remote transaction pooler. That was the single largest contributor to the job's
+// wall clock, and wall clock is exactly what a billed Actions minute measures.
+// ---------------------------------------------------------------------------
+
+/** The columns a provided-lines write actually supplies (`fetchedAt` is shared). */
+export interface UpsertRow {
+  sport: string;
+  playerId: number;
+  stat: string;
+  source: string;
+  gameDate: Date;
+  line: number;
+  oddsType: string;
+  overOdds: number | null;
+  underOdds: number | null;
+  multiplier: number | null;
+}
+
+/** The unique key: @@unique([sport, playerId, stat, source, gameDate, line, oddsType]). */
+export function upsertKey(r: UpsertRow): string {
+  return `${r.sport}|${r.playerId}|${r.stat}|${r.source}|${r.gameDate.getTime()}|${r.line}|${r.oddsType}`;
+}
+
+/**
+ * Collapse rows sharing a unique key, keeping the LAST occurrence.
+ *
+ * Required, not cosmetic: Postgres rejects an INSERT whose VALUES hit the same
+ * conflict key twice ("ON CONFLICT DO UPDATE command cannot affect row a second
+ * time"). The old row-at-a-time loop absorbed that silently because the later
+ * upsert simply overwrote the earlier, so last-wins reproduces the previous
+ * behaviour exactly. Cross-source collisions cannot happen (source is in the key);
+ * this guards one book listing the same rung twice in a single payload.
+ */
+export function dedupeUpsertRows<T extends UpsertRow>(rows: readonly T[]): T[] {
+  const byKey = new Map<string, T>();
+  for (const r of rows) byKey.set(upsertKey(r), r);
+  return [...byKey.values()];
+}
+
+/** Bound params per row; `fetchedAt` is $1 and shared by every tuple. */
+export const UPSERT_COLS = 10;
+
+/**
+ * Rows per statement. Two ceilings bound this, and 1000 clears both with room:
+ * Postgres caps a statement at 65535 bound parameters (1000 rows = 10001), and the
+ * caller spreads those parameters into `$executeRawUnsafe(sql, ...values)`, which
+ * runs out of argument stack somewhere above 125k on current Node. Meanwhile it
+ * still collapses thousands of round trips into a handful of statements.
+ */
+export const UPSERT_CHUNK = 1000;
+
+/**
+ * One multi-row `INSERT … ON CONFLICT DO UPDATE` plus its bound parameters.
+ * Callers must pass rows already deduped by `dedupeUpsertRows`.
+ */
+export function buildUpsertChunk(
+  rows: readonly UpsertRow[],
+  fetchedAt: Date,
+): { sql: string; values: unknown[] } {
+  const values: unknown[] = [fetchedAt];
+  const tuples = rows.map((d, n) => {
+    const b = n * UPSERT_COLS + 2; // $1 is the shared fetchedAt
+    values.push(
+      d.sport, d.playerId, d.stat, d.source, d.gameDate,
+      d.line, d.oddsType, d.overOdds, d.underOdds, d.multiplier,
+    );
+    return `($${b},$${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$1)`;
+  });
+  const sql =
+    `INSERT INTO "ProvidedLine" ("sport","playerId","stat","source","gameDate","line","oddsType","overOdds","underOdds","multiplier","fetchedAt") ` +
+    `VALUES ${tuples.join(',')} ` +
+    `ON CONFLICT ("sport","playerId","stat","source","gameDate","line","oddsType") ` +
+    `DO UPDATE SET "overOdds" = EXCLUDED."overOdds", "underOdds" = EXCLUDED."underOdds", ` +
+    `"multiplier" = EXCLUDED."multiplier", "fetchedAt" = EXCLUDED."fetchedAt"`;
+  return { sql, values };
+}
