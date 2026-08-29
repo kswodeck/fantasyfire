@@ -12,9 +12,17 @@ export const revalidate = 1800;
 export async function GET(): Promise<Response> {
   const now = new Date();
   const dayIso = socialDayStart(now).toISOString().slice(0, 10);
+  // One independent lean query per sport, fetched together rather than one after
+  // another — this walked all of SPORT_LIST serially. Mapping preserves SPORT_LIST
+  // order, so the feed's item order is unchanged.
+  const perSport = await Promise.all(
+    SPORT_LIST.map(async (sport) => ({
+      sport,
+      leans: await getDailyLeans(sport, 5, now).catch(() => []),
+    })),
+  );
   const items: RssItem[] = [];
-  for (const sport of SPORT_LIST) {
-    const leans = await getDailyLeans(sport, 5, now).catch(() => []);
+  for (const { sport, leans } of perSport) {
     if (leans.length === 0) continue;
     items.push({
       title: `Today's hottest ${SPORTS[sport].name} props`,

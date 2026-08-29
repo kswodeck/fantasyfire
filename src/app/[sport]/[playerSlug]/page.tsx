@@ -120,11 +120,17 @@ export default async function PlayerPage({ params }: PageProps) {
   const initialSource = availableSources.includes(DEFAULT_PROVIDED_SOURCE)
     ? DEFAULT_PROVIDED_SOURCE
     : (availableSources[0] ?? DEFAULT_PROVIDED_SOURCE);
-  const research = await getPlayerResearch(sport, playerSlug, undefined, undefined, initialSource);
-  if (!research) notFound();
+  // Both start together — they share only `initialSource`, and awaiting the reads
+  // after the research served no purpose. Research is still awaited FIRST so an
+  // unknown slug 404s exactly as before; the reads promise is already in flight and
+  // carries its own catch, so nothing is left unhandled when notFound() throws.
+  const researchPromise = getPlayerResearch(sport, playerSlug, undefined, undefined, initialSource);
   // Seed for the "top reads" mini dashboard (board-identical scoring; the client
   // refetches per book). Never fails the page — no reads simply hides the card.
-  const topReads = await getPlayerTopReads(sport, playerSlug, initialSource).catch(() => []);
+  const topReadsPromise = getPlayerTopReads(sport, playerSlug, initialSource).catch(() => []);
+  const research = await researchPromise;
+  if (!research) notFound();
+  const topReads = await topReadsPromise;
 
   const { player } = research;
   const team = getTeam(sport, player.teamAbbreviation);

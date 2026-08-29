@@ -27,32 +27,46 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const sportEntries: MetadataRoute.Sitemap = [];
   let freshestOverall: Date | null = null;
 
-  for (const sport of SPORT_LIST) {
+  // Every sport's two queries, all fetched together. This walked SPORT_LIST serially
+  // and awaited the two calls one after the other inside each sport — 16 serial round
+  // trips to build one document. They are mutually independent, so the only thing that
+  // changes is how much of the waiting overlaps.
+  //
+  // Each call keeps its OWN catch, matching the old behaviour where the player entries
+  // were already pushed before the prop query ran: a failure in one half must not
+  // discard the other, and a sport whose queries fail still contributes its static
+  // sport entries below. (DB unavailable during a revalidation — still return routes.)
+  const perSport = await Promise.all(
+    SPORT_LIST.map(async (sport) => {
+      // Promise.all, not two awaits in sequence — these do not depend on each other.
+      const [players, propParams] = await Promise.all([
+        getPlayerSlugsWithFreshness(sport).catch(() => []),
+        // Per-stat prop pages for the most-active players (capped, valid combos only
+        // — so the sitemap never lists a 404 or balloons into 20k+ URLs).
+        getPropStatParams(sport, 120).catch(() => []),
+      ]);
+      return { sport, players, propParams };
+    }),
+  );
+
+  for (const { sport, players, propParams } of perSport) {
     let freshestForSport: Date | null = null;
-    try {
-      const players = await getPlayerSlugsWithFreshness(sport);
-      for (const { slug, lastGameDate } of players) {
-        playerEntries.push({
-          url: absoluteUrl(`/${sport}/${slug}`),
-          changeFrequency: 'daily',
-          priority: 0.7,
-          ...(lastGameDate ? { lastModified: lastGameDate } : {}),
-        });
-        freshestForSport = newer(freshestForSport, lastGameDate);
-      }
-      // Per-stat prop pages for the most-active players (capped, valid combos
-      // only — so the sitemap never lists a 404 or balloons into 20k+ URLs).
-      const propParams = await getPropStatParams(sport, 120);
-      for (const { slug, stat } of propParams) {
-        playerEntries.push({
-          url: absoluteUrl(`/${sport}/${slug}/${stat}`),
-          changeFrequency: 'daily',
-          priority: 0.6,
-          lastModified: freshestForSport ?? now,
-        });
-      }
-    } catch {
-      // DB unavailable during a revalidation — still return the static routes.
+    for (const { slug, lastGameDate } of players) {
+      playerEntries.push({
+        url: absoluteUrl(`/${sport}/${slug}`),
+        changeFrequency: 'daily',
+        priority: 0.7,
+        ...(lastGameDate ? { lastModified: lastGameDate } : {}),
+      });
+      freshestForSport = newer(freshestForSport, lastGameDate);
+    }
+    for (const { slug, stat } of propParams) {
+      playerEntries.push({
+        url: absoluteUrl(`/${sport}/${slug}/${stat}`),
+        changeFrequency: 'daily',
+        priority: 0.6,
+        lastModified: freshestForSport ?? now,
+      });
     }
     freshestOverall = newer(freshestOverall, freshestForSport);
     const sportMod = freshestForSport ?? now;

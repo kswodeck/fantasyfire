@@ -986,6 +986,86 @@ async function getMinutesDvpTable(
   );
 }
 
+/**
+ * Every stat's DvP table for ONE (sport, posBucket, season) in a SINGLE query.
+ *
+ * getMinutesDvpTable above varies only in its `(expr) AS val` column — the games CTE,
+ * the per-player minute threshold, the join and the grouping are identical for every
+ * stat in a bucket. Calling it per stat therefore re-scanned PlayerGameStat once per
+ * stat just to average a different column: 16 stats x 3 buckets = 48 scans for one NBA
+ * board (measured in the query log). Projecting every stat expression in one pass
+ * returns the same numbers for a fraction of the work.
+ *
+ * Equivalence is exact by construction: same CTEs, same threshold, same GROUP BY, and
+ * `n` (COUNT(*)) counts qualifying GAMES, not per-stat values, so it is shared. A group
+ * whose values are all NULL yields SQL NULL from AVG, which `Number(null)` turns into 0
+ * — exactly what the per-stat version produced.
+ */
+async function getMinutesDvpTables(
+  sport: MinutesDvpSport,
+  posBucket: PosBucket,
+  stats: readonly StatKey[],
+  season: string,
+): Promise<Map<StatKey, DvpCell[]>> {
+  const out = new Map<StatKey, DvpCell[]>();
+  const sqlFor = sport === 'nhl' ? NHL_STAT_SQL : NBA_STAT_SQL;
+  const usable = stats.filter((s) => sqlFor[s]);
+  for (const s of stats) if (!sqlFor[s]) out.set(s, []); // matches the `if (!expr) return []` guard
+  if (usable.length === 0) return out;
+
+  const factor = qualifyFactorFor(sport, posBucket);
+  // v0..vN track `usable` positionally. The expressions come from the fixed
+  // NBA_STAT_SQL / NHL_STAT_SQL maps — never from user input — same as the single-stat
+  // query this replaces.
+  const valCols = usable.map((s, i) => `(${sqlFor[s]}) AS v${i}`).join(', ');
+  const avgCols = usable.map((_, i) => `AVG(g.v${i})::float8 AS a${i}`).join(', ');
+  const rows = await db.$queryRawUnsafe<Array<Record<string, number>>>(
+    `WITH games AS (
+       SELECT s."opponentTeamId" AS opp, s.minutes AS minutes, ${valCols},
+              ROW_NUMBER() OVER (PARTITION BY s."playerId" ORDER BY s."gameDate" DESC) AS rn,
+              s."playerId" AS pid
+       FROM "PlayerGameStat" s
+       JOIN "Player" p ON p.id = s."playerId"
+       WHERE p.sport = $4 AND p."posBucket" = $1 AND s.season = $2
+         AND s.minutes IS NOT NULL AND s.minutes > 0
+     ),
+     thresh AS (
+       SELECT pid, (AVG(minutes) + AVG(minutes) FILTER (WHERE rn <= $3)) / 2.0 AS thr
+       FROM games GROUP BY pid
+     )
+     SELECT g.opp AS "opponentTeamId", COUNT(*)::int AS n, ${avgCols}
+     FROM games g
+     JOIN thresh t ON t.pid = g.pid
+     WHERE g.minutes >= t.thr * $5
+     GROUP BY g.opp`,
+    posBucket,
+    season,
+    RECENT_GAMES_WINDOW,
+    sport,
+    factor,
+  );
+
+  usable.forEach((stat, i) => {
+    if (rows.length === 0) {
+      out.set(stat, []);
+      return;
+    }
+    out.set(
+      stat,
+      rankDvp(
+        rows.map((r) => ({
+          opponentTeamId: Number(r.opponentTeamId),
+          avgAllowed: Number(r[`a${i}`]),
+          sampleSize: Number(r.n),
+        })),
+        posBucket,
+        stat,
+      ),
+    );
+  });
+  return out;
+}
+
 async function getMinutesDvp(
   sport: MinutesDvpSport,
   posBucket: PosBucket,
@@ -1943,16 +2023,20 @@ export async function getBoard(
   // The full ladder + book quotes ride along so a variant rung headlining a row is
   // scored against its OWN payout breakeven — the same read every other surface
   // (sourced boards, player page) produces for that line.
-  const variantMap = await getProvidedVariantMap(sport, ids, opts.source);
+  // These four are mutually independent — only the matchup context needs the season,
+  // and it chains off it. Awaiting them one by one cost four serial round trips for
+  // no reason; the pg pool still bounds real concurrency.
+  const [variantMap, bookQuotes, availability, ctx] = await Promise.all([
+    getProvidedVariantMap(sport, ids, opts.source),
+    getBookQuoteMap(sport, ids),
+    getBoardAvailability(sport, ids),
+    getActiveSeason(sport).then((season) => boardMatchupContext(sport, players, season)),
+  ]);
   const providedLines = new Map<string, number>();
   for (const [key, vs] of variantMap) {
     const rep = pickRepresentative(vs, null);
     if (rep) providedLines.set(key, rep.line);
   }
-  const bookQuotes = await getBookQuoteMap(sport, ids);
-  const season = await getActiveSeason(sport);
-  const ctx = await boardMatchupContext(sport, players, season);
-  const availability = await getBoardAvailability(sport, ids);
   return computeBoardRows(sport, players, gamesByPlayer, providedLines, {
     limit,
     perPlayerCap,
@@ -1992,8 +2076,32 @@ export async function getSourcedBoards(
   //    demon/goblin rung never skews line value), and
   //  • repMaps — the representative rung to actually show/score (prefer plain, else
   //    demon, else goblin), picked nearest the cross-book consensus.
+  // One ladder query per book, all in flight together. This awaited each book in turn,
+  // and the busy surfaces (/ and /board) pass EVERY available source — so the serial
+  // version cost one full round trip per book before any work started.
+  //
+  // Everything the board needs from the DB starts here, together: the per-book
+  // ladders, the quote map, the matchup context (the expensive one — it warms every
+  // DvP table) and availability. All four were awaited one after another, and the
+  // ladder loop awaited each book in turn on top of that — so the busy surfaces (/
+  // and /board), which pass EVERY available source, paid a full serial round trip per
+  // book before the rest even began. Only the matchup context has a dependency (the
+  // season), so it chains off it inside the same combinator. One Promise.all rather
+  // than separately-started promises, so a rejection anywhere is handled here instead
+  // of surfacing as an unhandled rejection when an earlier await throws first.
+  const [ladders, bookQuotes, ctx, availability] = await Promise.all([
+    Promise.all(sources.map((s) => getProvidedVariantMap(sport, ids, s))),
+    // Every sportsbook's two-sided quotes, once for the whole board — variant rungs
+    // whose exact line a book quotes get a MARKET-IMPLIED breakeven (de-vigged)
+    // instead of the configured approximation.
+    getBookQuoteMap(sport, ids),
+    getActiveSeason(sport).then((season) => boardMatchupContext(sport, players, season)),
+    getBoardAvailability(sport, ids),
+  ]);
   const variantMaps: Record<string, Map<string, ProvidedVariant[]>> = {};
-  for (const s of sources) variantMaps[s] = await getProvidedVariantMap(sport, ids, s);
+  sources.forEach((s, i) => {
+    variantMaps[s] = ladders[i];
+  });
   const normalMaps: Record<string, Map<string, number>> = {};
   for (const s of sources) {
     const nm = new Map<string, number>();
@@ -2004,10 +2112,6 @@ export async function getSourcedBoards(
     normalMaps[s] = nm;
   }
   const consensus = consensusLineMap(normalMaps);
-  // Every sportsbook's two-sided quotes, once for the whole board — variant rungs
-  // whose exact line a book quotes get a MARKET-IMPLIED breakeven (de-vigged) instead
-  // of the configured approximation.
-  const bookQuotes = await getBookQuoteMap(sport, ids);
   const repMaps: Record<string, Map<string, number>> = {};
   for (const s of sources) {
     const rm = new Map<string, number>();
@@ -2022,9 +2126,6 @@ export async function getSourcedBoards(
     }
     repMaps[s] = rm;
   }
-  const season = await getActiveSeason(sport);
-  const ctx = await boardMatchupContext(sport, players, season);
-  const availability = await getBoardAvailability(sport, ids);
   for (const s of sources) {
     result[s] = computeBoardRows(sport, players, gamesByPlayer, repMaps[s], {
       limit,
@@ -2199,26 +2300,29 @@ async function boardMatchupContext(
 
   // DvP cell tables, memoized per (posBucket, stat): opponentTeamId -> cell (the cell
   // feeds both the grade and the opponent multiplier, so they stay in lock-step).
-  const tableCache = new Map<string, Map<number, DvpCell>>();
-  const cellTable = async (
-    bucket: PosBucket,
-    stat: StatKey,
-  ): Promise<Map<number, DvpCell>> => {
+  // Caches the PROMISE, not the resolved map: two concurrent callers for the same
+  // (bucket, stat) then share one in-flight query instead of both missing the cache
+  // and issuing duplicates. That matters now the tables are warmed in parallel below.
+  const tableCache = new Map<string, Promise<Map<number, DvpCell>>>();
+  const cellTable = (bucket: PosBucket, stat: StatKey): Promise<Map<number, DvpCell>> => {
     const key = `${bucket}:${stat}`;
     const cached = tableCache.get(key);
     if (cached) return cached;
-    let cells: DvpCell[] = [];
-    if (sport === 'nba' || sport === 'wnba' || sport === 'cbb' || sport === 'nhl')
-      cells = await getMinutesDvpTable(sport, bucket, stat, season);
-    else if (sport === 'mlb' && bucket === 'H')
-      cells = await getMlbHitterMatchupTable(stat, season);
-    else if (sport === 'nfl' || sport === 'cfb') cells = await getNflDvpTable(sport, bucket, stat, season);
-    else if (sport === 'mls')
-      cells = await getSoccerDvpTable(sport, bucket, stat, season);
-    const m = new Map<number, DvpCell>();
-    for (const c of cells) m.set(c.opponentTeamId, c);
-    tableCache.set(key, m);
-    return m;
+    const p = (async () => {
+      let cells: DvpCell[] = [];
+      if (sport === 'nba' || sport === 'wnba' || sport === 'cbb' || sport === 'nhl')
+        cells = await getMinutesDvpTable(sport, bucket, stat, season);
+      else if (sport === 'mlb' && bucket === 'H')
+        cells = await getMlbHitterMatchupTable(stat, season);
+      else if (sport === 'nfl' || sport === 'cfb') cells = await getNflDvpTable(sport, bucket, stat, season);
+      else if (sport === 'mls')
+        cells = await getSoccerDvpTable(sport, bucket, stat, season);
+      const m = new Map<number, DvpCell>();
+      for (const c of cells) m.set(c.opponentTeamId, c);
+      return m;
+    })();
+    tableCache.set(key, p);
+    return p;
   };
 
   // Basketball game pace (one league-wide table) — the same projected-game pace
@@ -2239,6 +2343,48 @@ async function boardMatchupContext(
     pitcherMultCache.set(key, m);
     return m;
   };
+
+  // Warm every DvP table the loop below will ask for, CONCURRENTLY.
+  //
+  // Each table is keyed by (posBucket, stat) alone, so the full set is knowable up
+  // front — but the loop used to discover them one at a time and `await` each inside
+  // a nested per-player/per-stat walk. Measured on a 120-player NBA board that is 48
+  // SERIAL round trips of the same `WITH games AS (…)` scan, ~14-25ms each, and it
+  // dominated getBoard's wall clock (831ms total against a 133ms pool load). The
+  // queries and their results are identical; only the waiting overlaps. The pg pool
+  // (max 3) is what actually bounds the fan-out, so there is no thundering herd.
+  const neededBuckets = new Set<PosBucket>();
+  for (const p of players) {
+    if (p.teamId == null || !p.posBucket) continue;
+    if (oppByTeam.get(p.teamId) == null) continue;
+    neededBuckets.add(p.posBucket as PosBucket);
+  }
+  if (sport === 'nba' || sport === 'wnba' || sport === 'cbb' || sport === 'nhl') {
+    // One query per BUCKET rather than one per (bucket, stat) — see
+    // getMinutesDvpTables. Seeds the same cache the loop reads, so nothing downstream
+    // knows the difference.
+    await Promise.all(
+      [...neededBuckets].map(async (bucket) => {
+        const tables = await getMinutesDvpTables(
+          sport,
+          bucket,
+          statKeysForSport(sport, bucket),
+          season,
+        );
+        for (const [stat, cells] of tables) {
+          const m = new Map<number, DvpCell>();
+          for (const c of cells) m.set(c.opponentTeamId, c);
+          tableCache.set(`${bucket}:${stat}`, Promise.resolve(m));
+        }
+      }),
+    );
+  } else {
+    await Promise.all(
+      [...neededBuckets].flatMap((bucket) =>
+        statKeysForSport(sport, bucket).map((stat) => cellTable(bucket, stat)),
+      ),
+    );
+  }
 
   for (const p of players) {
     if (p.teamId == null || !p.posBucket) continue;
