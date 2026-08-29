@@ -34,7 +34,13 @@ concurrency:
 jobs:
   ingest:
     runs-on: ubuntu-latest
-    timeout-minutes: 100
+    # Backstop only — a wedged run is billed for every minute it sits here. Healthy
+    # daily runs land in 2-5 min; the 47-minute outliers were the ESPN retry grind
+    # (see src/ingest/retryPasses.ts), which now short-circuits on a source outage.
+    # 60 still leaves generous room for a first-run season backfill, which walks up to
+    # MAX_WALK_DAYS dates and is the only legitimately long case. Raise it if a real
+    # backfill ever needs more, rather than leaving 100 minutes of rope for a hang.
+    timeout-minutes: 60
     # DATABASE_URL is stored on the "Production" environment, so the job must
     # declare it to access the secret. The environment's branch rule allows
     # `main`, which is where the schedule/dispatch runs.
