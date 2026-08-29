@@ -43,8 +43,8 @@ describe('composeDailyPost', () => {
       channel: 'bluesky',
     });
     expect(c.text).toContain('hottest NBA props');
-    expect(c.text).toContain('L. Dončić Over 32.5 PTS 🔥🔥'); // over + Strong lean = Blazing
-    expect(c.text).toContain('J. Brunson Under 6.5 AST ❄️'); // under + Lean = Cold (cool side)
+    expect(c.text).toContain('Luka Dončić Over 32.5 PTS 🔥🔥'); // over + Strong lean = Blazing
+    expect(c.text).toContain('Jalen Brunson Under 6.5 AST ❄️'); // under + Lean = Cold (cool side)
     expect(c.text).not.toContain('1-800-GAMBLER'); // RG disclosure lives on the site/bios, not posts
     expect(c.text).toContain(c.linkDisplay);
     expect(c.boardUrl).toBe(
@@ -191,8 +191,8 @@ describe('composeDailyDigest', () => {
   it('lists one top lean per sport with leans and links the all-sports board', () => {
     const c = composeDailyDigest({ entries: ENTRIES, siteUrl: SITE_URL, channel: 'discord' });
     expect(c.text).toContain('2 leagues');
-    expect(c.text).toContain('NBA: L. Dončić Over 32.5 PTS');
-    expect(c.text).toContain('MLB: A. Judge Over 0.5 HR');
+    expect(c.text).toContain('NBA: Luka Dončić Over 32.5 PTS');
+    expect(c.text).toContain('MLB: Aaron Judge Over 0.5 HR');
     expect(c.text).not.toContain('WNBA'); // no leans → dropped
     expect(c.text).not.toContain('1-800-GAMBLER');
     expect(c.boardUrl).toContain('/board?utm_source=discord');
@@ -230,7 +230,7 @@ describe('composeDailyPoll', () => {
     ]);
     expect(poll).not.toBeNull();
     expect(poll!.options).toHaveLength(2);
-    expect(poll!.options[0]).toBe('NBA · L. Dončić Over 32.5 PTS');
+    expect(poll!.options[0]).toBe('NBA · Luka Dončić Over 32.5 PTS');
     for (const o of poll!.options) expect(o.length).toBeLessThanOrEqual(55);
     expect(poll!.question).toContain('?');
     for (const token of BANNED_TOKENS) {
@@ -350,5 +350,99 @@ describe('discovery tags in composed posts', () => {
       channel: 'instagram',
     });
     expect(() => assertDescriptive(c.text)).not.toThrow();
+  });
+});
+
+// --- hit-rate evidence -----------------------------------------------------
+
+const HR = { recentWindow: 10, recentHits: 8, recentDecided: 10, seasonHits: 31, seasonDecided: 50 };
+
+const EVIDENCED: DailyLean[] = [
+  lean({ hitRate: HR }),
+  lean({
+    slug: 'jalen-brunson', firstName: 'Jalen', lastName: 'Brunson', statShort: 'AST',
+    line: 6.5, side: 'under', tier: 'Lean',
+    hitRate: { recentWindow: 10, recentHits: 7, recentDecided: 9, seasonHits: 28, seasonDecided: 44 },
+  }),
+  lean({
+    slug: 'nikola-jokic', firstName: 'Nikola', lastName: 'Jokić', statShort: 'REB', line: 12.5,
+    hitRate: { recentWindow: 5, recentHits: 4, recentDecided: 5, seasonHits: 20, seasonDecided: 33 },
+  }),
+];
+
+describe('hit-rate evidence in captions', () => {
+  it('shows the record as counts plus a season rate', () => {
+    const c = composeDailyPost({
+      sport: 'nba', sportName: 'NBA', leans: EVIDENCED, siteUrl: SITE_URL,
+      channel: 'discord', maxChars: 1500,
+    });
+    expect(c.text).toContain('Luka Dončić Over 32.5 PTS — 8/10 L10 · 62% season');
+  });
+
+  it('reports the UNDER count for an under lean, not the overs', () => {
+    // 7/9 is already sided by BoardRow.hitRate — the composer must not re-flip it.
+    const c = composeDailyPost({
+      sport: 'nba', sportName: 'NBA', leans: EVIDENCED, siteUrl: SITE_URL,
+      channel: 'discord', maxChars: 1500,
+    });
+    expect(c.text).toContain('Jalen Brunson Under 6.5 AST — 7/9 L10');
+  });
+
+  it('names the window it actually used when history is thin', () => {
+    const c = composeDailyPost({
+      sport: 'nba', sportName: 'NBA', leans: [EVIDENCED[2]], siteUrl: SITE_URL,
+      channel: 'discord', maxChars: 1500,
+    });
+    expect(c.text).toContain('4/5 L5');
+  });
+
+  it('degrades to the plain line when a lean carries no record', () => {
+    const c = composeDailyPost({
+      sport: 'nba', sportName: 'NBA', leans: [lean()], siteUrl: SITE_URL,
+      channel: 'discord', maxChars: 1500,
+    });
+    expect(c.text).toContain('Luka Dončić Over 32.5 PTS');
+    expect(c.text).not.toContain('—'); // no dangling evidence separator
+  });
+
+  it('drops leans before it drops the record', () => {
+    // A budget that fits 3 evidenced leans but not 5.
+    const five = [...EVIDENCED, lean({ slug: 'a', firstName: 'Anthony', lastName: 'Edwards', hitRate: HR }), lean({ slug: 'b', firstName: 'Devin', lastName: 'Booker', hitRate: HR })];
+    const c = composeDailyPost({
+      sport: 'nba', sportName: 'NBA', leans: five, siteUrl: SITE_URL,
+      // 5 evidenced leans render ~381 chars, 3 render ~263 — a 300 budget must
+      // therefore drop leans while keeping the record.
+      channel: 'discord', maxChars: 300,
+    });
+    expect(c.text).toContain('L10'); // evidence survived
+    expect(c.text.split('\n').filter((l) => l.startsWith('•')).length).toBeLessThan(5);
+    expect([...c.text].length).toBeLessThanOrEqual(300);
+  });
+
+  it('falls back to compact lines when even the floor will not fit', () => {
+    // Bluesky's real budget with long evidenced lines.
+    const c = composeDailyPost({
+      sport: 'nba', sportName: 'NBA', leans: EVIDENCED, siteUrl: SITE_URL,
+      channel: 'bluesky', maxChars: 290,
+    });
+    expect([...c.text].length).toBeLessThanOrEqual(290);
+    expect(c.text).toContain('Luka Dončić Over 32.5 PTS');
+  });
+
+  it('always carries the record in alt text, whatever the caption dropped', () => {
+    const c = composeDailyPost({
+      sport: 'nba', sportName: 'NBA', leans: EVIDENCED, siteUrl: SITE_URL,
+      channel: 'bluesky', maxChars: 290,
+    });
+    expect(c.imageAlt).toContain('8/10 L10');
+  });
+
+  it('keeps every composed surface free of tout-speak', () => {
+    const c = composeDailyPost({
+      sport: 'nba', sportName: 'NBA', leans: EVIDENCED, siteUrl: SITE_URL,
+      channel: 'discord', maxChars: 1500,
+    });
+    expect(() => assertDescriptive(c.text)).not.toThrow();
+    expect(() => assertDescriptive(c.imageAlt)).not.toThrow();
   });
 });

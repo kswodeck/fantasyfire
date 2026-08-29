@@ -33,6 +33,19 @@ export interface DailyLean {
   bestLine?: boolean;
   /** Only lean tiers are publishable — never "Slight lean" or below. */
   tier: 'Strong lean' | 'Lean';
+  /**
+   * The record behind the read, already resolved to `side` (see BoardRow.hitRate).
+   * This is the whole reason to trust a posted lean: without it a caption asserts
+   * "Over 25.5 PTS 🔥🔥" and gives the reader nothing to check it against. Optional
+   * so composed-text fixtures can omit it.
+   */
+  hitRate?: {
+    recentWindow: number;
+    recentHits: number;
+    recentDecided: number;
+    seasonHits: number;
+    seasonDecided: number;
+  } | null;
   /** Book source id the line came from (providedSources.ts), null = our computed median. */
   linesSource?: string | null;
 }
@@ -93,6 +106,7 @@ function leansFromRows(
       multiplier: r.multiplier ?? null,
       bestLine: !!source && r.lineValue?.best != null && r.lineValue.best.source === source,
       linesSource: source,
+      hitRate: r.hitRate ?? null,
     });
     if (leans.length >= limit) break;
   }
