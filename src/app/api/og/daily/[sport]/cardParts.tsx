@@ -5,6 +5,8 @@
 // handlers/config).
 import { sourceBrand, sourceLabel, sourceLogoPngUrl } from '@/lib/providedSources';
 import type { DailyLean } from '@/lib/server/social';
+import { formatEvidence } from '@/lib/social/compose';
+import { SITE } from '@/lib/site';
 import { socialDayIso } from '@/lib/social/schedule';
 import { getTeam, playerHeadshotUrl, teamLogoUrl } from '@/lib/teams';
 import { heatLabel } from '@/lib/tierStyle';
@@ -119,8 +121,8 @@ export function VerticalCard({
         style={{
           display: 'flex',
           flexDirection: 'column',
-          gap: story ? 22 : 18,
-          marginTop: story ? 40 : 30,
+          gap: story ? 16 : 12,
+          marginTop: story ? 32 : 24,
           flexGrow: 1,
         }}
       >
@@ -140,10 +142,10 @@ export function VerticalCard({
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: story ? 10 : 8,
+                  gap: story ? 6 : 4,
                   background: 'rgba(255,255,255,0.06)',
                   borderRadius: 20,
-                  padding: story ? '26px 32px' : '20px 30px',
+                  padding: story ? '18px 32px' : '14px 30px',
                 }}
               >
                 <div
@@ -151,8 +153,26 @@ export function VerticalCard({
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
                     <LeanAvatar lean={l} src={headshots[l.slug]} size={story ? 72 : 64} />
-                    <div style={{ display: 'flex', fontSize: 40, fontWeight: 700 }}>
-                      {l.firstName.charAt(0)}. {l.lastName}
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ display: 'flex', fontSize: 40, fontWeight: 700 }}>
+                        {l.firstName} {l.lastName}
+                      </div>
+                      {/* The record the read rests on. Same string the caption prints
+                          (formatEvidence), so a screenshot of the card and the post text
+                          can never tell the reader different things. */}
+                      {formatEvidence(l) ? (
+                        <div
+                          style={{
+                            display: 'flex',
+                            fontSize: story ? 26 : 24,
+                            fontWeight: 600,
+                            color: '#a8a29e',
+                            marginTop: 2,
+                          }}
+                        >
+                          {formatEvidence(l)}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                   {l.teamAbbreviation ? (
@@ -221,8 +241,49 @@ export function VerticalCard({
           })
         )}
       </div>
+
+      {/* Footer — see the landscape card for the reasoning. It matters MORE here:
+          a 1080x1350 feed post or a 1080x1920 story is the format people screenshot
+          and reshare, arriving somewhere with no profile and no caption. The
+          wordmark, the bare domain and the descriptive framing have to survive that
+          trip on the artwork itself. `domain` is null in a dev environment rather
+          than publishing a localhost origin. */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginTop: story ? 28 : 22,
+          paddingTop: story ? 20 : 16,
+          borderTop: '1px solid rgba(255,255,255,0.10)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+          <div style={{ display: 'flex', fontSize: story ? 30 : 28, fontWeight: 800, color: '#f5f5f4' }}>
+            FantasyFire
+          </div>
+          {cardDomain() ? (
+            <div style={{ display: 'flex', fontSize: story ? 26 : 24, color: '#78716c' }}>
+              {cardDomain()}/{sport}
+            </div>
+          ) : null}
+        </div>
+        <div style={{ display: 'flex', fontSize: story ? 22 : 21, color: '#78716c' }}>
+          Research, not betting advice · 21+
+        </div>
+      </div>
     </div>
   );
+}
+
+/**
+ * Host for the card footer, or null when it would leak a dev origin.
+ * NEXT_PUBLIC_SITE_URL is unset in some environments and SITE.url then falls back to
+ * localhost — which must never be published on artwork that travels off-platform.
+ */
+export function cardDomain(): string | null {
+  const host = SITE.url.replace(/^https?:\/\//, '');
+  return /^(localhost|127\.0\.0\.1|0\.0\.0\.0)(:|$)/.test(host) ? null : host;
 }
 
 /** "best line" marker (multi-source cards): this book posts the most favorable

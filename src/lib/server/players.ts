@@ -2426,6 +2426,35 @@ async function boardMatchupContext(
 }
 
 /** Rank a loaded player pool into board rows against a given line map (pure compute). */
+/**
+ * The hit-rate record behind a board read, resolved to the LEANED side.
+ *
+ * Reuses the `windows` + season counts already computed for FireFactor, so it costs
+ * nothing extra and can never disagree with the score it explains. Prefers the L10
+ * window and falls back to L5, so a thin history reports the window it actually has
+ * instead of an empty one. `decided` excludes pushes, so `decided - overs` is the
+ * under count exactly.
+ */
+function sidedHitRate(
+  windows: ReadonlyArray<{ window: string; overs: number; decided: number }>,
+  seasonHr: { overs: number; decided: number },
+  side: 'over' | 'under',
+): BoardRow['hitRate'] {
+  if (seasonHr.decided === 0) return null;
+  const recent =
+    windows.find((w) => w.window === '10' && w.decided > 0) ??
+    windows.find((w) => w.window === '5' && w.decided > 0);
+  if (!recent) return null;
+  const hits = (overs: number, decided: number) => (side === 'over' ? overs : decided - overs);
+  return {
+    recentWindow: Number(recent.window),
+    recentHits: hits(recent.overs, recent.decided),
+    recentDecided: recent.decided,
+    seasonHits: hits(seasonHr.overs, seasonHr.decided),
+    seasonDecided: seasonHr.decided,
+  };
+}
+
 function computeBoardRows(
   sport: Sport,
   players: BoardPlayer[],
@@ -2629,6 +2658,9 @@ function computeBoardRows(
         oddsType: shownRung?.oddsType ?? null,
         multiplier: shownRung ? sidedMultiplier(shownRung, fireScore.side) : null,
         variants: scoredVariants,
+        // Resolved to the leaned side from the SAME `windows`/`seasonHr` that fed
+        // FireFactor — no extra query, and it cannot drift from the score it explains.
+        hitRate: sidedHitRate(windows, seasonHr, fireScore.side),
       });
     }
   }

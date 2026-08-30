@@ -62,13 +62,51 @@ function capSide(side: 'over' | 'under'): string {
   return side === 'over' ? 'Over' : 'Under';
 }
 
-function leanLine(l: DailyLean): string {
+/** Fewest leans worth keeping before giving up the hit-rate evidence entirely. */
+const EVIDENCE_FLOOR = 3;
+
+/** Platform-safe poll option length (X caps at 25 for polls; this is the caption-side cap). */
+const POLL_OPTION_MAX = 55;
+
+/**
+ * The record behind a lean, as a compact caption fragment: "8/10 L10 · 61% season".
+ *
+ * This is the difference between a post that asserts and a post that shows its work.
+ * The site's whole claim is descriptive — historical hit rates with sample-size
+ * confidence — and a caption that names a side without the record is the one place
+ * the brand quietly stopped honouring that. Counts (not just a percentage) so a thin
+ * sample is visible as 3/4 rather than hidden behind "75%".
+ *
+ * Returns '' when there is nothing decided to report, so the line degrades to exactly
+ * what it used to be rather than printing an empty stat.
+ *
+ * EXPORTED so the card images render the identical string. The cards already promise
+ * they "can never disagree with the caption" by reading the same selection; formatting
+ * the record twice would have quietly broken that.
+ */
+export function formatEvidence(l: DailyLean): string {
+  const h = l.hitRate;
+  if (!h || h.recentDecided === 0) return '';
+  const recent = `${h.recentHits}/${h.recentDecided} L${h.recentWindow}`;
+  if (h.seasonDecided === 0) return recent;
+  const seasonPct = Math.round((h.seasonHits / h.seasonDecided) * 100);
+  return `${recent} · ${seasonPct}% season`;
+}
+
+function leanLine(l: DailyLean, opts: { evidence?: boolean } = {}): string {
   // The rung's payout multiplier rides along whenever the book posts a
   // meaningful one (Sleeper standard/alt, Underdog alternates) — a plain 1×
   // adds nothing. Trailing zeros trimmed: 1.5 → "1.5×", 2 → "2×".
   const mult =
     l.multiplier != null && l.multiplier !== 1 ? ` (${parseFloat(l.multiplier.toFixed(2))}×)` : '';
-  return `${l.firstName.charAt(0)}. ${l.lastName} ${capSide(l.side)} ${l.line} ${l.statShort}${mult}`;
+  // Full first name, not an initial. "L. James" saved eight characters and cost the
+  // reader the player — and on the surfaces with room (everything but Bluesky's 300)
+  // that trade was never worth making. The fitting loop below still drops whole leans
+  // when a budget is tight, which reads better than abbreviating every one of them.
+  const head = `${l.firstName} ${l.lastName} ${capSide(l.side)} ${l.line} ${l.statShort}${mult}`;
+  if (!opts.evidence) return head;
+  const ev = formatEvidence(l);
+  return ev ? `${head} — ${ev}` : head;
 }
 
 /**
@@ -130,19 +168,43 @@ export function composeDailyPost(opts: {
     sources: opts.leans.map((l) => l.linesSource),
   });
 
-  let leans = [...opts.leans];
-  let text = '';
-  for (;;) {
-    text = [header, ...leans.map((l) => `• ${leanLine(l)} ${tierFlames(l)}`), footer, tags]
+  const render = (ls: DailyLean[], withEvidence: boolean): string =>
+    [
+      header,
+      ...ls.map((l) => `• ${leanLine(l, { evidence: withEvidence })} ${tierFlames(l)}`),
+      footer,
+      tags,
+    ]
       .filter(Boolean)
       .join('\n');
-    if ([...text].length <= maxChars || leans.length <= 1) break;
+  const fits = (t: string): boolean => [...t].length <= maxChars;
+
+  // Prefer showing the record, and pay for it with leans rather than with evidence:
+  // three props that show their work are worth more to a reader than five that only
+  // assert. Only when even EVIDENCE_FLOOR leans won't fit (Bluesky's 300-grapheme
+  // budget, mainly) does it fall back to the old compact line.
+  const floor = Math.min(EVIDENCE_FLOOR, opts.leans.length);
+  let leans = [...opts.leans];
+  let text = render(leans, true);
+  while (!fits(text) && leans.length > floor) {
     leans = leans.slice(0, -1);
+    text = render(leans, true);
+  }
+  if (!fits(text)) {
+    leans = [...opts.leans];
+    text = render(leans, false);
+    while (!fits(text) && leans.length > 1) {
+      leans = leans.slice(0, -1);
+      text = render(leans, false);
+    }
   }
 
+  // Alt text always carries the record: a screen-reader user should get the same
+  // evidence a sighted reader gets from the card, and alt has no character budget
+  // pressure worth trading it away for.
   const imageAlt =
     `Today's hottest ${sportName} props on FantasyFire: ` +
-    `${leans.map(leanLine).join('; ')}. ` +
+    `${leans.map((l) => leanLine(l, { evidence: true })).join('; ')}. ` +
     'Historical hit rates with sample-size confidence intervals — past performance, not betting advice.';
 
   assertDescriptive(text);
@@ -186,7 +248,8 @@ export function composeMultiSourcePost(opts: {
       ...blocks.map(
         (b) =>
           `${sourceLabel(b.source)}:\n` +
-          b.leans.map((l) => `• ${leanLine(l)} ${tierFlames(l)}`).join('\n'),
+          // These channels budget 1500+, so the record always fits — no fallback path.
+          b.leans.map((l) => `• ${leanLine(l, { evidence: true })} ${tierFlames(l)}`).join('\n'),
       ),
       footer,
       // Tags last; the books actually in the post drive the book tags, so a
@@ -260,33 +323,49 @@ export function composeDailyDigest(opts: {
   const attribution = linesAttribution(withLeans.map((e) => e.leans[0]));
   const footer = `All boards → ${linkDisplay}${attribution ? ` · ${attribution} lines` : ''}`;
 
-  let entries = [...withLeans];
-  let text = '';
-  for (;;) {
-    const header = `Today's slate — the hottest props across ${entries.length} leagues 🔥`;
+  const render = (es: ContentPackEntry[], withEvidence: boolean): string => {
+    const header = `Today's slate — the hottest props across ${es.length} leagues 🔥`;
     // Multi-sport: the tags lead with one league tag per sport shown (breadth),
     // so a dropped sport also drops its tag.
     const tags = tagLine(channel, {
-      sports: entries.map((e) => e.sport),
-      sources: entries.flatMap((e) => e.leans.map((l) => l.linesSource)),
+      sports: es.map((e) => e.sport),
+      sources: es.flatMap((e) => e.leans.map((l) => l.linesSource)),
     });
-    text = [
+    return [
       header,
-      ...entries.map(
-        (e) => `• ${e.sportName}: ${leanLine(e.leans[0])} ${tierFlames(e.leans[0])}`,
+      ...es.map(
+        (e) =>
+          `• ${e.sportName}: ${leanLine(e.leans[0], { evidence: withEvidence })} ${tierFlames(e.leans[0])}`,
       ),
       footer,
       tags,
     ]
       .filter(Boolean)
       .join('\n');
-    if ([...text].length <= maxChars || entries.length <= 2) break;
+  };
+  const fits = (t: string): boolean => [...t].length <= maxChars;
+
+  // Same trade as composeDailyPost: keep the record, pay in leagues. Two is this
+  // composer's floor (below that it is not a digest), so evidence is only abandoned
+  // when even two leagues with it overflow the budget.
+  let entries = [...withLeans];
+  let text = render(entries, true);
+  while (!fits(text) && entries.length > 2) {
     entries = entries.slice(0, -1);
+    text = render(entries, true);
+  }
+  if (!fits(text)) {
+    entries = [...withLeans];
+    text = render(entries, false);
+    while (!fits(text) && entries.length > 2) {
+      entries = entries.slice(0, -1);
+      text = render(entries, false);
+    }
   }
 
   const imageAlt =
     `Today's hottest props across ${entries.length} leagues on FantasyFire: ` +
-    `${entries.map((e) => `${e.sportName} — ${leanLine(e.leans[0])}`).join('; ')}. ` +
+    `${entries.map((e) => `${e.sportName} — ${leanLine(e.leans[0], { evidence: true })}`).join('; ')}. ` +
     'Historical hit rates with sample-size confidence intervals — past performance, not betting advice.';
 
   assertDescriptive(text);
@@ -370,10 +449,15 @@ export function composeDailyPoll(entries: ContentPackEntry[], maxOptions = 4): P
   const options = withLeans.slice(0, maxOptions).map((e) => {
     const l = e.leans[0];
     const side = l.side === 'over' ? 'Over' : 'Under';
-    return `${e.sportName} · ${l.firstName.charAt(0)}. ${l.lastName} ${side} ${l.line} ${l.statShort}`.slice(
-      0,
-      55,
-    );
+    const tail = `${side} ${l.line} ${l.statShort}`;
+    // Full name when it fits; abbreviate the FIRST name before resorting to a hard
+    // slice. The old code always abbreviated and then sliced anyway, so a long name
+    // could still land mid-word ("NBA · S. Gilgeous-Alexa") — which is the one thing
+    // a poll option must not do.
+    const full = `${e.sportName} · ${l.firstName} ${l.lastName} ${tail}`;
+    if (full.length <= POLL_OPTION_MAX) return full;
+    const short = `${e.sportName} · ${l.firstName.charAt(0)}. ${l.lastName} ${tail}`;
+    return short.length <= POLL_OPTION_MAX ? short : short.slice(0, POLL_OPTION_MAX);
   });
   const poll: PollContent = {
     question: 'Which prop hits tonight? 🔥',

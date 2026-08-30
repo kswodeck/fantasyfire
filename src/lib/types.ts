@@ -288,6 +288,25 @@ export interface BoardRow {
   /** This source's full variant ladder for the stat — powers the row's icon switcher.
    *  Present only on the sourced (per-book) boards; omitted on the computed board. */
   variants?: ProvidedVariant[];
+  /**
+   * The hit-rate evidence BEHIND `fireScore`, resolved to the leaned side.
+   *
+   * These counts were always computed (they feed FireFactor's Wilson component) and
+   * then discarded, so anything downstream of the board could show a read without the
+   * record it rests on. The social cards and captions are exactly that case: "Over
+   * 25.5 PTS 🔥🔥" is an assertion until it says 8 of the last 10.
+   *
+   * `hits` is for `fireScore.side`, so an under lean reports unders — callers never
+   * have to know to flip it. Null when nothing is decided at this line.
+   */
+  hitRate?: {
+    /** Recent window size actually used (the largest of L10/L5 with decided games). */
+    recentWindow: number;
+    recentHits: number;
+    recentDecided: number;
+    seasonHits: number;
+    seasonDecided: number;
+  } | null;
 }
 
 /** One rung's trend snapshot — the same swing metrics evaluated vs THAT rung's line,
