@@ -102,6 +102,34 @@ const embedHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Static generation here is DATABASE-BOUND, so its concurrency has to be sized against
+  // the connection pool rather than against CPU.
+  //
+  // The build prerenders ~1,280 DB-backed pages (40 players x 8 sports, plus 24 players'
+  // prop pages x 8 sports) out of ~1,620, and every one queries Postgres. Vercel's
+  // builder ran SEVEN workers; each is its own process with its own pg pool, so the
+  // build asked Supabase's transaction pooler for up to 21 concurrent clients and died
+  // at 405/1620 with "timeout exceeded when trying to connect" (deployment 7dfATKvnJ,
+  // on /mlb/cole-young).
+  //
+  // The load-shedding that is actually MEASURED to work lives in src/lib/db.ts, which
+  // shrinks the per-worker pool and lengthens the connect timeout during the build
+  // phase. The two settings below are complementary, and one of them is unproven:
+  //
+  //   - staticGenerationRetryCount   retries the FAILED PAGE instead of discarding a
+  //     build that has already rendered hundreds. Worth having regardless of the cause.
+  //   - staticGenerationMaxConcurrency caps pages in flight per worker, so one worker
+  //     cannot queue more DB work than its pool can drain.
+  //   - staticGenerationMinPagesPerWorker is documented as the gate on spawning another
+  //     worker, and is kept as a best-effort ceiling — but it did NOT reduce the worker
+  //     count in local testing (a 4-CPU machine used 3 workers whether it was set to 400
+  //     or 1600), so do not count on it to bound connections. Worker count appeared to
+  //     track CPUs, which is why the real fix is in the pool, not here.
+  experimental: {
+    staticGenerationRetryCount: 2,
+    staticGenerationMaxConcurrency: 4,
+    staticGenerationMinPagesPerWorker: 400,
+  },
   async headers() {
     return [
       // /embed gets framing-friendly headers…
