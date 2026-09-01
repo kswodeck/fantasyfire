@@ -67,8 +67,12 @@ more powerful.
 
 ### 2. Create the cron-job.org job
 
-One job per schedule entry, or one job with a custom schedule — cron-job.org allows
-unlimited jobs at up to 1-minute resolution on the free tier.
+Create **one job per row of the schedule table below** (two on the free plan). Each row
+is a cross-product of hours x minutes, which is exactly what cron-job.org's schedule
+editor expresses. The free tier allows unlimited jobs at up to 1-minute resolution, so
+splitting the cadence across a few jobs costs nothing.
+
+Every job uses the identical request — only the schedule differs:
 
 | Field | Value |
 |---|---|
@@ -91,7 +95,10 @@ renames and can be substituted directly:
 .../actions/workflows/302506280/dispatches
 ```
 
-Verified 2026-08-31: both forms resolve to this workflow, `state: active`.
+Verified 2026-09-01: both forms resolve to this workflow (`state: active`), and a real
+dispatch against `ref: main` returned **204** and produced run **#978** with trigger
+`workflow_dispatch`. The request path in this table is known-good end to end; the only
+untested part of the chain is your token.
 
 Enable **"Treat redirects as success: no"** and notification on failure, so an expired
 token surfaces as an email rather than as a quietly dead pipeline.
@@ -109,31 +116,33 @@ token surfaces as an email rather than as a quietly dead pipeline.
 
 ## Schedule
 
-All times **UTC**. The job is US-evening shaped, so the peak tier tracks Eastern
-evening slates. When EST begins (early Nov 2026) shift every entry **+1 hour** to keep
-the same Eastern wall-clock.
+All times **UTC**. When EST begins (early Nov 2026) shift every hour **+1** to keep the
+same Eastern wall-clock — the job is US-evening shaped.
 
-Deliberately avoids **05:00 and 13:00** — those are the in-repo fallback ticks, and the
-workflow's `cancel-in-progress: true` would let a collision kill a healthy run.
+**cron-job.org's schedule editor is a cross-product**: you pick a set of hours and a set
+of minutes, and it fires at every combination. A flat list of arbitrary times would
+therefore need one job per time. The schedules below are expressed as cross-products so
+the whole cadence is two jobs, not eleven.
 
-### Free plan (2,000 min/mo) — 11 external ticks/day
+Both deliberately avoid **05:00 and 13:00** — the in-repo fallback ticks. The workflow
+sets `cancel-in-progress: true`, so a collision would let a fallback tick kill a healthy
+external run.
 
-```
-15:00  17:00                      day warm-up
-19:00  21:00                      afternoon / early evening
-23:00  23:30                      peak begins
-00:00  00:30  01:00  01:30  02:00 peak, every 30 min
-```
+### Free plan (2,000 min/mo) — 10 external ticks/day
 
-### Pro plan (3,000 min/mo) — 19 external ticks/day
+| Job | Hours | Minutes | Ticks | Covers |
+|---|---|---|---|---|
+| **A — peak** | `23, 0, 1` | `0, 30` | 6 | 23:00–01:30 UTC, every 30 min (7:00–9:30pm ET) |
+| **B — warm-up** | `15, 17, 19, 21` | `0` | 4 | afternoon into early evening |
 
-```
-07:00                                    overnight keep-warm
-14:00  15:30  17:00                      day warm-up
-18:00  19:00  20:00  21:00  22:00        afternoon / evening
-22:30  23:00  23:30                      peak begins
-00:00  00:30  01:00  01:30  02:00  02:30  03:00   peak, every 30 min
-```
+### Pro plan (3,000 min/mo) — 18 external ticks/day
+
+| Job | Hours | Minutes | Ticks | Covers |
+|---|---|---|---|---|
+| **A — peak** | `22, 23, 0, 1, 2` | `0, 30` | 10 | 22:00–02:30 UTC, every 30 min (6:00–10:30pm ET) |
+| **B — warm-up** | `14, 15, 16, 17, 19, 21` | `0` | 6 | midday into evening |
+| **C — keep-warm** | `7` | `0` | 1 | overnight |
+| | | | *17 + 1 spare* | |
 
 ## Budget
 
@@ -152,14 +161,14 @@ That leaves, for provided-lines:
 
 | Plan | Allowance | Per day | Minus fixed | Ticks/day at 4 min |
 |---|---|---|---|---|
-| Free | 2,000 min/mo | 66.7 | 53.7 | **13** (11 external + 2 fallback) |
-| Pro | 3,000 min/mo | 100 | 87 | **21** (19 external + 2 fallback) |
+| Free | 2,000 min/mo | 66.7 | 53.7 | **12** (10 external + 2 fallback) |
+| Pro | 3,000 min/mo | 100 | 87 | **19** (17 external + 2 fallback) |
 
 Linux is **$0.006/min** beyond the allowance (cut from $0.008 on 2026-01-01), so each
 extra tick/day beyond the table costs roughly `4 × 30 × $0.006 ≈ $0.72/month`.
 
 **Note the honest trade.** Today the pipeline gets ~9 runs/day *by accident*, with
-6-hour holes. The free-plan schedule above buys 13 runs/day that actually land, evenly
+6-hour holes. The free-plan schedule above buys 12 runs/day that actually land, evenly
 spaced. That is a modest gain in count and a large gain in *distribution* — the point is
 that a 30-minute peak ceiling becomes real instead of aspirational. Most of the headroom
 for a genuinely tighter cadence is behind GitHub Pro, which at $4/mo is the cheapest
@@ -175,7 +184,7 @@ After creating the first job, check that dispatched runs are arriving:
 
 To confirm the drop-rate problem is actually fixed, compare a complete day's
 `workflow_dispatch` runs against the tick count above. It should match exactly — an
-external scheduler that fires 11 times should produce 11 runs.
+external scheduler that fires 10 times should produce 10 runs.
 
 ## Rolling back
 
