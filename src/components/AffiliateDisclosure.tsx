@@ -10,11 +10,39 @@ import { hasAnyRefLink } from '@/lib/providedSources';
  * homepages that earn us nothing, and claiming a paid relationship we don't have
  * would be its own false statement. So this appears exactly when it becomes true.
  *
- * `inline` is the compact one-liner for in-page use; the default is the boxed
- * version for the top of /books.
+ * Three weights, because the right amount of disclosure depends on how much of the
+ * page is about the books:
+ *  - `box`     — the boxed version for the top of /books, a page that is entirely
+ *                about the operators and where the fuller context belongs.
+ *  - `inline`  — the one-liner for a page whose main job is something else but
+ *                which builds toward a book action (the Playbook's entry builder).
+ *  - `minimal` — one quiet line for research pages, where the books are incidental
+ *                to the numbers and the disclosure should be findable without
+ *                competing with the analysis. Still adjacent and still legible at
+ *                the site's normal caption size (`text-xs text-muted`, the same
+ *                treatment as every other note on the page) — the brevity comes
+ *                out of the word count, never out of the visibility, because a
+ *                disclosure nobody can read carries the obligation without the
+ *                benefit.
  */
-export function AffiliateDisclosure({ inline = false }: { inline?: boolean }) {
+export function AffiliateDisclosure({
+  variant = 'box',
+}: {
+  variant?: 'box' | 'inline' | 'minimal';
+}) {
   if (!hasAnyRefLink()) return null;
+
+  // The short form keeps the two things that actually have to be said: that the
+  // links are paid, and that they don't move the numbers. The second half is not
+  // padding — it is the whole reason a research site can carry paid links at all.
+  if (variant === 'minimal') {
+    return (
+      <p className="mt-3 text-xs text-muted">
+        Book links are referral links — we may earn a commission. It never affects the
+        numbers on this page.
+      </p>
+    );
+  }
 
   const text = (
     <>
@@ -25,7 +53,7 @@ export function AffiliateDisclosure({ inline = false }: { inline?: boolean }) {
     </>
   );
 
-  if (inline) {
+  if (variant === 'inline') {
     return (
       <p className="mt-2 text-xs text-muted">
         <span className="font-semibold">Ad disclosure:</span> {text}

@@ -1,6 +1,7 @@
 'use client';
 
 import { refLinkFor, refLinkRel, sourceLabel, isSponsoredLink } from '@/lib/providedSources';
+import { useBookAvailability } from '@/hooks/useBookAvailability';
 import { track } from '@/lib/analytics';
 
 /**
@@ -20,8 +21,15 @@ import { track } from '@/lib/analytics';
  *    possible to see which surfaces actually convert and prune the ones that
  *    don't (that's the whole point of placing few links deliberately).
  *
- * Degrades to plain text when we have no URL for the source, so an unknown book id
- * can never render an empty or broken anchor.
+ * Degrades to plain text in two cases, so a reader is never handed a dead link:
+ * when we have no URL for the source (an unknown book id can never render an empty
+ * or broken anchor), and when the book doesn't offer this product in the reader's
+ * state (see useBookAvailability — that check fails open, so an unknown region
+ * still gets the link).
+ *
+ * The `placement` also travels to the affiliate program as a sub-id where one is
+ * configured (see refLinkFor), which is what makes per-surface revenue visible
+ * rather than just per-surface clicks.
  *
  * NOT usable everywhere a book name appears: it must not go inside the board rows
  * (their whole row is already a stretched <a>, and nesting anchors is invalid HTML
@@ -41,9 +49,16 @@ export function BookLink({
   children?: React.ReactNode;
   className?: string;
 }) {
-  const href = refLinkFor(source);
+  const href = refLinkFor(source, placement);
   const label = sourceLabel(source);
+  // Runs unconditionally (rules of hooks — there are early returns below it); the
+  // `enabled` flag is what keeps it from firing on links that aren't paid anyway.
+  const availability = useBookAvailability(source, href !== null);
+
   if (!href) return <>{children ?? label}</>;
+  // Offered nowhere the reader can reach it — sending them there wastes their time
+  // and earns nothing, so it reads as plain text exactly like an unconfigured book.
+  if (availability === 'unavailable') return <>{children ?? label}</>;
 
   return (
     <a

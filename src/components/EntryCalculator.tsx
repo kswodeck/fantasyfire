@@ -242,7 +242,7 @@ export function EntryCalculator({ props }: { props: SavedProp[] }) {
                   Build this entry on PrizePicks →
                 </BookLink>
               </p>
-              <AffiliateDisclosure inline />
+              <AffiliateDisclosure variant="inline" />
             </>
           )}
         </div>

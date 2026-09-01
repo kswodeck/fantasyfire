@@ -2,11 +2,19 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { refLinkFor, refLinkRel, isSponsoredLink, hasAnyRefLink } from './providedSources';
 
 const ENV = 'NEXT_PUBLIC_REF_LINKS';
+const SUBID_ENV = 'NEXT_PUBLIC_REF_SUBID_PARAMS';
 function setLinks(value: string | undefined) {
   if (value === undefined) delete process.env[ENV];
   else process.env[ENV] = value;
 }
-afterEach(() => setLinks(undefined));
+function setSubIdParams(value: string | undefined) {
+  if (value === undefined) delete process.env[SUBID_ENV];
+  else process.env[SUBID_ENV] = value;
+}
+afterEach(() => {
+  setLinks(undefined);
+  setSubIdParams(undefined);
+});
 
 /** Books with a live deal baked into DEFAULT_REF_LINKS. */
 const WITH_DEAL = ['prizepicks', 'pick6', 'underdog', 'sleeper'];
@@ -100,5 +108,66 @@ describe('malformed config degrades safely', () => {
       expect(refLinkFor('prizepicks')).toMatch(/^https:\/\//);
       expect(refLinkFor('fanduel')).toBeNull();
     }
+  });
+});
+
+describe('per-placement sub-ids (attribution)', () => {
+  it('changes nothing until a sub-id param is configured', () => {
+    // The whole point: an unconfigured book's link is byte-identical with or
+    // without a placement, so shipping this can never alter a live deal.
+    for (const id of WITH_DEAL) {
+      expect(refLinkFor(id, 'player-cta'), id).toBe(refLinkFor(id));
+    }
+  });
+
+  it('tags the link once the program’s param is known', () => {
+    setSubIdParams(JSON.stringify({ prizepicks: 'af_sub1' }));
+    const url = new URL(refLinkFor('prizepicks', 'player-cta') as string);
+    expect(url.searchParams.get('af_sub1')).toBe('player-cta');
+  });
+
+  it('only tags the books it is configured for', () => {
+    setSubIdParams(JSON.stringify({ prizepicks: 'af_sub1' }));
+    expect(refLinkFor('underdog', 'player-cta')).toBe(refLinkFor('underdog'));
+  });
+
+  it('preserves a query string the deal already carries', () => {
+    // Sleeper's live link ships ?promo=… — appending must not clobber it.
+    setLinks(JSON.stringify({ sleeper: 'https://sleeper.example/r?promo=ABC' }));
+    setSubIdParams(JSON.stringify({ sleeper: 'sub_id' }));
+    const url = new URL(refLinkFor('sleeper', 'books-page') as string);
+    expect(url.searchParams.get('promo')).toBe('ABC');
+    expect(url.searchParams.get('sub_id')).toBe('books-page');
+  });
+
+  it('never emits an untagged duplicate param', () => {
+    setLinks(JSON.stringify({ prizepicks: 'https://pp.example/r?af_sub1=old' }));
+    setSubIdParams(JSON.stringify({ prizepicks: 'af_sub1' }));
+    const url = new URL(refLinkFor('prizepicks', 'player-line') as string);
+    expect(url.searchParams.getAll('af_sub1')).toEqual(['player-line']);
+  });
+
+  it('sanitises a placement rather than splicing junk into a URL', () => {
+    setSubIdParams(JSON.stringify({ prizepicks: 'af_sub1' }));
+    const url = new URL(refLinkFor('prizepicks', 'a b&c=d#e') as string);
+    expect(url.searchParams.get('af_sub1')).toBe('abcde');
+  });
+
+  it('ignores a malformed param name instead of breaking the link', () => {
+    setSubIdParams(JSON.stringify({ prizepicks: 'not a valid param!' }));
+    expect(refLinkFor('prizepicks', 'player-cta')).toBe(refLinkFor('prizepicks'));
+  });
+
+  it('survives invalid JSON without throwing or dropping the link', () => {
+    for (const bad of ['not json', '[]', 'null']) {
+      setSubIdParams(bad);
+      expect(() => refLinkFor('prizepicks', 'player-cta')).not.toThrow();
+      expect(refLinkFor('prizepicks', 'player-cta')).toMatch(/^https:\/\//);
+    }
+  });
+
+  it('still returns null for a book with no deal', () => {
+    setSubIdParams(JSON.stringify({ fanduel: 'sub_id' }));
+    expect(refLinkFor('fanduel', 'player-cta')).toBeNull();
   });
 });

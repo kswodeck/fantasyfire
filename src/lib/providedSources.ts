@@ -128,6 +128,55 @@ function configuredRefLinks(): Record<string, string> {
   return refCache.parsed;
 }
 
+/**
+ * The query parameter each program uses to carry a SUB-ID (a.k.a. clickref, sub1,
+ * click_id) — the string that comes back on that program's conversion report, which
+ * is what lets revenue be attributed to the SURFACE that earned it rather than to
+ * the site as a whole.
+ *
+ * This matters because the two numbers we can see disagree: `book_link_click` tells
+ * us which placements get clicked, but only the program knows which ones convert. A
+ * placement with many clicks and no deposits is exactly the one worth deleting, and
+ * without a sub-id there is no way to find it.
+ *
+ * EMPTY BY DEFAULT ON PURPOSE. The parameter name is program-specific and has to be
+ * confirmed with each affiliate manager; guessing one would silently drop the
+ * tracking (a wrong param is ignored by the network) while looking like it works.
+ * So a book with no entry here gets its link passed through completely unchanged,
+ * and configuring one is a single env var:
+ *
+ *   NEXT_PUBLIC_REF_SUBID_PARAMS='{"prizepicks":"af_sub1","underdog":"sub_id"}'
+ */
+let subIdCache: { raw: string; parsed: Record<string, string> } | null = null;
+
+function parseSubIdParams(raw: string): Record<string, string> {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const out: Record<string, string> = {};
+    for (const [id, param] of Object.entries(parsed as Record<string, unknown>)) {
+      // A param name is a bare query key — anything else is a config error we drop
+      // rather than splice into a URL.
+      if (typeof param === 'string' && /^[a-zA-Z0-9_-]{1,32}$/.test(param)) out[id] = param;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function configuredSubIdParams(): Record<string, string> {
+  const raw = process.env.NEXT_PUBLIC_REF_SUBID_PARAMS;
+  if (!raw) return {};
+  if (subIdCache?.raw !== raw) subIdCache = { raw, parsed: parseSubIdParams(raw) };
+  return subIdCache.parsed;
+}
+
+/** Placement ids are ours, but they reach a URL — keep them to a safe alphabet. */
+function safeSubIdValue(placement: string): string {
+  return placement.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
+}
+
 /** True when this source has a real, paid referral link configured. */
 export function isSponsoredLink(id: string): boolean {
   return !!configuredRefLinks()[id];
@@ -147,8 +196,30 @@ export function hasAnyRefLink(): boolean {
  * add PrizePicks to NEXT_PUBLIC_REF_LINKS and only PrizePicks starts linking,
  * while every other book stays exactly as it reads today.
  */
-export function refLinkFor(id: string): string | null {
-  return configuredRefLinks()[id] ?? null;
+export function refLinkFor(id: string, placement?: string): string | null {
+  const base = configuredRefLinks()[id];
+  if (!base) return null;
+  if (!placement) return base;
+
+  // No confirmed sub-id parameter for this book yet ⇒ hand back the link exactly as
+  // configured. Tagging is strictly additive: it can never be the reason a link
+  // breaks or stops paying.
+  const param = configuredSubIdParams()[id];
+  if (!param) return base;
+
+  const value = safeSubIdValue(placement);
+  if (!value) return base;
+
+  try {
+    // Via URL rather than string concatenation: several of the live deals already
+    // carry their own query string (Sleeper's ?promo=), so "?" vs "&" is not a
+    // decision worth making by hand.
+    const url = new URL(base);
+    url.searchParams.set(param, value);
+    return url.toString();
+  } catch {
+    return base;
+  }
 }
 
 /**
