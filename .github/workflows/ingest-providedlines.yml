@@ -12,26 +12,29 @@ name: Ingest provided lines + injuries (PrizePicks + Underdog + RotoWire + ESPN)
 # NOTE: scheduled + manual runs only fire from the DEFAULT branch (main), so this
 # only starts running once it's on main (it lands there when you merge develop -> main).
 #
-# Time-aware, TIERED cadence to control billed Actions minutes. GitHub cron is
-# UTC-only and can't follow daylight saving, so this is anchored to EDT (UTC-4),
-# the current Eastern offset. Wall-clock schedule (Eastern):
-#   - 10:00am-1:00pm ET : hourly        — pre-slate warm-up
-#   - 1:30pm-6:30pm ET  : every 30 min  — afternoon lines firming up
-#   - 7:00pm-11:00pm ET : every 20 min  — peak: evening slates in play
-#   - overnight         : one at 3:00am ET + one at 8:00am ET — cheap keep-warm
-# ~30 runs/day (down from ~54, then ~35). GitHub schedules are best-effort:
-# high-frequency crons can slip 5-15 min or skip under load, so 20 min is a
-# ceiling, not a guarantee. Use "Run workflow" for an on-demand refresh.
+# CADENCE LIVES OUTSIDE THIS FILE. cron-job.org calls the workflow_dispatch endpoint
+# on a schedule it actually honours; see docs/CRON.md for the schedule, the setup and
+# the measurements behind the move. The `schedule:` block below is only a fallback.
 #
-# The peak tier was every 15 min (18 of the day's 35 runs sat between 22:45 and
-# 03:00 UTC). Actions minutes on this private repo are billed, and in Aug 2026 the
-# account hit its billing cap and STOPPED ALLOCATING RUNNERS entirely — every job
-# failed in seconds with "recent account payments have failed or your spending
-# limit needs to be increased". Provided-lines was ~90% of the burn. Peak coverage
-# at 20 min still lands 3 scrapes an hour into the evening slate.
+# The intent it implements (Eastern wall-clock, since the slate is US-evening shaped):
+#   - late morning / midday : a couple of warm-up pulls
+#   - afternoon             : lines firming up
+#   - 7:00pm-11:00pm ET     : peak, every 30 min — evening slates in play
+#   - overnight             : one cheap keep-warm
+# Because the external scheduler fires reliably, the peak tier is now a real 30-minute
+# ceiling rather than an aspiration. Use "Run workflow" for an on-demand refresh.
+#
+# Minutes still matter: Actions bills each job rounded UP to the minute, this job's
+# measured median is 3.2 min (so 4 billed), and in Aug 2026 the account hit its billing
+# cap and STOPPED ALLOCATING RUNNERS entirely — every job failed in seconds with
+# "recent account payments have failed or your spending limit needs to be increased".
+# Provided-lines was ~90% of that burn. docs/CRON.md carries the per-plan budget, so
+# adding external ticks is a costed decision rather than a guess.
 #
 # DST: when EST begins (early Nov 2026) the whole day shifts an hour earlier in ET.
-# To keep the SAME Eastern wall-clock schedule, bump every UTC hour below +1.
+# The schedule that needs the +1 UTC bump now lives in cron-job.org, not here — the two
+# fallback ticks below are deliberately time-of-day agnostic, so they need no seasonal
+# edit. See docs/CRON.md.
 #
 # Secret (Production environment):
 #   DATABASE_URL  — prod transaction-pooler URL (:6543, sslmode=require)
@@ -41,24 +44,23 @@ name: Ingest provided lines + injuries (PrizePicks + Underdog + RotoWire + ESPN)
 #   PROVIDED_LINES_ENABLED (variable)     — "true" to ping revalidation for moved lines
 
 on:
+  # SPARSE FALLBACK ONLY — the real cadence comes from cron-job.org, which calls this
+  # workflow's `workflow_dispatch` endpoint. See docs/CRON.md for the why and the setup.
+  #
+  # Short version: GitHub's scheduled-workflow queue is best-effort and silently DROPS
+  # runs. Measured over 2026-08-29..31, this workflow declared 30 runs/day and actually
+  # fired 9 on a complete day — a 70% drop rate, median 26 min late (worst 120), with a
+  # median gap of 144 min between runs and one gap of 403 min against a schedule that
+  # intends 20-30. The board was going hours stale behind a green pipeline.
+  #
+  # These two entries are a dead-man's-switch, not the schedule: if the cron-job.org
+  # account lapses or its token expires, the pipeline degrades to a couple of runs a day
+  # instead of silently stopping. Deliberately at 05:00/13:00 UTC, which the recommended
+  # external schedule does not use, so a fallback tick never collides with an external
+  # one (cancel-in-progress would otherwise let them kill each other).
   schedule:
-    # Anchored to EDT (UTC-4). See header for the Eastern wall-clock intent and the
-    # DST bump note. Tiers are laid out so no two lines fire in the same minute.
-    # 10:00am-1:00pm ET hourly (14:00-17:00 UTC):
-    - cron: '0 14-17 * * *'
-    # 1:30pm-6:30pm ET every 30 min (17:30, then :00/:30 through 22:30 UTC):
-    - cron: '30 17 * * *'
-    - cron: '0,30 18-22 * * *'
-    # 7:00pm-11:00pm ET every 20 min (:00/:20/:40 from 23:00 through 02:40, + 03:00 UTC).
-    # Starts on the hour rather than bridging at :40 — a :40 entry would sit only 10 min
-    # after the 22:30 tick above, inside the job's own 10-minute timeout, and
-    # cancel-in-progress would let the bridge kill a healthy 22:30 run:
-    - cron: '0,20,40 23 * * *'
-    - cron: '0,20,40 0-2 * * *'
-    - cron: '0 3 * * *'
-    # Overnight keep-warm — 3:00am ET (07:00 UTC) + 8:00am ET (12:00 UTC):
-    - cron: '0 7 * * *'
-    - cron: '0 12 * * *'
+    - cron: '0 5 * * *'
+    - cron: '0 13 * * *'
   workflow_dispatch: {}
 
 # NEWEST RUN WINS. This was `cancel-in-progress: false`, and that queued rather than
