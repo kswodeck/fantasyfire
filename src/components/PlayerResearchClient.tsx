@@ -28,7 +28,10 @@ import { VariantLadder } from './VariantLadder';
 import { VariantChips } from './VariantChips';
 import { PayoutBadge } from './PayoutBadge';
 import { useSelectedSource } from './SelectedSourceProvider';
+import { sourceLabel } from '@/lib/providedSources';
 import { BookLink } from './BookLink';
+import { BookCta } from './BookCta';
+import { AffiliateDisclosure } from './AffiliateDisclosure';
 import { isOverOnly } from '@/lib/payoutVariant';
 
 // Below-the-fold panels are code-split so the verdict above the fold hydrates
@@ -368,6 +371,25 @@ export function PlayerResearchClient({
         statLabel={statDef.label}
         line={data.line}
       />
+
+      {/* The page's single action link, deliberately placed HERE: directly below the
+          verdict and above nothing that informs it. A reader who has drilled to one
+          player, one stat and one line and just read the verdict has a real next
+          step, and it is the book — at that point a shortcut is a convenience, not
+          an ad. Gated on the shown line actually coming from a book (`lineSource`),
+          because "open this line on X" is only true of a number X posted; a
+          hand-typed line has no counterpart there. Renders nothing when there is no
+          deal for that book or it isn't offered in the reader's state.
+
+          One disclosure sits with it and covers the page: VariantLadder and
+          MarketEdgePanel render only inside this component, so their book links are
+          disclosed here too. */}
+      {data.lineSource && (
+        <BookCta source={data.lineSource} placement="player-cta">
+          Open this line on {sourceLabel(data.lineSource)} &rarr;
+        </BookCta>
+      )}
+      <AffiliateDisclosure variant="minimal" />
 
       {/* Hit-rate cards */}
       <section aria-label="Hit rates" className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">

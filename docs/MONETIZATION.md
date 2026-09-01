@@ -13,13 +13,23 @@ files it touches so it can be picked up directly. Companion to [`GROWTH-PLAN.md`
 
 ## TL;DR — the five things, in order
 
-| # | What | Who | Effort | Why now |
-|---|------|-----|--------|---------|
-| **P1** | **Fix the FTC disclosure gap** — 3 of 5 paid-link surfaces carry no disclosure | Dev | ~30 min | Live paid links, no disclosure, on your **most-trafficked page type**. This is a live compliance defect, not a future task. |
-| **P2** | Give the live links a real (honest) **conversion surface** — one contextual CTA at the decision point | Dev | ~half day | 4 of 5 placements are passive text on a book's name. The infrastructure is built; nothing is asking for the click. |
-| **P3** | **Per-placement sub-IDs** so the affiliate dashboard attributes revenue to a surface | Owner + Dev | ~2 hrs + emails | Umami sees clicks; only the book sees conversions. Without sub-IDs every later placement decision is a guess. |
-| **P4** | **State-aware links** — don't send a Missouri user to a banned market | Dev | ~3 hrs | Kills dead clicks *and* is the single most user-respecting change available. |
-| **P5** | **Widen the book roster** (not the link density) | Owner | ongoing | Already a zero-code-change switch. Each new deal covers states PrizePicks can't serve. |
+| # | What | Who | Effort | Status |
+|---|------|-----|--------|--------|
+| **P1** | **Fix the FTC disclosure gap** — 3 of 5 paid-link surfaces carry no disclosure | Dev | ~30 min | ✅ **shipped** — one quiet `minimal` disclosure on the player page covers all three |
+| **P2** | Give the live links a real (honest) **conversion surface** — one contextual CTA at the decision point | Dev | ~half day | ✅ **shipped** — `BookCta` under the verdict (`player-cta`) |
+| **P3** | **Per-placement sub-IDs** so the affiliate dashboard attributes revenue to a surface | Owner + Dev | ~2 hrs + emails | ⚙️ **plumbing shipped, inert** — needs the param names from each affiliate manager |
+| **P4** | **State-aware links** — don't send a Missouri user to a banned market | Dev | ~3 hrs | ✅ **shipped** for PrizePicks; other books' tables unverified (fail open) |
+| **P5** | **Widen the book roster** (not the link density) | Owner | ongoing | Owner work — already a zero-code-change switch |
+
+> **What's left for the Owner after this batch:**
+> 1. Ask each affiliate manager for their **sub-id parameter name**, then set
+>    `NEXT_PUBLIC_REF_SUBID_PARAMS` (e.g. `{"prizepicks":"af_sub1"}`). Until then P3 is
+>    built but tagging nothing — deliberately, since a guessed param drops tracking silently.
+> 2. Ask the same managers about **deep-link parameters** (P3 below).
+> 3. Verify the **state tables** for Underdog / Sleeper / DK Pick6 in
+>    `src/lib/bookAvailability.ts`. They are intentionally empty, so those books' links
+>    show everywhere until someone confirms where they shouldn't.
+> 4. The **LLC / business account** item in §0, which is now overdue rather than premature.
 
 Everything else — display ads, sportsbook affiliates, prediction markets, a paywall — is
 **refused below with a reason**, and the reasons are load-bearing (§4).
@@ -56,22 +66,28 @@ compliance obligations attached to that are active right now."**
 `AffiliateDisclosure` is rendered on exactly **two** surfaces — `/books` and the Playbook's
 `EntryCalculator`. But paid links also render on **three** more:
 
-| Placement | File | Disclosure? |
-|---|---|---|
-| `books-page` | `src/app/books/page.tsx` | ✅ |
-| `playbook-entry` | `src/components/EntryCalculator.tsx` | ✅ |
-| **`player-line`** | `src/components/PlayerResearchClient.tsx:255` | ❌ |
-| **`variant-ladder`** | `src/components/VariantLadder.tsx:49` | ❌ |
-| **`market-edge`** | `src/components/MarketEdgePanel.tsx:98` | ❌ |
+| Placement | File | Disclosure (before) | Now |
+|---|---|---|---|
+| `books-page` | `src/app/books/page.tsx` | ✅ | ✅ `box` |
+| `playbook-entry` | `src/components/EntryCalculator.tsx` | ✅ | ✅ `inline` |
+| **`player-line`** | `src/components/PlayerResearchClient.tsx` | ❌ | ✅ `minimal` |
+| **`variant-ladder`** | `src/components/VariantLadder.tsx` | ❌ | ✅ `minimal` |
+| **`market-edge`** | `src/components/MarketEdgePanel.tsx` | ❌ | ✅ `minimal` |
 
 The FTC standard is **clear and conspicuous, near the link** — a paragraph in `/terms` does
 not cover a paid link on a player page, and the footer doesn't carry one either. The player
 page is the highest-traffic page type on the site and the entire point of the SEO strategy.
 
-**P1 is therefore not a revenue task. It is fixing a defect on the surface you are trying
-hardest to send strangers to.** Cheapest correct fix: render `<AffiliateDisclosure inline />`
-once per page that contains any paid link (the component already self-suppresses when no deal
-exists, so it stays correct if a deal is pulled).
+**P1 was therefore not a revenue task. It was fixing a defect on the surface you are trying
+hardest to send strangers to.**
+
+**How it was fixed (2026-09-01):** `AffiliateDisclosure` gained a third weight, `minimal` — one
+quiet line at the site's normal caption size, rendered **once** in `PlayerResearchClient`.
+Because `VariantLadder` and `MarketEdgePanel` render **only** inside that component, a single
+placement covers all three previously-uncovered surfaces without stacking three copies on one
+page. The brevity comes out of the word count, never out of the visibility: a disclosure nobody
+can read carries the obligation without the benefit. The component still self-suppresses when no
+deal is configured, so it stays correct if a deal is pulled.
 
 > **[Owner], urgent and non-code:** [`LAUNCH-CHECKLIST.md`](LAUNCH-CHECKLIST.md) says to form an
 > **LLC + dedicated business bank account _before_ first revenue**. Those links are live. If
