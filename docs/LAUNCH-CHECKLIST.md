@@ -61,6 +61,10 @@ and DMARC paths, so doing it first prevents redo-work.
 Everything else is "soon / later." **Defer all monetization** (AdSense, affiliate links) — it's
 lawyer-review-first (§7).
 
+> **⚠️ Superseded for affiliate links (2026-09-01).** Four DFS referral deals went live in
+> `7481eb5`, so "defer" no longer describes reality. AdSense is still refused. See
+> [`MONETIZATION.md`](MONETIZATION.md) for the current position and the live compliance gap.
+
 ---
 
 ## 1. Domain · DNS · Professional email
@@ -241,6 +245,13 @@ Insights (Core Web Vitals) + PageSpeed/Lighthouse (lab).**
 ---
 
 ## 7. ⛔ Monetization — defer, lawyer-first (do NOT treat as quick wins)
+
+> **Status update (2026-09-01):** partly overtaken by events — the four DFS pick'em referral
+> deals are **live in production**. The research below is still accurate on the *risks*, and
+> the AdSense and sportsbook-affiliate refusals still stand. What changed: DFS-affiliate is a
+> materially lighter regime than sportsbook-affiliate, and the FTC/entity obligations are now
+> active rather than hypothetical. Current position, ranked plan and compliance gap:
+> [`MONETIZATION.md`](MONETIZATION.md).
 
 - **Google AdSense:** gambling-adjacent "tips/odds/handicapping/comparison" is a **restricted,
   approval-gated** AdSense category, and there's a **publisher restriction barring ads on any page
