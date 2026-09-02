@@ -19,7 +19,7 @@ name: Ingest provided lines + injuries (PrizePicks + Underdog + RotoWire + ESPN)
 # The intent it implements (Eastern wall-clock, since the slate is US-evening shaped):
 #   - late morning / midday : a couple of warm-up pulls
 #   - afternoon             : lines firming up
-#   - 7:00pm-11:00pm ET     : peak, every 30 min — evening slates in play
+#   - evening (7pm ET on)   : peak, every 30 min — evening slates in play
 #   - overnight             : one cheap keep-warm
 # Because the external scheduler fires reliably, the peak tier is now a real 30-minute
 # ceiling rather than an aspiration. Use "Run workflow" for an on-demand refresh.
@@ -31,10 +31,12 @@ name: Ingest provided lines + injuries (PrizePicks + Underdog + RotoWire + ESPN)
 # Provided-lines was ~90% of that burn. docs/CRON.md carries the per-plan budget, so
 # adding external ticks is a costed decision rather than a guess.
 #
-# DST: when EST begins (early Nov 2026) the whole day shifts an hour earlier in ET.
-# The schedule that needs the +1 UTC bump now lives in cron-job.org, not here — the two
-# fallback ticks below are deliberately time-of-day agnostic, so they need no seasonal
-# edit. See docs/CRON.md.
+# DST: nothing to do, in either place. The external schedule is entered in Eastern on a
+# cron-job.org account set to America/New_York, so it follows the DST change by itself;
+# and the two fallback ticks below are deliberately time-of-day agnostic. NOTE that the
+# account timezone is load-bearing — entering UTC hours into an Eastern account fires
+# every tick perfectly at the wrong hour, which is exactly what happened on the first
+# setup (all ten ticks landed +4h late). See docs/CRON.md.
 #
 # Secret (Production environment):
 #   DATABASE_URL  — prod transaction-pooler URL (:6543, sslmode=require)

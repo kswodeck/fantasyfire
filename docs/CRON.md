@@ -116,33 +116,47 @@ token surfaces as an email rather than as a quietly dead pipeline.
 
 ## Schedule
 
-All times **UTC**. When EST begins (early Nov 2026) shift every hour **+1** to keep the
-same Eastern wall-clock — the job is US-evening shaped.
+### Set the account timezone FIRST
 
-**cron-job.org's schedule editor is a cross-product**: you pick a set of hours and a set
-of minutes, and it fires at every combination. A flat list of arbitrary times would
-therefore need one job per time. The schedules below are expressed as cross-products so
-the whole cadence is two jobs, not eleven.
+cron-job.org schedules in the **account's timezone**, not UTC. Getting this wrong does
+not fail loudly — every job fires perfectly, just at the wrong hour. It happened on the
+first setup here: the schedule was entered from a UTC table while the account was on
+Eastern, and all ten ticks landed exactly four hours late (verified against run history:
+the actual UTC fire times were the intended ones shifted +4h, i.e. UTC-4). The dense
+30-minute peak tier ended up covering 11pm-1:30am ET, after most games finish, instead
+of the 7-9:30pm ET window it was designed for.
 
-Both deliberately avoid **05:00 and 13:00** — the in-repo fallback ticks. The workflow
-sets `cancel-in-progress: true`, so a collision would let a fallback tick kill a healthy
-external run.
+So: set the account timezone to **America/New_York** and enter the Eastern times below.
+
+Eastern rather than UTC on purpose. The slate is US-evening shaped, so the schedule is
+naturally expressed in ET — and an America/New_York account follows DST by itself, which
+removes the seasonal +1 hour edit this file used to warn about. Nothing to re-do in
+November.
+
+### The editor is a cross-product
+
+You pick a set of hours and a set of minutes, and it fires at every combination. A flat
+list of arbitrary times would need one job per time; expressed as cross-products the
+whole cadence is two jobs.
+
+Both avoid **01:00 and 09:00 ET** — the in-repo fallback ticks (05:00/13:00 UTC). The
+workflow sets `cancel-in-progress: true`, so a collision would let a fallback tick kill
+a healthy external run.
 
 ### Free plan (2,000 min/mo) — 10 external ticks/day
 
-| Job | Hours | Minutes | Ticks | Covers |
+| Job | Hours (ET) | Minutes | Ticks | Covers |
 |---|---|---|---|---|
-| **A — peak** | `23, 0, 1` | `0, 30` | 6 | 23:00–01:30 UTC, every 30 min (7:00–9:30pm ET) |
-| **B — warm-up** | `15, 17, 19, 21` | `0` | 4 | afternoon into early evening |
+| **A — peak** | `19, 20, 21` | `0, 30` | 6 | 7:00-9:30pm ET, every 30 min — evening slates in play |
+| **B — warm-up** | `11, 13, 15, 17` | `0` | 4 | late morning into early evening |
 
-### Pro plan (3,000 min/mo) — 18 external ticks/day
+### Pro plan (3,000 min/mo) — 17 external ticks/day
 
-| Job | Hours | Minutes | Ticks | Covers |
+| Job | Hours (ET) | Minutes | Ticks | Covers |
 |---|---|---|---|---|
-| **A — peak** | `22, 23, 0, 1, 2` | `0, 30` | 10 | 22:00–02:30 UTC, every 30 min (6:00–10:30pm ET) |
-| **B — warm-up** | `14, 15, 16, 17, 19, 21` | `0` | 6 | midday into evening |
-| **C — keep-warm** | `7` | `0` | 1 | overnight |
-| | | | *17 + 1 spare* | |
+| **A — peak** | `18, 19, 20, 21, 22` | `0, 30` | 10 | 6:00-10:30pm ET, every 30 min |
+| **B — warm-up** | `10, 11, 12, 13, 15, 17` | `0` | 6 | midday into evening |
+| **C — keep-warm** | `3` | `0` | 1 | overnight |
 
 ## Budget
 
@@ -180,6 +194,10 @@ After creating the first job, check that dispatched runs are arriving:
 
 - The Actions tab shows the run with trigger **`workflow_dispatch`** rather than
   `schedule`. That is the signal it came from cron-job.org.
+- **Check the HOUR, not just the count.** A timezone mistake produces the right number
+  of runs at the wrong times, which looks healthy in every other respect. Compare a
+  run's UTC timestamp against the ET schedule above (ET = UTC-4 in summer, UTC-5 in
+  winter); a constant offset across every tick means the account timezone is wrong.
 - cron-job.org's own history tab shows `204` per execution.
 
 To confirm the drop-rate problem is actually fixed, compare a complete day's
