@@ -512,11 +512,51 @@ function toPlayerGame(r: StatGameRow): PlayerGame {
   };
 }
 
+/**
+ * The recent-form window a carried-over log is filled to — the largest finite bucket
+ * in STAT_WINDOWS ([5, 10, 20, 'season']), so every window the FireFactor blends has
+ * something in it rather than the score resting on one or two games.
+ */
+export const CARRYOVER_TARGET_GAMES = 20;
+
+/**
+ * Is this current-season log too young to grade? Mirrors the gate computeBoardRows
+ * applies (FIREFACTOR_MIN_GAMES games that clear the role-opportunity bar), so the
+ * question "does this player need a top-up" is asked exactly once, in one place.
+ */
+export function needsCarryover(
+  sport: Sport,
+  posBucket: string | null,
+  current: PlayerGame[],
+): boolean {
+  return qualifyGames(sport, posBucket, current).length < FIREFACTOR_MIN_GAMES;
+}
+
+/**
+ * Append prior-season games to a short current-season log, newest first, until the
+ * recent-form window is full. Both inputs arrive gameDate-descending and every
+ * carried game is older than every current one, so the merged log stays in order —
+ * which is what puts the real games in FIREFACTOR_WINDOW_RECENCY's heaviest buckets
+ * and pushes the carryover toward the lightest. Reports how many were carried so the
+ * surfaces can say so.
+ */
+export function mergeCarryover(
+  current: PlayerGame[],
+  prior: PlayerGame[],
+  target: number = CARRYOVER_TARGET_GAMES,
+): { games: PlayerGame[]; carried: number } {
+  const room = Math.max(0, target - current.length);
+  if (room === 0 || prior.length === 0) return { games: current, carried: 0 };
+  const carried = prior.slice(0, room);
+  return { games: [...current, ...carried], carried: carried.length };
+}
+
 export async function getPlayerGames(
   playerId: number,
   sport: Sport,
   season?: string,
-): Promise<PlayerGame[]> {
+  posBucket?: string | null,
+): Promise<{ games: PlayerGame[]; carried: number }> {
   // Per-sport column projection (egress saver): the same narrowed select the board
   // uses, so only this sport's stat columns cross the wire instead of all ~60.
   const select = boardStatSelect(sport);
@@ -531,14 +571,28 @@ export async function getPlayerGames(
     // through to the unscoped query ONLY for players with no active-season games
     // (retired / rookie / season-long injury, reachable via dynamicParams) so their
     // page still renders in full rather than blanking.
-    if (scoped.length > 0) return scoped.map(toPlayerGame);
+    if (scoped.length > 0) {
+      const games = scoped.map(toPlayerGame);
+      // …unless it is the opening weeks of a season, when that log is too young to
+      // grade. Top it up from the previous season on the SAME rule loadBoardPool
+      // uses, so this page and the board never disagree about a player's read.
+      if (!needsCarryover(sport, posBucket ?? null, games)) return { games, carried: 0 };
+      const prior = (await db.playerGameStat.findMany({
+        where: { playerId, season: previousSeason(sport, season) },
+        orderBy: { gameDate: 'desc' },
+        take: CARRYOVER_TARGET_GAMES,
+        select,
+      })) as unknown as StatGameRow[];
+      return mergeCarryover(games, prior.map(toPlayerGame));
+    }
   }
   const rows = (await db.playerGameStat.findMany({
     where: { playerId },
     orderBy: { gameDate: 'desc' },
     select,
   })) as unknown as StatGameRow[];
-  return rows.map(toPlayerGame);
+  // Whole-history fallback: not a season top-up, so nothing to disclose as carried.
+  return { games: rows.map(toPlayerGame), carried: 0 };
 }
 
 /** One opponent the matchup card / DvP is computed against. */
@@ -1542,7 +1596,12 @@ export async function getPlayerResearch(
       ? statParam
       : defaultStatForSport(sport, record.posBucket);
 
-  const allGames = await getPlayerGames(record.id, sport, season);
+  const { games: allGames, carried: carriedAll } = await getPlayerGames(
+    record.id,
+    sport,
+    season,
+    record.posBucket,
+  );
   // Keep only games where the player got a normal opportunity for their role.
   // NBA minutes are continuous, so the bar is the player's own blended average.
   // MLB plate appearances are small integers clustered at ~4 for regulars, so a
@@ -1873,6 +1932,7 @@ export async function getPlayerResearch(
     lineValue,
     seasonAverage: seasonResult.mean,
     gamesPlayed: games.length,
+    carriedOverGames: countCarried(carriedAll, allGames, games),
     // Freshness: the most recent game in the DB for this player (unfiltered by
     // the qualify cutoff), so the "updated through" stamp reflects real data age.
     lastGameDate: allGames[0]?.gameDate ?? null,
@@ -2015,7 +2075,8 @@ export async function getBoard(
   opts: BoardOptions = {},
 ): Promise<BoardRow[]> {
   const { limit = 40, scan = 120, perPlayerCap = 2, perStatCap = 10 } = opts;
-  const { players, gamesByPlayer } = opts.pool ?? (await loadBoardPool(sport, scan));
+  const { players, gamesByPlayer, carriedOverByPlayer } =
+    opts.pool ?? (await loadBoardPool(sport, scan));
   if (players.length === 0) return [];
   const ids = players.map((p) => p.id);
   // Real lines from the chosen book; empty map (no query) when the feature is off,
@@ -2049,6 +2110,7 @@ export async function getBoard(
     paceMultByPlayer: ctx.paceMultByPlayer,
     envMultByPlayer: ctx.envMultByPlayer,
     availability,
+    carriedOverByPlayer,
   });
 }
 
@@ -2065,7 +2127,8 @@ export async function getSourcedBoards(
 ): Promise<Record<string, BoardRow[]>> {
   const { limit = 150, scan = 120, perPlayerCap = 2, perStatCap = 30 } = opts;
   const result: Record<string, BoardRow[]> = {};
-  const { players, gamesByPlayer } = opts.pool ?? (await loadBoardPool(sport, scan));
+  const { players, gamesByPlayer, carriedOverByPlayer } =
+    opts.pool ?? (await loadBoardPool(sport, scan));
   if (players.length === 0) {
     for (const s of sources) result[s] = [];
     return result;
@@ -2140,6 +2203,7 @@ export async function getSourcedBoards(
       paceMultByPlayer: ctx.paceMultByPlayer,
       envMultByPlayer: ctx.envMultByPlayer,
       availability,
+      carriedOverByPlayer,
     });
   }
   return result;
@@ -2487,6 +2551,9 @@ function computeBoardRows(
     /** Current availability per player — Out players are dropped; game-time tiers
      *  discount the read (same gate the player page applies) and badge the row. */
     availability?: Map<number, CardAvailability>;
+    /** Per player, how many of their games came from the previous season (see
+     *  loadBoardPool). Display only — the FireFactor never sees it. */
+    carriedOverByPlayer?: Map<number, number>;
   },
 ): BoardRow[] {
   const { limit, perPlayerCap, perStatCap, requireProvided } = opts;
@@ -2499,7 +2566,15 @@ function computeBoardRows(
     if (!allGames || allGames.length < FIREFACTOR_MIN_GAMES) continue;
     const games = qualifyGames(sport, p.posBucket, allGames);
     if (games.length < FIREFACTOR_MIN_GAMES) continue;
-    const listItem = boardListItem(sport, p, games.length, avail);
+    const listItem = boardListItem(
+      sport,
+      p,
+      games.length,
+      avail,
+      // Only the carried games that SURVIVED the role-opportunity filter are part of
+      // this read, so count those rather than what loadBoardPool appended.
+      countCarried(opts.carriedOverByPlayer?.get(p.id) ?? 0, allGames, games),
+    );
     // Volume/usage trend is per-player (same for all of their stats).
     const volumeMult = volumeMultiplier(
       games.map((g) => opportunityFor(sport, p.posBucket, g)),
@@ -2844,7 +2919,14 @@ function boardStatSelect(sport: Sport) {
 
 /** The heavy board-scan load (players + every game), shareable across the board and
  *  trends computations on one page so it's paid once. */
-export type BoardPool = { players: BoardPlayer[]; gamesByPlayer: Map<number, PlayerGame[]> };
+export type BoardPool = {
+  players: BoardPlayer[];
+  gamesByPlayer: Map<number, PlayerGame[]>;
+  /** Per player, how many of their games came from the PREVIOUS season (see
+   *  loadBoardPool). Absent/0 = a pure current-season log. Drives the board's
+   *  early-season disclosure; never affects the math. */
+  carriedOverByPlayer?: Map<number, number>;
+};
 
 /** Top-`scan` most-active players + all their games (one batched query each). */
 export async function loadBoardPool(sport: Sport, scan: number): Promise<BoardPool> {
@@ -2859,12 +2941,13 @@ export async function loadBoardPool(sport: Sport, scan: number): Promise<BoardPo
   // not spill into prior seasons, and this matches the season-scoped DvP/leaders math.
   // Never pruned, so without this the scan multiplies by every retained season.
   const season = await getActiveSeason(sport);
+  const select = boardStatSelect(sport);
   // Per-sport column select (egress saver). The dynamic select loses Prisma's precise
   // payload type, so map through StatGameRow (stat fields optional; missing → 0).
   const rows = (await db.playerGameStat.findMany({
     where: { playerId: { in: players.map((p) => p.id) }, season },
     orderBy: { gameDate: 'desc' },
-    select: boardStatSelect(sport),
+    select,
   })) as unknown as Array<StatGameRow & { playerId: number }>;
   const gamesByPlayer = new Map<number, PlayerGame[]>();
   for (const r of rows) {
@@ -2872,7 +2955,70 @@ export async function loadBoardPool(sport: Sport, scan: number): Promise<BoardPo
     if (list) list.push(toPlayerGame(r));
     else gamesByPlayer.set(r.playerId, [toPlayerGame(r)]);
   }
-  return { players, gamesByPlayer };
+  // Tops `gamesByPlayer` up in place for anyone the new season is too young to grade.
+  const { carriedOverByPlayer } = await carryPriorSeason(
+    sport,
+    players,
+    gamesByPlayer,
+    season,
+    select,
+  );
+  return { players, gamesByPlayer, carriedOverByPlayer };
+}
+
+/**
+ * SEASON ROLLOVER. A season-scoped log is empty on opening night and stays under the
+ * FIREFACTOR_MIN_GAMES the board requires for weeks after it — so the board renders
+ * nothing at all, for every book, until enough of the new season exists. The NFL made
+ * that concrete: one game a week means a blank board from Week 1 to roughly Week 6,
+ * across the sport's busiest month. Every sport hits the same cliff at its own opener.
+ *
+ * So: for the players who are short (and only those), pull the PREVIOUS season and
+ * top their log up to CARRYOVER_TARGET_GAMES, newest first. The carryover retires
+ * itself — each real game lands at the front, and once a player clears the gate on
+ * current-season games alone they are never topped up again.
+ *
+ * Mutates `gamesByPlayer` in place and returns the per-player carried counts for the
+ * disclosure. Costs one extra query, only while logs are short; mid-season nobody
+ * qualifies and it does not run at all.
+ */
+async function carryPriorSeason(
+  sport: Sport,
+  players: BoardPlayer[],
+  gamesByPlayer: Map<number, PlayerGame[]>,
+  season: string,
+  select: ReturnType<typeof boardStatSelect>,
+): Promise<{ carriedOverByPlayer: Map<number, number> }> {
+  const carriedOverByPlayer = new Map<number, number>();
+  const short = players.filter((p) =>
+    needsCarryover(sport, p.posBucket ?? null, gamesByPlayer.get(p.id) ?? []),
+  );
+  if (short.length === 0) return { carriedOverByPlayer };
+  const prior = (await db.playerGameStat.findMany({
+    where: { playerId: { in: short.map((p) => p.id) }, season: previousSeason(sport, season) },
+    orderBy: { gameDate: 'desc' },
+    // Safety bound, sized to what the merge can actually consume. Rows come back
+    // newest-first and a league's players share a schedule, so this covers roughly
+    // the last CARRYOVER_TARGET_GAMES slate dates for everyone in `short`. A player
+    // on an unusual schedule can be short-changed a game or two; they simply get a
+    // thinner log, which the Wilson trust factor already discounts.
+    take: short.length * CARRYOVER_TARGET_GAMES,
+    select,
+  })) as unknown as Array<StatGameRow & { playerId: number }>;
+  if (prior.length === 0) return { carriedOverByPlayer };
+  const priorByPlayer = new Map<number, PlayerGame[]>();
+  for (const r of prior) {
+    const list = priorByPlayer.get(r.playerId);
+    if (list) list.push(toPlayerGame(r));
+    else priorByPlayer.set(r.playerId, [toPlayerGame(r)]);
+  }
+  for (const p of short) {
+    const merged = mergeCarryover(gamesByPlayer.get(p.id) ?? [], priorByPlayer.get(p.id) ?? []);
+    if (merged.carried === 0) continue;
+    gamesByPlayer.set(p.id, merged.games);
+    carriedOverByPlayer.set(p.id, merged.carried);
+  }
+  return { carriedOverByPlayer };
 }
 
 /** Keep only games where the player got their normal role-relative opportunity. */
@@ -2892,11 +3038,25 @@ export function qualifyGames(
   });
 }
 
+/**
+ * How many of a player's carried-over (prior-season) games are still in the log after
+ * qualifyGames drops the low-opportunity ones — the honest number to disclose, since
+ * a carried game the filter threw out is not part of the read. The carryover is the
+ * TAIL of `allGames` (it is strictly older) and qualifyGames filters that same array
+ * in place, so the surviving entries are identified by reference.
+ */
+function countCarried(carried: number, allGames: PlayerGame[], qualified: PlayerGame[]): number {
+  if (carried === 0) return 0;
+  const tail = new Set(allGames.slice(allGames.length - carried));
+  return qualified.reduce((n, g) => (tail.has(g) ? n + 1 : n), 0);
+}
+
 function boardListItem(
   sport: Sport,
   p: BoardPlayer,
   gamesPlayed: number,
   availability?: CardAvailability,
+  carriedOverGames?: number,
 ): PlayerListItem {
   return {
     sport,
@@ -2915,6 +3075,7 @@ function boardListItem(
     teamExternalId: p.team?.externalId ?? null,
     gamesPlayed,
     availability: availability ?? null,
+    ...(carriedOverGames ? { carriedOverGames } : {}),
   };
 }
 

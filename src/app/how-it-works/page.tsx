@@ -13,6 +13,7 @@ import {
   PROJECTION_ADJ_BOUNDS,
   CONSISTENCY_CV_THRESHOLDS,
   FIREFACTOR_WEIGHTS,
+  FIREFACTOR_MIN_GAMES,
 } from '@/lib/stats';
 
 export const metadata: Metadata = {
@@ -101,6 +102,23 @@ export default function HowItWorksPage() {
         <p>
           A &ldquo;4 of 5&rdquo; hot streak therefore reads as <strong>Low</strong>{' '}
           confidence, not as an edge. That honesty is the whole point.
+        </p>
+
+        <h2>The first weeks of a season</h2>
+        <p>
+          A read needs at least <strong>{FIREFACTOR_MIN_GAMES} games</strong> in which the
+          player got their normal workload. On opening night nobody has that, and in the
+          NFL &mdash; one game a week &mdash; nobody would have it until around Week 6. So
+          when a player is short, we <strong>top their recent-form window up with their
+          most recent games from last season</strong>, newest first, and we say so on the
+          board and on their page.
+        </p>
+        <p>
+          The carryover retires itself: every new game lands at the front of the window,
+          where our recency weighting counts it most, and once a player has{' '}
+          {FIREFACTOR_MIN_GAMES} games of the current season the top-up stops entirely.
+          Treat an early-season read as what it is &mdash; largely last year&rsquo;s form,
+          on a roster and in a role that may have changed.
         </p>
 
         <h2>The projection</h2>

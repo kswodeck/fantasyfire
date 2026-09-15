@@ -75,6 +75,13 @@ export function BoardExplorer({
   // Payout filter (PrizePicks types / Underdog multiplier range) over the slate rows.
   const payout = useBoardPayoutFilter(slateRows);
   const filteredRows = payout.rows;
+  // Early-season disclosure. A season-scoped form window is empty on opening night, so
+  // short logs are topped up with last season's games (see loadBoardPool) — otherwise
+  // the whole board would be blank for weeks. Say so rather than passing last year's
+  // form off as this year's. Counted by PLAYER, since one player fills several rows.
+  const carriedPlayers = new Set(
+    filteredRows.filter((r) => (r.player.carriedOverGames ?? 0) > 0).map((r) => r.player.slug),
+  ).size;
 
   return (
     <div>
@@ -121,6 +128,20 @@ export function BoardExplorer({
           No book has lines for {sport.toUpperCase()} right now, so these reads are priced
           against <strong className="text-foreground">our own median line</strong> instead
           of a book&rsquo;s number.
+        </p>
+      )}
+
+      {carriedPlayers > 0 && (
+        <p className="mb-3 rounded-xl border border-line bg-surface px-4 py-3 text-xs text-muted">
+          Early in the season:{' '}
+          <strong className="text-foreground">
+            {carriedPlayers} {carriedPlayers === 1 ? 'player' : 'players'}
+          </strong>{' '}
+          {carriedPlayers === 1 ? 'has' : 'have'} played too few games this season to
+          read on their own, so{' '}
+          {carriedPlayers === 1 ? 'that read is' : 'those reads are'} topped up with
+          last season&rsquo;s games. Expect {carriedPlayers === 1 ? 'it' : 'them'} to
+          move as this season fills in.
         </p>
       )}
 
