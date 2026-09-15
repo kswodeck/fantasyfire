@@ -90,6 +90,16 @@ export default async function SportHome({ params }: PageProps) {
         // site-wide standard-first default); variant-only swings are the fallback.
         const trendList = trends[initialSource] ?? [];
         topTrend = trendList.find((r) => !isOverOnly(r.oddsType ?? null)) ?? trendList[0] ?? null;
+        // Books are posting lines but not one produced a row (a scrape that landed
+        // names we can't join, or a slate of props we hold no history for). Without
+        // this the page dead-ends: BoardExplorer's median fallback is handed an empty
+        // array, so it renders "no reads" while our own lines would have served. Only
+        // pay for it on that path — the normal case has already returned rows.
+        if (!Object.values(boards).some((r) => r.length > 0)) {
+          medianRows = await getBoard(sport, { limit: 150, perStatCap: 30 }).catch(
+            (): BoardRow[] => [],
+          );
+        }
       } else {
         [slate, medianRows] = await Promise.all([
           getTonightSlate(sport),
@@ -107,9 +117,9 @@ export default async function SportHome({ params }: PageProps) {
     // Injuries are a nice-to-have on the tile — degrade to the static hint.
   }
 
-  const hasBoard = hasSources
-    ? Object.values(boardsBySource).some((r) => r.length > 0)
-    : medianRows.length > 0;
+  const hasBoard =
+    medianRows.length > 0 ||
+    (hasSources && Object.values(boardsBySource).some((r) => r.length > 0));
 
   return (
     <div className="mx-auto w-full max-w-3xl px-2 py-8 sm:px-4">

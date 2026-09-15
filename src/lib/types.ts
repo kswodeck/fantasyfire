@@ -63,6 +63,11 @@ export interface PlayerListItem extends PlayerSummary {
   gamesPlayed: number;
   /** Current injury designation for the row badge; absent/null when the player is clear. */
   availability?: CardAvailability | null;
+  /** How many of `gamesPlayed` came from the PREVIOUS season, because the current one
+   *  is too young to fill the recent-form window (see loadBoardPool's carryPriorSeason).
+   *  Absent/0 on a pure current-season read. Disclosure only — never an input to the
+   *  FireFactor. */
+  carriedOverGames?: number;
 }
 
 /** A game line enriched with display context. */
@@ -184,6 +189,9 @@ export interface PlayerResearch {
   lineValue: LineValueComparison | null;
   seasonAverage: number | null;
   gamesPlayed: number;
+  /** How many of `gamesPlayed` came from the PREVIOUS season because this one is too
+   *  young to fill the recent-form window. 0 on a pure current-season read. */
+  carriedOverGames: number;
   /** ISO date (YYYY-MM-DD) of this player's most recent game; null if none. */
   lastGameDate: string | null;
   /** The FireFactor verdict + its sub-reads for this stat + line. */

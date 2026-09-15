@@ -246,6 +246,16 @@ export default async function PlayerPage({ params }: PageProps) {
                 .filter(Boolean)
                 .join(' · ')}
             </p>
+            {research.carriedOverGames > 0 && (
+              <p className="mt-1 text-xs text-muted">
+                Too few games this season to read on their own, so{' '}
+                <strong className="text-foreground">
+                  {research.carriedOverGames} of these {research.gamesPlayed}
+                </strong>{' '}
+                are carried over from last season. Expect this read to move as the
+                season fills in.
+              </p>
+            )}
             {research.lastGameDate && (
               <p className="mt-1 text-xs text-muted">
                 Stats updated: {formatIsoDate(research.lastGameDate)} — nightly box
