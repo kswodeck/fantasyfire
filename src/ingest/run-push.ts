@@ -12,7 +12,7 @@ import 'dotenv/config';
 import webpush from 'web-push';
 import { db } from '../lib/db';
 import { recordIngestRun } from './ingestRun';
-import { getBoard } from '../lib/server/players';
+import { getDailyLeans } from '../lib/server/social';
 import { cardUrl } from '../lib/social/channels';
 import { SPORT_LIST, type Sport } from '../lib/sports';
 
@@ -33,24 +33,34 @@ interface Lean {
   lastName: string;
 }
 
-/** Today's strongest leans across sports, from the live board (was the snapshot table). */
-async function strongestLeans(): Promise<Lean[]> {
+/**
+ * Today's strongest leans across sports — the SAME slate-gated selection the social
+ * poster and the card images use (getDailyLeans), so a notification titled "today's
+ * hottest reads" only ever carries players who actually play today.
+ *
+ * This used to read the raw board, which has no slate gate at all. For a sport that
+ * plays most days that is nearly invisible; for one that plays weekly it was plainly
+ * wrong — a Tuesday push carried NFL props whose games were still four days out.
+ * getDailyLeans returns [] when a sport has no slate today, so those sports now drop
+ * out of the digest on their off days instead of padding it with stale reads.
+ */
+async function strongestLeans(now = new Date()): Promise<Lean[]> {
   const leans: Lean[] = [];
   for (const sport of SPORT_LIST) {
-    const rows = await getBoard(sport, { limit: 40 }).catch(() => []);
-    for (const r of rows) {
-      if (r.fireScore.tier !== 'Strong lean') continue;
+    // Board order is score-desc, so the strong leans sit at the front of this slice.
+    const daily = await getDailyLeans(sport, 20, now).catch(() => []);
+    for (const l of daily) {
+      if (l.tier !== 'Strong lean') continue;
       leans.push({
         sport,
-        statShort: r.statShort,
-        line: r.line,
-        side: r.fireScore.side,
-        firstName: r.player.firstName,
-        lastName: r.player.lastName,
+        statShort: l.statShort,
+        line: l.line,
+        side: l.side,
+        firstName: l.firstName,
+        lastName: l.lastName,
       });
     }
   }
-  // Already strong-lean only; the board returns them score-desc per sport.
   return leans;
 }
 

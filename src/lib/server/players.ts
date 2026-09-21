@@ -2020,6 +2020,14 @@ export interface BoardOptions {
    *  stats where the book posts nothing but variants — a demon/goblin/alternate line
    *  never headlines a default view. Ladders still attach for the chips. */
   standardOnly?: boolean;
+  /**
+   * Restrict the whole board to these team abbreviations — the scan, the caps and
+   * the ranking, not just the output. Pass a slate's teams to rank WITHIN it: on a
+   * two-team night "top 40" then means the best reads from that game rather than
+   * the league's top 40, of which none may be playing. Undefined = the whole league
+   * (every site surface). See loadBoardPool.
+   */
+  teams?: readonly string[];
 }
 
 /** Map a PlayerInjury row (the badge-relevant columns) to the slim card shape. */
@@ -2076,7 +2084,7 @@ export async function getBoard(
 ): Promise<BoardRow[]> {
   const { limit = 40, scan = 120, perPlayerCap = 2, perStatCap = 10 } = opts;
   const { players, gamesByPlayer, carriedOverByPlayer } =
-    opts.pool ?? (await loadBoardPool(sport, scan));
+    opts.pool ?? (await loadBoardPool(sport, scan, opts.teams));
   if (players.length === 0) return [];
   const ids = players.map((p) => p.id);
   // Real lines from the chosen book; empty map (no query) when the feature is off,
@@ -2128,7 +2136,7 @@ export async function getSourcedBoards(
   const { limit = 150, scan = 120, perPlayerCap = 2, perStatCap = 30 } = opts;
   const result: Record<string, BoardRow[]> = {};
   const { players, gamesByPlayer, carriedOverByPlayer } =
-    opts.pool ?? (await loadBoardPool(sport, scan));
+    opts.pool ?? (await loadBoardPool(sport, scan, opts.teams));
   if (players.length === 0) {
     for (const s of sources) result[s] = [];
     return result;
@@ -2928,10 +2936,27 @@ export type BoardPool = {
   carriedOverByPlayer?: Map<number, number>;
 };
 
-/** Top-`scan` most-active players + all their games (one batched query each). */
-export async function loadBoardPool(sport: Sport, scan: number): Promise<BoardPool> {
+/**
+ * Top-`scan` most-active players + all their games (one batched query each).
+ *
+ * `teams` narrows the pool to those team abbreviations. That is what makes a board
+ * rank WITHIN a slate instead of across the league: the scan budget is spent on the
+ * rosters actually playing, so a two-team night fills the board from those two
+ * rosters rather than returning the league's most-active players and filtering
+ * almost all of them out downstream.
+ */
+export async function loadBoardPool(
+  sport: Sport,
+  scan: number,
+  teams?: readonly string[],
+): Promise<BoardPool> {
   const players = await db.player.findMany({
-    where: { sport },
+    where: {
+      sport,
+      // An EMPTY list means "no teams", which must return an empty board — not the
+      // whole league. Only an ABSENT filter means league-wide.
+      ...(teams ? { team: { abbreviation: { in: [...teams] } } } : {}),
+    },
     include: { team: { select: { abbreviation: true, name: true, externalId: true } } },
     orderBy: { gameStats: { _count: 'desc' } },
     take: scan,
