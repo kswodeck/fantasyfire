@@ -10,6 +10,7 @@ vi.mock('./scrapeFetch', () => ({ scrapeFetch }));
 
 import { fetchRotowireLines } from './rotowire';
 import { fetchSleeperLines } from './sleeper';
+import { fetchUnderdogLines } from './underdog';
 
 /** A failing HTTP response (the shape scrapeFetch resolves to). */
 const httpError = (status: number) => ({ ok: false, status, headers: new Headers() });
@@ -41,6 +42,29 @@ describe('a scraper that cannot reach its upstream', () => {
     scrapeFetch.mockResolvedValue(httpError(503));
     await expect(fetchSleeperLines()).rejects.toThrow(/all \d+ line feeds failed/);
   });
+
+  it('underdog stops at a client gate instead of re-asking every sport', async () => {
+    // 426 Upgrade Required: the API is refusing our client, identically for every
+    // sport. Asking the other four costs four requests and 6s of spacing to learn
+    // the same thing, ~35x a day.
+    scrapeFetch.mockResolvedValue(httpError(426));
+    await expect(fetchUnderdogLines()).rejects.toThrow(/refusing our client/);
+    expect(scrapeFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('underdog names the fix, since a client gate never clears on its own', async () => {
+    scrapeFetch.mockResolvedValue(httpError(403));
+    await expect(fetchUnderdogLines()).rejects.toThrow(/request headers in underdog\.ts need updating/);
+  });
+
+  it('underdog still tries every sport on an ordinary failure', async () => {
+    // 503 is a blip, not a verdict — one sport being down says nothing about the next.
+    scrapeFetch.mockResolvedValue(httpError(503));
+    await expect(fetchUnderdogLines()).rejects.toThrow(/all 5 sport requests failed/);
+    expect(scrapeFetch).toHaveBeenCalledTimes(5);
+    // 10s budget: five requests spaced 1.5s apart really do take ~6s. That cost is
+    // the point of the short-circuit above — the 426 case returns immediately.
+  }, 10_000);
 
   it('sleeper tolerates ONE feed failing — a partial board is still a board', async () => {
     // Standard + alternate feeds fail independently by design; only losing both is
