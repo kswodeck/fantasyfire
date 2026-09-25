@@ -225,6 +225,20 @@ function parseUdBody(body: UdResponse, out: ProvidedLineRow[]): void {
   }
 }
 
+/**
+ * Statuses that reject the CLIENT rather than the request: Underdog has decided it
+ * will not talk to us as we are presenting ourselves. 426 ("Upgrade Required") is
+ * the one that bit us — their gate wants a client/version the HEADERS block above
+ * no longer satisfies — and 401/403 behave the same way.
+ *
+ * These are worth separating from a blip because the response to them is different
+ * in every respect: they apply to the whole API rather than one sport, they are
+ * identical on every retry, and the only thing that clears them is a code change to
+ * the request we send. Retrying, backing off, or asking about the next sport is
+ * pure waste, so the fetch stops at the first one.
+ */
+const CLIENT_GATE_STATUS = new Set([401, 403, 426]);
+
 export async function fetchUnderdogLines(): Promise<ProvidedLineRow[]> {
   const out: ProvidedLineRow[] = [];
   const failures: string[] = [];
@@ -233,11 +247,27 @@ export async function fetchUnderdogLines(): Promise<ProvidedLineRow[]> {
     const sportId = UD_SPORT_IDS[i];
     try {
       const res = await scrapeFetch(`${BASE}?sport_id=${sportId}`, { headers: HEADERS });
+      if (CLIENT_GATE_STATUS.has(res.status)) {
+        // Fail the whole source NOW rather than asking four more times and logging
+        // five identical lines. This job runs ~35x/day, so the old loop spent ~175
+        // requests and 6s of deliberate spacing a day re-confirming the same answer.
+        throw new Error(
+          `Underdog HTTP ${res.status} — the API is refusing our client, not this ` +
+            `request (first seen on ${sportId}; the other ${UD_SPORT_IDS.length - 1} ` +
+            `sports were skipped, they return the same). This does not clear on retry: ` +
+            `the request headers in underdog.ts need updating to match what the site ` +
+            `currently sends.`,
+        );
+      }
       if (!res.ok) throw new Error(`Underdog HTTP ${res.status} (${sportId})`);
       parseUdBody((await res.json()) as UdResponse, out);
     } catch (e) {
-      failures.push(`${sportId}: ${(e as Error).message}`);
-      console.warn(`[underdog] ${sportId} fetch failed: ${(e as Error).message}`);
+      const msg = (e as Error).message;
+      // A client gate is the source's verdict on all of us — surface it as-is
+      // instead of burying it in a per-sport tally.
+      if (msg.includes('refusing our client')) throw e;
+      failures.push(`${sportId}: ${msg}`);
+      console.warn(`[underdog] ${sportId} fetch failed: ${msg}`);
     }
   }
   // Every request failed → an outage, not an empty board. See the note in
