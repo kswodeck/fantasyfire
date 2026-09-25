@@ -62,18 +62,22 @@ const PUBLISHABLE_TIERS: ReadonlySet<string> = new Set(['Strong lean', 'Lean']);
  */
 async function getSocialBoardRows(
   sport: Sport,
+  teams: readonly string[] | undefined,
 ): Promise<{ rows: BoardRow[]; source: string | null }> {
   const sources = await getAvailableSources(sport).catch(() => [] as string[]);
   const preferred = process.env.SOCIAL_LINES_SOURCE?.trim().toLowerCase();
   const source = preferred && sources.includes(preferred) ? preferred : sources[0];
   if (source) {
-    const boards = await getSourcedBoards(sport, [source], { limit: 40 }).catch(
+    const boards = await getSourcedBoards(sport, [source], { limit: 40, teams }).catch(
       () => ({}) as Record<string, BoardRow[]>,
     );
     const rows = boards[source] ?? [];
     if (rows.length > 0) return { rows, source };
   }
-  return { rows: await getBoard(sport, { limit: 40 }).catch(() => [] as BoardRow[]), source: null };
+  return {
+    rows: await getBoard(sport, { limit: 40, teams }).catch(() => [] as BoardRow[]),
+    source: null,
+  };
 }
 
 /** BoardRows → publishable DailyLeans: lean tiers only, slate teams only, one
@@ -146,16 +150,28 @@ export async function getDailyLeans(
   const { hasSlate, teams } = await getSocialSlate(sport, now);
   if (!hasSlate) return [];
 
+  // Rank WITHIN today's slate, not across the league. The board is capped long
+  // before leansFromRows filters it by team, so a league-wide board on a light
+  // slate spends its whole cap on players who aren't playing and arrives here
+  // with nothing left. Invisible for a 15-game MLB night (every team is on the
+  // slate); fatal for a 2-of-32-team NFL Thursday. See BoardOptions.teams.
+  //
+  // undefined, not []: an empty set means the feed gave us a slate with no usable
+  // abbreviations, which leansFromRows has always read as "don't filter" rather
+  // than "nobody plays today". Keep that — [] would now mean an empty board.
+  const slateTeams = teams.size > 0 ? [...teams] : undefined;
+
   let rows: BoardRow[];
   let source: string | null;
   if (sourceOverride) {
-    const boards = await getSourcedBoards(sport, [sourceOverride], { limit: 40 }).catch(
-      () => ({}) as Record<string, BoardRow[]>,
-    );
+    const boards = await getSourcedBoards(sport, [sourceOverride], {
+      limit: 40,
+      teams: slateTeams,
+    }).catch(() => ({}) as Record<string, BoardRow[]>);
     rows = boards[sourceOverride] ?? [];
     source = sourceOverride;
   } else {
-    ({ rows, source } = await getSocialBoardRows(sport));
+    ({ rows, source } = await getSocialBoardRows(sport, slateTeams));
   }
   const leans = leansFromRows(rows, source, teams, limit);
   await attachTeamIds(sport, leans);
@@ -184,9 +200,10 @@ export async function getDailySourceLeans(
   const books = MULTI_SOURCE_BOOKS.filter((b) => available.includes(b));
   if (books.length === 0) return [];
 
-  const boards = await getSourcedBoards(sport, books, { limit: 40 }).catch(
-    () => ({}) as Record<string, BoardRow[]>,
-  );
+  const boards = await getSourcedBoards(sport, books, {
+    limit: 40,
+    teams: teams.size > 0 ? [...teams] : undefined,
+  }).catch(() => ({}) as Record<string, BoardRow[]>);
   const blocks: { source: string; leans: DailyLean[] }[] = [];
   for (const book of books) {
     const leans = leansFromRows(boards[book] ?? [], book, teams, limitPerSource);

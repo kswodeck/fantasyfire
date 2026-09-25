@@ -107,6 +107,14 @@ Once per day, **per in-season sport** (a sport qualifies if it has ≥1 game tod
   player-stat page. Deep links are the point — every post lands on an
   indexable page.
 
+Leans are ranked **within today's slate**, not across the league: the board is
+computed over the teams actually playing (`BoardOptions.teams`) rather than
+league-wide and filtered afterwards. This matters for weekly sports — an NFL
+Thursday puts 2 of 32 teams on the slate, so a league-wide top-40 spent its whole
+cap on players who weren't playing and the sport posted nothing. The same gate
+feeds the web-push digest, so a notification titled "today's hottest reads" can't
+carry a player whose next game is days away.
+
 Weekly bonus post (Sunday): "This week's longest active streaks" from the
 streaks board — same pipeline, different query.
 
