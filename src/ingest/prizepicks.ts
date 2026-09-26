@@ -15,6 +15,7 @@ import type { Sport } from '../lib/sports';
 import type { StatKey } from '../lib/stats';
 import type { ProvidedLineRow } from './providedTypes';
 import { scrapeFetch } from './scrapeFetch';
+import { isInSeasonWindow } from '../lib/seasonWindow';
 
 const BASE = 'https://partner-api.prizepicks.com/projections';
 // One filtered request per league shrinks the payload from ~15 MB (all leagues) to
@@ -232,6 +233,37 @@ function parsePpBody(body: PpResponse, out: ProvidedLineRow[]): void {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Tiebreak between leagues that are equally in season: rough market size. */
+const LEAGUE_PRIORITY: readonly Sport[] = ['nfl', 'nba', 'mlb', 'nhl', 'wnba', 'mls'];
+
+/**
+ * The order to ask PrizePicks for leagues in: every sport that is genuinely in season
+ * first, preseason/off-season ones last, ties broken by LEAGUE_PRIORITY.
+ *
+ * Order is not cosmetic here. PP throttles a run of requests from one IP — see
+ * fetchLeague: the first ~2 leagues pass and later ones 429 — so whichever leagues sit
+ * at the front are the ones that reliably land. The old order was simply the key order
+ * of PP_LEAGUE_IDS, which put NBA first and NFL third: through September a preseason
+ * league spent the un-throttled slot while NFL, mid-season, took the 429s. Measured on
+ * 2026-09-26: league 9 (NFL) needed all three attempts to land at 05:30 UTC, and failed
+ * outright at 09:40.
+ *
+ * "In season" uses ZERO grace days on purpose. The ingest gate (shouldIngest) keeps a
+ * 30-day grace so preseason lines are still stored — this does not change what is
+ * fetched, only who goes first. Nothing is dropped; a preseason league just queues
+ * behind the ones people are betting on today.
+ */
+export function leagueFetchOrder(now: Date = new Date()): number[] {
+  const rank = (sport: Sport) => {
+    const i = LEAGUE_PRIORITY.indexOf(sport);
+    return i === -1 ? LEAGUE_PRIORITY.length : i; // an unlisted league still gets fetched, last
+  };
+  return (Object.entries(PP_LEAGUE_IDS) as [Sport, number][])
+    .map(([sport, id]) => ({ id, live: isInSeasonWindow(sport, now, 0), rank: rank(sport) }))
+    .sort((a, b) => Number(b.live) - Number(a.live) || a.rank - b.rank)
+    .map((l) => l.id);
+}
+
 /**
  * One league fetch with patient 429 handling. PP's rate window is stricter
  * than a 1.5s gap — production runs showed the first ~2 leagues passing and
@@ -258,7 +290,7 @@ async function fetchLeague(leagueId: number): Promise<PpResponse> {
 
 export async function fetchPrizePicksLines(): Promise<ProvidedLineRow[]> {
   const out: ProvidedLineRow[] = [];
-  const leagueIds = Object.values(PP_LEAGUE_IDS);
+  const leagueIds = leagueFetchOrder();
   const failures: string[] = [];
   for (let i = 0; i < leagueIds.length; i++) {
     if (i > 0) await sleep(6000); // space requests WELL apart — PP rate-limits more than bursts

@@ -174,6 +174,60 @@ export const UPSERT_COLS = 10;
  */
 export const UPSERT_CHUNK = 1000;
 
+/** The smallest statement the write loop will shrink to before giving up. */
+export const UPSERT_MIN_CHUNK = 125;
+
+/**
+ * Write `rows` in chunks, halving the chunk size whenever a statement times out and
+ * retrying the SAME rows as smaller statements.
+ *
+ * Why shrink rather than retry: on a healthy database a full 1000-row chunk lands in
+ * well under a second, and the whole write phase of a ~20k-row run takes ~11s. On a
+ * degraded one — measured at ~20x slower in the ~09:40 UTC window, where two runs in
+ * two days died on a cancelled statement — the same chunk overruns statement_timeout,
+ * and re-sending it just buys the same timeout again. Half the rows is roughly half
+ * the work, so it can land where the full chunk could not.
+ *
+ * Bounded by construction: the size only ever falls (1000 → 500 → 250 → 125), so a run
+ * wastes at most four timed-out statements before either making progress or throwing.
+ * A database too slow for even UPSERT_MIN_CHUNK rows is genuinely unhealthy, and the
+ * run should fail loudly rather than report a green write it did not make.
+ *
+ * Safe to resume mid-list: each statement commits on its own, a cancelled one is
+ * rolled back in full, and the upsert is idempotent — rows before the failure point
+ * are already written, and the failing rows are simply sent again.
+ */
+export async function writeInShrinkingChunks<T>(
+  rows: readonly T[],
+  write: (chunk: readonly T[]) => Promise<unknown>,
+  opts: {
+    isTimeout: (e: unknown) => boolean;
+    start?: number;
+    min?: number;
+    onShrink?: (info: { from: number; to: number; atRow: number }) => void;
+  },
+): Promise<{ statements: number; finalChunk: number }> {
+  const min = opts.min ?? UPSERT_MIN_CHUNK;
+  let size = opts.start ?? UPSERT_CHUNK;
+  let statements = 0;
+  let i = 0;
+  while (i < rows.length) {
+    const chunk = rows.slice(i, i + size);
+    try {
+      await write(chunk);
+      statements++;
+      i += chunk.length;
+    } catch (e) {
+      // Anything but a timeout is not ours to absorb; nor is a timeout at the floor.
+      if (!opts.isTimeout(e) || size <= min) throw e;
+      const next = Math.max(min, Math.floor(size / 2));
+      opts.onShrink?.({ from: size, to: next, atRow: i });
+      size = next;
+    }
+  }
+  return { statements, finalChunk: size };
+}
+
 /**
  * One multi-row `INSERT … ON CONFLICT DO UPDATE` plus its bound parameters.
  * Callers must pass rows already deduped by `dedupeUpsertRows`.

@@ -102,12 +102,22 @@ async function ingestSport(sport: Sport): Promise<number> {
   }
 
   // Replace this sport's statuses wholesale so recovered players clear.
+  //
+  // Explicit timeout: Prisma's default is 5s, and on a healthy database this delete +
+  // insert lands in a fraction of that (the whole 8-sport step runs in ~3s). But in the
+  // ~09:40 UTC window where the database runs ~20x slow it took 6-11s, so Prisma
+  // expired the transaction client-side and three sports kept stale injuries. Nobody
+  // waits on this job, so a generous ceiling costs nothing; the batch is atomic, so
+  // an expired attempt leaves the previous statuses fully intact.
   await withDbRetry(
     () =>
-      db.$transaction([
-        db.playerInjury.deleteMany({ where: { sport } }),
-        ...(records.length ? [db.playerInjury.createMany({ data: records })] : []),
-      ]),
+      db.$transaction(
+        [
+          db.playerInjury.deleteMany({ where: { sport } }),
+          ...(records.length ? [db.playerInjury.createMany({ data: records })] : []),
+        ],
+        { maxWait: 15_000, timeout: 30_000 },
+      ),
     `injuries write ${sport}`,
   );
   console.log(`[injuries:${sport}] ${rows.length} feed rows, ${records.length} matched + stored`);
