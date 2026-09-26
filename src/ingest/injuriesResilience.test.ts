@@ -102,6 +102,18 @@ describe('run-injuries against a blipping pooler', () => {
     await expect(runMain(main)).rejects.toThrow(/all 8 sports failed/);
   });
 
+  it('gives the delete+insert batch a ceiling a slow database can meet', async () => {
+    // Prisma's default is 5s. In the degraded ~09:40 UTC window this batch took 6-11s,
+    // so Prisma expired it and nba/mlb/cfb kept stale injuries.
+    const main = await loadMain();
+    await runMain(main);
+
+    expect($transaction).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({ timeout: 30_000 }),
+    );
+  });
+
   it('does not retry a genuine query bug', async () => {
     player.findMany.mockRejectedValue(new Error('column "nope" does not exist'));
     const main = await loadMain();

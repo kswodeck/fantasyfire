@@ -17,7 +17,7 @@
 import 'dotenv/config';
 import { db } from '../lib/db';
 import { recordIngestRun } from './ingestRun';
-import { withDbRetry } from './dbRetry';
+import { withDbRetry, isStatementTimeout } from './dbRetry';
 import { fetchPrizePicksLines } from './prizepicks';
 import { fetchUnderdogLines } from './underdog';
 import { fetchSleeperLines } from './sleeper';
@@ -31,6 +31,7 @@ import {
   droughtFailure,
   dedupeUpsertRows,
   buildUpsertChunk,
+  writeInShrinkingChunks,
   UPSERT_CHUNK,
   RETIRED_SOURCE_TAGS,
   type RowKey,
@@ -220,11 +221,28 @@ async function main(): Promise<number> {
   const toWrite = dedupeUpsertRows(resolved);
   const collapsed = resolved.length - toWrite.length;
   const fetchedAt = new Date();
-  for (let i = 0; i < toWrite.length; i += UPSERT_CHUNK) {
-    const { sql, values } = buildUpsertChunk(toWrite.slice(i, i + UPSERT_CHUNK), fetchedAt);
-    await withDbRetry(
-      () => db.$executeRawUnsafe(sql, ...values),
-      `upsert chunk ${i / UPSERT_CHUNK}`,
+  // Connection blips are retried inside each write; a statement TIMEOUT falls through
+  // withDbRetry untouched and is handled by the loop, which re-sends the same rows as
+  // smaller statements. See writeInShrinkingChunks for why shrinking beats retrying.
+  const write = await writeInShrinkingChunks(
+    toWrite,
+    (chunk) => {
+      const { sql, values } = buildUpsertChunk(chunk, fetchedAt);
+      return withDbRetry(() => db.$executeRawUnsafe(sql, ...values), `upsert ${chunk.length} rows`);
+    },
+    {
+      isTimeout: isStatementTimeout,
+      onShrink: ({ from, to, atRow }) =>
+        console.warn(
+          `[providedlines] a ${from}-row upsert hit statement_timeout at row ${atRow} of ` +
+            `${toWrite.length} — the database is running slow; resending as ${to}-row statements.`,
+        ),
+    },
+  );
+  if (write.finalChunk < UPSERT_CHUNK) {
+    console.warn(
+      `[providedlines] write phase finished at ${write.finalChunk}-row statements ` +
+        `(${write.statements} total) after shrinking — the database was degraded this run.`,
     );
   }
 
