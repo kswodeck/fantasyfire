@@ -47,6 +47,8 @@ jobs:
     environment: Production
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL || '' }}
+      # Job failures report to Sentry (src/ingest/sentry.ts). Unset = reporting off.
+      SENTRY_DSN: ${{ secrets.SENTRY_DSN || '' }}
       # Seasons are computed from the date in code. Set the NBA_SEASON / MLB_SEASON
       # repo variables only to force a specific season (e.g. backfill).
       NBA_SEASON: ${{ vars.NBA_SEASON || '' }}

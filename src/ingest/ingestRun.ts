@@ -2,9 +2,11 @@
 // page. Wrap a script's main() so success/failure + duration are recorded without
 // touching the job's internals. Recording is best-effort: a failed insert is logged
 // but never masks the job's own result, and the original error is rethrown so each
-// script's existing exit-code handling still fires.
+// script's existing exit-code handling still fires. Failures are also reported to
+// Sentry (src/ingest/sentry.ts) when SENTRY_DSN is set.
 import { db } from '../lib/db';
 import { withDbRetry } from './dbRetry';
+import { reportJobFailure } from './sentry';
 
 type RunStatus = 'success' | 'failure';
 
@@ -51,6 +53,7 @@ export async function recordIngestRun(
     await record(job, startedAt, 'success', typeof result === 'number' ? result : null, null);
   } catch (e) {
     await record(job, startedAt, 'failure', null, e instanceof Error ? e.message : String(e));
+    await reportJobFailure(job, e);
     throw e;
   }
 }

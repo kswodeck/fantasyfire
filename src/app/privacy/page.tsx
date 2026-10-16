@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   alternates: { canonical: '/privacy' },
 };
 
-const LAST_UPDATED = 'July 26, 2026';
+const LAST_UPDATED = 'October 16, 2026';
 
 export default function PrivacyPage() {
   return (
@@ -142,6 +142,15 @@ export default function PrivacyPage() {
               target="_blank"
               rel="noopener noreferrer"
             >
+              privacy
+            </a>
+            ).
+          </li>
+          <li>
+            <strong>Sentry</strong> — error monitoring; when a page crashes it receives the
+            error details, page URL and browser/device type, but not your IP address or
+            cookies (
+            <a href="https://sentry.io/privacy/" target="_blank" rel="noopener noreferrer">
               privacy
             </a>
             ).

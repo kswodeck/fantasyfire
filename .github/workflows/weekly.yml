@@ -112,6 +112,8 @@ jobs:
     environment: Production
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL || '' }}
+      # Job failures report to Sentry (src/ingest/sentry.ts). Unset = reporting off.
+      SENTRY_DSN: ${{ secrets.SENTRY_DSN || '' }}
       UMAMI_API_KEY: ${{ secrets.UMAMI_API_KEY || '' }}
       UMAMI_WEBSITE_ID: ${{ vars.UMAMI_WEBSITE_ID || '' }}
       DISCORD_CONTENT_PACK_WEBHOOK_URL: ${{ secrets.DISCORD_CONTENT_PACK_WEBHOOK_URL || '' }}

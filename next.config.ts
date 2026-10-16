@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import { withSentryConfig } from '@sentry/nextjs/config';
 
 // Build the Content-Security-Policy. Static (not nonce-based) on purpose: a nonce
 // CSP forces every page to dynamic rendering in Next 16, which would gut the
@@ -178,4 +179,19 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Sentry build integration. It reads SENTRY_AUTH_TOKEN / SENTRY_ORG / SENTRY_PROJECT
+// from the environment (the Vercel Marketplace integration sets them); without them
+// it skips the source-map upload and the build still succeeds.
+export default withSentryConfig(nextConfig, {
+  // Browser events POST to this same-origin route, which Next rewrites to Sentry.
+  // That keeps the CSP's connect-src at 'self' (no Sentry host to allowlist) and gets
+  // past ad blockers. Fixed path rather than `true` so it's predictable in logs.
+  tunnelRoute: '/monitoring',
+  // Upload source maps for readable stack traces, then strip them from the deploy so
+  // they're never served publicly.
+  sourcemaps: { deleteSourcemapsAfterUpload: true },
+  silent: !process.env.CI,
+  // Drop the SDK's own debug logging from the client bundle.
+  bundleSizeOptimizations: { excludeDebugStatements: true },
+  telemetry: false,
+});

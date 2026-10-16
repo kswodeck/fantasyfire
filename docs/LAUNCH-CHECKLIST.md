@@ -185,9 +185,21 @@ Insights (Core Web Vitals) + PageSpeed/Lighthouse (lab).**
   on previews; in GitHub Actions, pin third-party actions to commit SHAs and minimize
   `GITHUB_TOKEN` permissions (a compromised ingest could poison the public data your "honesty"
   brand depends on).
-- **[Both] Sentry (optional)** error monitoring — free Developer plan (5k errors/mo); one-command
-  setup `npx @sentry/wizard@latest -i nextjs`; keep tracing sample rate ~0; add its ingest host to
-  the CSP `connect-src`. <https://docs.sentry.io/platforms/javascript/guides/nextjs/>
+- **[Owner] Sentry** error monitoring — code is wired (`src/instrumentation*.ts`,
+  `src/sentry.*.config.ts`, `src/app/error.tsx` + `global-error.tsx`, `src/ingest/sentry.ts`) and
+  inert until configured. Remaining steps:
+  1. Vercel → Integrations → Marketplace → **Sentry** → install on this project (free Developer
+     plan, 5k errors/mo). It creates the Sentry project and sets `NEXT_PUBLIC_SENTRY_DSN`,
+     `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` on Vercel. Confirm all four exist under
+     Settings → Environment Variables (add any that are missing from Sentry's project settings).
+  2. Redeploy `main` so the DSN is baked into the client bundle and source maps upload.
+  3. Sentry → Project Settings → Security & Privacy → turn on **Prevent Storing of IP Addresses**
+     (the privacy page says we don't keep IPs).
+  4. GitHub → repo Settings → Environments → **Production** → add secret `SENTRY_DSN` (same DSN)
+     so failed ingest/social/metrics jobs report too.
+  5. Sentry → Alerts: email on new issues (the default rule is fine).
+  Browser events go through the same-origin `/monitoring` tunnel, so no CSP change is needed.
+  Tracing is off (`tracesSampleRate: 0`); Speed Insights covers performance.
 
 ---
 

@@ -113,6 +113,8 @@ jobs:
     environment: Production
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL || '' }}
+      # Job failures report to Sentry (src/ingest/sentry.ts). Unset = reporting off.
+      SENTRY_DSN: ${{ secrets.SENTRY_DSN || '' }}
       NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL || 'https://fantasyfire.app' }}
       SOCIAL_PUBLISH_ENABLED: ${{ vars.SOCIAL_PUBLISH_ENABLED || '' }}
       SOCIAL_SPORTS_EXCLUDE: ${{ vars.SOCIAL_SPORTS_EXCLUDE || '' }}
