@@ -23,6 +23,8 @@ const TRANSIENT = [
   'Connection terminated',
   "Can't reach database server",
   'Timed out fetching a new connection',
+  // pg-pool's own wording when connectionTimeoutMillis expires waiting for a client.
+  'timeout exceeded when trying to connect',
 ];
 
 function isTransient(e: unknown): boolean {
