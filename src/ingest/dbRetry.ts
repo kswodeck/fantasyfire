@@ -34,22 +34,10 @@ function isTransient(e: unknown): boolean {
   return TRANSIENT.some((t) => msg.includes(t));
 }
 
-/**
- * Postgres cancelled the statement for running past `statement_timeout` (SQLSTATE
- * 57014). Deliberately NOT in TRANSIENT: re-running the same statement against a
- * database that just took too long to finish it mostly buys another timeout, and at
- * a multi-second timeout four attempts can eat a cron run's whole budget. A caller
- * that can make the retry cheaper — send less work per statement — should catch
- * this and do that instead (see the upsert loop in run-ingest-providedlines.ts).
- * The cancelled statement is rolled back in full, so retrying is always safe.
- */
-export function isStatementTimeout(e: unknown): boolean {
-  if ((e as { meta?: { code?: string } })?.meta?.code === '57014') return true;
-  // Postgres's exact text for a 57014 raised by statement_timeout. Prisma's P2010
-  // wraps it in its own message, so match the text rather than a bare code number.
-  const msg = e instanceof Error ? e.message : String(e);
-  return msg.includes('canceling statement due to statement timeout');
-}
+// Statement timeouts (57014) are deliberately NOT in TRANSIENT: at a multi-second
+// timeout, four blind retries can eat a cron run's whole budget. The classifier lives
+// in lib so the app's league scans share it; re-exported for the ingest callers.
+export { isStatementTimeout } from '../lib/dbConnectRetry';
 
 /**
  * Run a DB operation, retrying transient connection failures with exponential

@@ -93,6 +93,7 @@ import {
 } from '@/lib/payoutVariant';
 import type { RungQuote } from '@/lib/odds/marketBreakeven';
 import { sharedCache, SEASON_AGGREGATE_TTL } from '@/lib/server/sharedCache';
+import { leagueScanRaw, optionalScan } from '@/lib/server/leagueScan';
 
 /**
  * The season the app reads for a sport. Computed from today's date, falling back
@@ -1008,7 +1009,7 @@ async function queryMinutesDvpTable(
   // see qualifyFactorFor for the NHL-goalie 0.6). Done in SQL (window function)
   // so the league-wide DvP averages stay consistent with each player's own role.
   const factor = qualifyFactorFor(sport, posBucket);
-  const rows = await db.$queryRawUnsafe<
+  const rows = await leagueScanRaw<
     { opponentTeamId: number; avg: number; n: number }[]
   >(
     `WITH games AS (
@@ -1029,11 +1030,7 @@ async function queryMinutesDvpTable(
      JOIN thresh t ON t.pid = g.pid
      WHERE g.minutes >= t.thr * $5
      GROUP BY g.opp`,
-    posBucket,
-    season,
-    RECENT_GAMES_WINDOW,
-    sport,
-    factor,
+    [posBucket, season, RECENT_GAMES_WINDOW, sport, factor],
   );
   if (rows.length === 0) return [];
   return rankDvp(
@@ -1080,7 +1077,7 @@ async function queryMinutesDvpTables(
   // query this replaces.
   const valCols = usable.map((s, i) => `(${sqlFor[s]}) AS v${i}`).join(', ');
   const avgCols = usable.map((_, i) => `AVG(g.v${i})::float8 AS a${i}`).join(', ');
-  const rows = await db.$queryRawUnsafe<Array<Record<string, number>>>(
+  const rows = await leagueScanRaw<Array<Record<string, number>>>(
     `WITH games AS (
        SELECT s."opponentTeamId" AS opp, s.minutes AS minutes, ${valCols},
               ROW_NUMBER() OVER (PARTITION BY s."playerId" ORDER BY s."gameDate" DESC) AS rn,
@@ -1099,11 +1096,7 @@ async function queryMinutesDvpTables(
      JOIN thresh t ON t.pid = g.pid
      WHERE g.minutes >= t.thr * $5
      GROUP BY g.opp`,
-    posBucket,
-    season,
-    RECENT_GAMES_WINDOW,
-    sport,
-    factor,
+    [posBucket, season, RECENT_GAMES_WINDOW, sport, factor],
   );
 
   usable.forEach((stat, i) => {
@@ -1130,8 +1123,32 @@ async function queryMinutesDvpTables(
 
 // League-wide DvP tables are identical for every player in a sport/bucket — cache
 // them across requests (see sharedCache.ts) instead of rescanning the season per page.
-const getMinutesDvpTable = sharedCache(queryMinutesDvpTable, ['dvp-minutes', 'v1'], SEASON_AGGREGATE_TTL);
+const getMinutesDvpTableSingle = sharedCache(queryMinutesDvpTable, ['dvp-minutes', 'v1'], SEASON_AGGREGATE_TTL);
 const getMinutesDvpTables = sharedCache(queryMinutesDvpTables, ['dvp-minutes-all', 'v1'], SEASON_AGGREGATE_TTL);
+
+/**
+ * One stat's minutes-gated DvP table. When the stat is one of the bucket's own keys
+ * (always, for the player page and boards) it's read out of the bucket's ALL-stat
+ * table — the exact cache entry boardMatchupContext fills on every 15-min board
+ * render — so player pages ride the board's warm entry instead of each running their
+ * own season scan (one scan per bucket, not one per bucket × stat). Same numbers by
+ * construction (see getMinutesDvpTables). Other stats fall back to the single query.
+ */
+async function getMinutesDvpTable(
+  sport: MinutesDvpSport,
+  posBucket: PosBucket,
+  stat: StatKey,
+  season: string,
+): Promise<DvpCell[]> {
+  const keys = statKeysForSport(sport, posBucket);
+  if (!keys.includes(stat)) return getMinutesDvpTableSingle(sport, posBucket, stat, season);
+  const tables = await getMinutesDvpTables(sport, posBucket, keys, season);
+  return tables.find(([s]) => s === stat)?.[1] ?? [];
+}
+
+// The player read's DvP lookups below are OPTIONAL context: if the league scan can't
+// finish right now (slow-window statement timeout, pooler stall) the page renders with
+// no matchup card/grade instead of a 500 — see optionalScan in leagueScan.ts.
 
 async function getMinutesDvp(
   sport: MinutesDvpSport,
@@ -1140,7 +1157,12 @@ async function getMinutesDvp(
   opponentTeamId: number,
   season: string,
 ): Promise<DvpCell | null> {
-  const cells = await getMinutesDvpTable(sport, posBucket, stat, season);
+  // Keyed per bucket: every stat in it reads the same all-stat scan.
+  const cells = await optionalScan(
+    `dvp:${sport}:${posBucket}:${season}`,
+    () => getMinutesDvpTable(sport, posBucket, stat, season),
+    [],
+  );
   return cells.find((c) => c.opponentTeamId === opponentTeamId) ?? null;
 }
 
@@ -1155,7 +1177,7 @@ async function querySoccerDvpTable(
 ): Promise<DvpCell[]> {
   const expr = SOCCER_STAT_SQL[stat];
   if (!expr) return [];
-  const rows = await db.$queryRawUnsafe<
+  const rows = await leagueScanRaw<
     { opponentTeamId: number; avg: number; n: number }[]
   >(
     `SELECT s."opponentTeamId" AS "opponentTeamId", AVG(COALESCE(${expr},0))::float8 AS avg, COUNT(*)::int AS n
@@ -1163,9 +1185,7 @@ async function querySoccerDvpTable(
      JOIN "Player" p ON p.id = s."playerId"
      WHERE p.sport = $1 AND p."posBucket" = $2 AND s.season = $3
      GROUP BY s."opponentTeamId"`,
-    sport,
-    posBucket,
-    season,
+    [sport, posBucket, season],
   );
   if (rows.length === 0) return [];
   return rankDvp(
@@ -1188,7 +1208,11 @@ async function getSoccerDvp(
   opponentTeamId: number,
   season: string,
 ): Promise<DvpCell | null> {
-  const cells = await getSoccerDvpTable(sport, posBucket, stat, season);
+  const cells = await optionalScan(
+    `dvp:${sport}:${posBucket}:${stat}:${season}`,
+    () => getSoccerDvpTable(sport, posBucket, stat, season),
+    [],
+  );
   return cells.find((c) => c.opponentTeamId === opponentTeamId) ?? null;
 }
 
@@ -1200,7 +1224,7 @@ async function queryMlbHitterMatchupTable(
   const expr = MLB_HIT_SQL[stat];
   if (!expr) return [];
   // Per-game team total allowed, then average across that opponent's games.
-  const rows = await db.$queryRawUnsafe<
+  const rows = await leagueScanRaw<
     { opponentTeamId: number; avg: number; n: number }[]
   >(
     `SELECT opp AS "opponentTeamId", AVG(pg)::float8 AS avg, COUNT(*)::int AS n FROM (
@@ -1211,7 +1235,7 @@ async function queryMlbHitterMatchupTable(
        GROUP BY s."opponentTeamId", s."gameId"
      ) t
      GROUP BY opp`,
-    season,
+    [season],
   );
   if (rows.length === 0) return [];
   return rankDvp(
@@ -1232,7 +1256,11 @@ async function getMlbHitterMatchup(
   opponentTeamId: number,
   season: string,
 ): Promise<DvpCell | null> {
-  const cells = await getMlbHitterMatchupTable(stat, season);
+  const cells = await optionalScan(
+    `dvp:mlb:H:${stat}:${season}`,
+    () => getMlbHitterMatchupTable(stat, season),
+    [],
+  );
   return cells.find((c) => c.opponentTeamId === opponentTeamId) ?? null;
 }
 
@@ -1250,7 +1278,7 @@ async function queryNflDvpTable(
   // Average the stat allowed to featured players of this bucket, per opponent.
   // No per-player blended threshold (NBA-style) — with ~17 games a fixed
   // involvement floor is simpler and keeps cells from going empty.
-  const rows = await db.$queryRawUnsafe<
+  const rows = await leagueScanRaw<
     { opponentTeamId: number; avg: number; n: number }[]
   >(
     `SELECT s."opponentTeamId" AS "opponentTeamId", AVG(${expr})::float8 AS avg, COUNT(*)::int AS n
@@ -1259,9 +1287,7 @@ async function queryNflDvpTable(
      WHERE p.sport = $3 AND p."posBucket" = $1 AND s.season = $2
        AND ${invol.expr} >= ${invol.floor}
      GROUP BY s."opponentTeamId"`,
-    posBucket,
-    season,
-    sport,
+    [posBucket, season, sport],
   );
   if (rows.length === 0) return [];
   return rankDvp(
@@ -1284,7 +1310,11 @@ async function getNflDvp(
   opponentTeamId: number,
   season: string,
 ): Promise<DvpCell | null> {
-  const cells = await getNflDvpTable(sport, posBucket, stat, season);
+  const cells = await optionalScan(
+    `dvp:${sport}:${posBucket}:${stat}:${season}`,
+    () => getNflDvpTable(sport, posBucket, stat, season),
+    [],
+  );
   return cells.find((c) => c.opponentTeamId === opponentTeamId) ?? null;
 }
 
@@ -1292,7 +1322,7 @@ async function getNflDvp(
 // serialization); a failure throws here so it is never cached as "no pace".
 const queryBasketballPaceRows = sharedCache(
   async (sport: 'nba' | 'wnba' | 'cbb', season: string): Promise<{ teamId: number; pace: number }[]> =>
-    db.$queryRawUnsafe<{ teamId: number; pace: number }[]>(
+    leagueScanRaw<{ teamId: number; pace: number }[]>(
       `SELECT "teamId", AVG(poss)::float8 AS pace FROM (
          SELECT s."teamId" AS "teamId", s."gameId" AS gid,
                 SUM(COALESCE(s.fga,0)) + 0.44 * SUM(COALESCE(s.fta,0))
@@ -1303,8 +1333,7 @@ const queryBasketballPaceRows = sharedCache(
          GROUP BY s."teamId", s."gameId"
        ) t
        GROUP BY "teamId"`,
-      season,
-      sport,
+      [season, sport],
     ),
   ['pace', 'v1'],
   SEASON_AGGREGATE_TTL,
@@ -1324,7 +1353,12 @@ const getBasketballPaceTable = cache(
     season: string,
   ): Promise<{ byTeam: Map<number, number>; leagueAvg: number } | null> => {
     try {
-      const rows = await queryBasketballPaceRows(sport, season);
+      // optionalScan adds the cooldown (the catch below already degraded to null).
+      const rows = await optionalScan(
+        `pace:${sport}:${season}`,
+        () => queryBasketballPaceRows(sport, season),
+        [],
+      );
       if (rows.length === 0) return null;
       const byTeam = new Map<number, number>();
       let sum = 0;

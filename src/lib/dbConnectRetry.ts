@@ -59,3 +59,19 @@ export async function retryOnConnectFailure<T>(
     }
   }
 }
+
+/**
+ * Postgres cancelled the statement for running past `statement_timeout` (SQLSTATE
+ * 57014). Deliberately NOT a connect failure: re-running the same statement against a
+ * database that just took too long to finish it mostly buys another timeout. A caller
+ * that can make the retry cheaper — send less work per statement — should catch this
+ * and do that instead (see the upsert loop in run-ingest-providedlines.ts), or degrade
+ * (see leagueScan.ts). The cancelled statement is rolled back in full.
+ */
+export function isStatementTimeout(e: unknown): boolean {
+  if ((e as { meta?: { code?: string } })?.meta?.code === '57014') return true;
+  // Postgres's exact text for a 57014 raised by statement_timeout. Prisma's P2010
+  // wraps it in its own message, so match the text rather than a bare code number.
+  const msg = e instanceof Error ? e.message : String(e);
+  return msg.includes('canceling statement due to statement timeout');
+}
