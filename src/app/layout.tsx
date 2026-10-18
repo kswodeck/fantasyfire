@@ -56,6 +56,10 @@ export const metadata: Metadata = {
   ...(googleVerification ? { verification: { google: googleVerification } } : {}),
   robots: { index: true, follow: true },
   manifest: '/manifest.webmanifest',
+  // iOS Safari otherwise rewrites digit runs (stat lines, scores, game logs) and
+  // addresses into <a href="tel:…"> before React hydrates — a DOM mutation that
+  // fails hydration on iPhone only.
+  formatDetection: { telephone: false, address: false, email: false },
   // iOS home-screen install: proper standalone treatment and app title (iOS
   // ignores most of the web manifest and reads these meta tags instead).
   appleWebApp: {
