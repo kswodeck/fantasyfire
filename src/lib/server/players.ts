@@ -92,22 +92,29 @@ import {
   bestVariantScore,
 } from '@/lib/payoutVariant';
 import type { RungQuote } from '@/lib/odds/marketBreakeven';
+import { sharedCache, SEASON_AGGREGATE_TTL } from '@/lib/server/sharedCache';
 
 /**
  * The season the app reads for a sport. Computed from today's date, falling back
- * to the previous season if the current one has no data yet. Cached per request.
+ * to the previous season if the current one has no data yet. Cached across
+ * requests, keyed by the date-derived season too so a rollover is never served
+ * the old answer. An existence probe (findFirst), not count(*): PlayerGameStat has
+ * no season index, so a count read a whole sport's history on every page render.
  */
-const getActiveSeason = cache(async (sport: Sport): Promise<string> => {
-  const current = currentSeason(sport);
-  if ((await db.playerGameStat.count({ where: { sport, season: current } })) > 0) {
-    return current;
-  }
-  const prev = previousSeason(sport, current);
-  if ((await db.playerGameStat.count({ where: { sport, season: prev } })) > 0) {
-    return prev;
-  }
-  return current; // nothing ingested — queries return empty, handled gracefully
-});
+const hasSeasonData = (sport: Sport, season: string) =>
+  db.playerGameStat.findFirst({ where: { sport, season }, select: { id: true } }).then(Boolean);
+const resolveActiveSeason = sharedCache(
+  async (sport: Sport, current: string): Promise<string> => {
+    if (await hasSeasonData(sport, current)) return current;
+    const prev = previousSeason(sport, current);
+    if (await hasSeasonData(sport, prev)) return prev;
+    return current; // nothing ingested — queries return empty, handled gracefully
+  },
+  ['active-season', 'v1'],
+  SEASON_AGGREGATE_TTL,
+);
+const getActiveSeason = (sport: Sport): Promise<string> =>
+  resolveActiveSeason(sport, currentSeason(sport));
 
 // Per-game "opportunity" used to drop games where a player was barely involved
 // (injury exits / garbage time / pinch-hit cameos), which would otherwise drag
@@ -987,7 +994,7 @@ type MinutesDvpSport = 'nba' | 'wnba' | 'cbb' | 'nhl';
 
 /** Minutes-gated DvP cell table: stat allowed to a position bucket, ranked across
  *  teams. NBA/WNBA share the NBA stat SQL; the NHL has its own. */
-async function getMinutesDvpTable(
+async function queryMinutesDvpTable(
   sport: MinutesDvpSport,
   posBucket: PosBucket,
   stat: StatKey,
@@ -1055,17 +1062,17 @@ async function getMinutesDvpTable(
  * whose values are all NULL yields SQL NULL from AVG, which `Number(null)` turns into 0
  * — exactly what the per-stat version produced.
  */
-async function getMinutesDvpTables(
+async function queryMinutesDvpTables(
   sport: MinutesDvpSport,
   posBucket: PosBucket,
   stats: readonly StatKey[],
   season: string,
-): Promise<Map<StatKey, DvpCell[]>> {
+): Promise<Array<[StatKey, DvpCell[]]>> {
   const out = new Map<StatKey, DvpCell[]>();
   const sqlFor = sport === 'nhl' ? NHL_STAT_SQL : NBA_STAT_SQL;
   const usable = stats.filter((s) => sqlFor[s]);
   for (const s of stats) if (!sqlFor[s]) out.set(s, []); // matches the `if (!expr) return []` guard
-  if (usable.length === 0) return out;
+  if (usable.length === 0) return [...out];
 
   const factor = qualifyFactorFor(sport, posBucket);
   // v0..vN track `usable` positionally. The expressions come from the fixed
@@ -1117,8 +1124,14 @@ async function getMinutesDvpTables(
       ),
     );
   });
-  return out;
+  // Entries, not the Map: the cached result is JSON-serialized (see sharedCache).
+  return [...out];
 }
+
+// League-wide DvP tables are identical for every player in a sport/bucket — cache
+// them across requests (see sharedCache.ts) instead of rescanning the season per page.
+const getMinutesDvpTable = sharedCache(queryMinutesDvpTable, ['dvp-minutes', 'v1'], SEASON_AGGREGATE_TTL);
+const getMinutesDvpTables = sharedCache(queryMinutesDvpTables, ['dvp-minutes-all', 'v1'], SEASON_AGGREGATE_TTL);
 
 async function getMinutesDvp(
   sport: MinutesDvpSport,
@@ -1134,7 +1147,7 @@ async function getMinutesDvp(
 /** Soccer DvP: a stat allowed to a position bucket per appearance, ranked. The feed
  *  has no per-player minutes, so there's no involvement gate — sub cameos dilute
  *  every team's average equally, keeping the RANKING comparable. */
-async function getSoccerDvpTable(
+async function querySoccerDvpTable(
   sport: 'mls',
   posBucket: PosBucket,
   stat: StatKey,
@@ -1166,6 +1179,8 @@ async function getSoccerDvpTable(
   );
 }
 
+const getSoccerDvpTable = sharedCache(querySoccerDvpTable, ['dvp-soccer', 'v1'], SEASON_AGGREGATE_TTL);
+
 async function getSoccerDvp(
   sport: 'mls',
   posBucket: PosBucket,
@@ -1178,7 +1193,7 @@ async function getSoccerDvp(
 }
 
 /** MLB matchup: a hitting stat the opponent's pitching staff allows per game. */
-async function getMlbHitterMatchupTable(
+async function queryMlbHitterMatchupTable(
   stat: StatKey,
   season: string,
 ): Promise<DvpCell[]> {
@@ -1210,6 +1225,8 @@ async function getMlbHitterMatchupTable(
   );
 }
 
+const getMlbHitterMatchupTable = sharedCache(queryMlbHitterMatchupTable, ['dvp-mlb-hitter', 'v1'], SEASON_AGGREGATE_TTL);
+
 async function getMlbHitterMatchup(
   stat: StatKey,
   opponentTeamId: number,
@@ -1221,7 +1238,7 @@ async function getMlbHitterMatchup(
 
 /** Football defense-vs-position (NFL/CFB): a stat each team allows to a
  *  position, ranked. CFB's involvement gate differs (no targets in that feed). */
-async function getNflDvpTable(
+async function queryNflDvpTable(
   sport: 'nfl' | 'cfb',
   posBucket: PosBucket,
   stat: StatKey,
@@ -1258,6 +1275,8 @@ async function getNflDvpTable(
   );
 }
 
+const getNflDvpTable = sharedCache(queryNflDvpTable, ['dvp-football', 'v1'], SEASON_AGGREGATE_TTL);
+
 async function getNflDvp(
   sport: 'nfl' | 'cfb',
   posBucket: PosBucket,
@@ -1269,13 +1288,35 @@ async function getNflDvp(
   return cells.find((c) => c.opponentTeamId === opponentTeamId) ?? null;
 }
 
+// Plain rows are what gets cached across requests (a Map wouldn't survive
+// serialization); a failure throws here so it is never cached as "no pace".
+const queryBasketballPaceRows = sharedCache(
+  async (sport: 'nba' | 'wnba' | 'cbb', season: string): Promise<{ teamId: number; pace: number }[]> =>
+    db.$queryRawUnsafe<{ teamId: number; pace: number }[]>(
+      `SELECT "teamId", AVG(poss)::float8 AS pace FROM (
+         SELECT s."teamId" AS "teamId", s."gameId" AS gid,
+                SUM(COALESCE(s.fga,0)) + 0.44 * SUM(COALESCE(s.fta,0))
+                  - SUM(COALESCE(s.oreb,0)) + SUM(COALESCE(s.turnovers,0)) AS poss
+         FROM "PlayerGameStat" s
+         JOIN "Player" p ON p.id = s."playerId"
+         WHERE p.sport = $2 AND s.season = $1
+         GROUP BY s."teamId", s."gameId"
+       ) t
+       GROUP BY "teamId"`,
+      season,
+      sport,
+    ),
+  ['pace', 'v1'],
+  SEASON_AGGREGATE_TTL,
+);
+
 /**
  * Basketball game pace (idea #3) — each team's season pace + the league average.
  * Possessions per team-game ≈ FGA + 0.44·FTA − OREB + TOV (the box-score estimate
  * single-sourced in lib/stats/pace.ts), aggregated to a per-game average per team.
  * NBA and WNBA both store the full basketball box, so both get a pace read.
- * Memoized per request; null off-basketball / on error so the projection just
- * stays pace-neutral.
+ * Rows cached across requests (above); null off-basketball / on error so the
+ * projection just stays pace-neutral.
  */
 const getBasketballPaceTable = cache(
   async (
@@ -1283,20 +1324,7 @@ const getBasketballPaceTable = cache(
     season: string,
   ): Promise<{ byTeam: Map<number, number>; leagueAvg: number } | null> => {
     try {
-      const rows = await db.$queryRawUnsafe<{ teamId: number; pace: number }[]>(
-        `SELECT "teamId", AVG(poss)::float8 AS pace FROM (
-           SELECT s."teamId" AS "teamId", s."gameId" AS gid,
-                  SUM(COALESCE(s.fga,0)) + 0.44 * SUM(COALESCE(s.fta,0))
-                    - SUM(COALESCE(s.oreb,0)) + SUM(COALESCE(s.turnovers,0)) AS poss
-           FROM "PlayerGameStat" s
-           JOIN "Player" p ON p.id = s."playerId"
-           WHERE p.sport = $2 AND s.season = $1
-           GROUP BY s."teamId", s."gameId"
-         ) t
-         GROUP BY "teamId"`,
-        season,
-        sport,
-      );
+      const rows = await queryBasketballPaceRows(sport, season);
       if (rows.length === 0) return null;
       const byTeam = new Map<number, number>();
       let sum = 0;
@@ -1362,9 +1390,9 @@ const getMlbPitcherIdByName = cache(async (): Promise<Map<string, number | null>
 });
 
 /** League-average pitcher rates per batter faced (K rate, hits-allowed rate) — the
- *  baseline a specific starter is measured against (idea #6). Memoized per request.
+ *  baseline a specific starter is measured against (idea #6). Cached across requests.
  *  Hitters' null pitching columns sum to 0, so this is effectively pitchers-only. */
-const getMlbLeaguePitcherRates = cache(
+const getMlbLeaguePitcherRates = sharedCache(
   async (season: string): Promise<{ kRate: number; hitsRate: number } | null> => {
     const agg = await db.playerGameStat.aggregate({
       where: { sport: 'mlb', season },
@@ -1383,6 +1411,8 @@ const getMlbLeaguePitcherRates = cache(
       hitsRate: (agg._sum.hitsAllowed ?? 0) / bf,
     };
   },
+  ['mlb-league-pitcher-rates', 'v1'],
+  SEASON_AGGREGATE_TTL,
 );
 
 /**

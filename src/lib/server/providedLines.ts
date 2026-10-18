@@ -36,16 +36,21 @@ function recentCutoff(days: number = RECENT_WINDOW_DAYS, now: Date = new Date())
  *
  * cache(): asked per sport by both the sport pages and the all-sports
  * aggregators within one render — memoize to one query per sport.
+ *
+ * groupBy, not findMany({ distinct }): Prisma applies `distinct` IN MEMORY, so that
+ * fetched every recent line row (thousands) just to dedupe a handful of book names —
+ * Sentry's slow "ProvidedLine ... OFFSET" query. groupBy dedupes in Postgres.
+ * (Deliberately NOT cross-request cached: the 15-min boards need it fresh, and any
+ * shared TTL under 24h would shorten the player pages' ISR — see sharedCache.ts.)
  */
 export const getAvailableSources = cache(async (sport: Sport): Promise<string[]> => {
   if (!providedLinesEnabled()) return [];
   // Fail safe: a missing table (flag enabled before the migration runs) or a DB
   // hiccup must degrade to "no books" (computed lines), never 500 a page.
   try {
-    const rows = await db.providedLine.findMany({
+    const rows = await db.providedLine.groupBy({
+      by: ['source'],
       where: { sport, gameDate: { gte: recentCutoff() } },
-      distinct: ['source'],
-      select: { source: true },
     });
     return orderSources(rows.map((r) => r.source));
   } catch (e) {
