@@ -3,12 +3,17 @@
 // https://docs.sentry.io/platforms/javascript/guides/nextjs/
 
 import * as Sentry from '@sentry/nextjs';
+import { THIRD_PARTY_SCRIPT_URLS } from '@/lib/sentryFilters';
 
 Sentry.init({
   dsn: 'https://600bb557d0cf1045efa23a124c7d556a@o4512274507038720.ingest.us.sentry.io/4512274513592320',
 
   // Add optional integrations for additional features
   integrations: [Sentry.replayIntegration()],
+
+  // Drop errors thrown from third-party scripts we load but don't own (Vercel Speed
+  // Insights, analytics tags, browser extensions) — see src/lib/sentryFilters.ts.
+  denyUrls: THIRD_PARTY_SCRIPT_URLS,
 
   // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
   tracesSampleRate: 1,
