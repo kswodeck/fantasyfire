@@ -22,6 +22,9 @@ const CONNECT_FAILURE_MESSAGES = [
   // Prisma's wording for an unreachable server / exhausted pool.
   "Can't reach database server",
   'Timed out fetching a new connection',
+  // Supabase's pooler (Supavisor) found no free server connection for the
+  // transaction — it never reached Postgres (Sentry SENTRY-FANTASYFIRE-APP-S).
+  'ECHECKOUTTIMEOUT',
 ];
 const CONNECT_FAILURE_CODES = new Set(['ECONNREFUSED', 'EAI_AGAIN', 'P1001']);
 

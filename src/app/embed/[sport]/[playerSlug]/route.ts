@@ -6,7 +6,7 @@
 // (the whole point: a self-replicating link engine). Framing is allowed for this
 // path via the CSP in next.config.ts.
 import type { NextRequest } from 'next/server';
-import { getPlayerResearch } from '@/lib/server/players';
+import { getPlayerHitRateCard } from '@/lib/server/players';
 import { absoluteUrl } from '@/lib/site';
 import { isSport, SPORTS } from '@/lib/sports';
 import { isPropStat } from '@/lib/propStats';
@@ -36,6 +36,18 @@ function notFoundCard(): Response {
   });
 }
 
+function unavailableCard(): Response {
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="robots" content="noindex"><style>body{margin:0;font:14px system-ui;color:#57534e;padding:16px}</style></head><body>Hit rates are temporarily unavailable · <a href="${esc(absoluteUrl('/'))}" target="_blank" rel="noopener">FantasyFire</a></body></html>`;
+  return new Response(html, {
+    status: 503,
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-store',
+      'retry-after': '60',
+    },
+  });
+}
+
 export async function GET(
   request: NextRequest,
   ctx: { params: Promise<{ sport: string; playerSlug: string }> },
@@ -48,7 +60,16 @@ export async function GET(
   const wantStat = statParam.success && isPropStat(sport, statParam.data) ? statParam.data : undefined;
   const theme = sp.get('theme') === 'light' ? 'light' : sp.get('theme') === 'dark' ? 'dark' : 'auto';
 
-  const research = await getPlayerResearch(sport, playerSlug, wantStat as StatKey | undefined);
+  // Card-only read (not the full research pipeline) — embeds are fetched per view on
+  // third-party pages. A DB outage answers a short-lived 503 card rather than a 500:
+  // the iframe recovers on its own at the next view, and nothing caches the failure.
+  let research: Awaited<ReturnType<typeof getPlayerHitRateCard>>;
+  try {
+    research = await getPlayerHitRateCard(sport, playerSlug, wantStat as StatKey | undefined);
+  } catch (e) {
+    console.warn('[embed] hit-rate card unavailable:', e instanceof Error ? e.message : e);
+    return unavailableCard();
+  }
   if (!research) return notFoundCard();
 
   // Optional explicit line override (else the page's typical line).
