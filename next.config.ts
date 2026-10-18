@@ -9,6 +9,7 @@ import type { NextConfig } from 'next';
 //
 // Allowlist notes:
 //   - script/connect cloud.umami.is + the Umami beacon gateway  -> analytics
+//     (gateway.umami.is today; api-gateway.umami.dev before it)
 //   - script www.googletagmanager.com                           -> GA4 (gtag.js)
 //   - connect/img *.google-analytics.com, *.analytics.google.com-> the GA4 collector.
 //     Wildcards are required, NOT decoration: GA4 posts hits to a REGIONAL host
@@ -48,6 +49,12 @@ function contentSecurityPolicy(): string {
     'connect-src': [
       "'self'",
       'https://cloud.umami.is',
+      // Umami's beacon host. Current cloud.umami.is/script.js posts to gateway.umami.is
+      // (`x || "https://gateway.umami.is"` + "/api/send"); without it every Umami
+      // pageview and funnel event was CSP-blocked (seen as a failed `POST
+      // gateway.umami.is/api/send` breadcrumb in Sentry APP-G). api-gateway.umami.dev
+      // is the previous host, kept for any cached older copy of the tracker.
+      'https://gateway.umami.is',
       'https://api-gateway.umami.dev',
       'https://www.googletagmanager.com',
       'https://www.google-analytics.com',
