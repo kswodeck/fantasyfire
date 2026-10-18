@@ -56,3 +56,6 @@ next-env.d.ts
 
 # Local-only preview/editor config (contains machine-specific absolute paths)
 /.claude/
+
+# Sentry Config File
+.env.sentry-build-plugin
