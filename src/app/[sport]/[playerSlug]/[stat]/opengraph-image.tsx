@@ -1,5 +1,5 @@
 import { ImageResponse } from 'next/og';
-import { getPlayerResearch } from '@/lib/server/players';
+import { getPlayerHitRateCard } from '@/lib/server/players';
 import { isSport, SPORTS } from '@/lib/sports';
 import { isPropStat } from '@/lib/propStats';
 import { STAT_DEFS, type StatKey } from '@/lib/stats';
@@ -26,12 +26,21 @@ export default async function Image({
   params: Promise<{ sport: string; playerSlug: string; stat: string }>;
 }) {
   const { sport, playerSlug, stat } = await params;
-  const research =
-    isSport(sport) && isPropStat(sport, stat)
-      ? await getPlayerResearch(sport, playerSlug, stat as StatKey)
-      : null;
-
   const sportName = isSport(sport) ? SPORTS[sport].name : 'NBA';
+
+  // Card-only read: crawlers fetch this image for every long-tail page, and the full
+  // research pipeline (~15 queries incl. season-wide DvP/pace scans) per image is what
+  // pinned the pooler (Sentry SENTRY-FANTASYFIRE-APP-S). If the DB still can't answer,
+  // serve the generic card instead of a 500 — a crawler that gets an error shows no
+  // preview at all and may not re-fetch for days.
+  let research: Awaited<ReturnType<typeof getPlayerHitRateCard>> = null;
+  if (isSport(sport) && isPropStat(sport, stat)) {
+    try {
+      research = await getPlayerHitRateCard(sport, playerSlug, stat as StatKey);
+    } catch (e) {
+      console.warn('[og] hit-rate card unavailable; serving generic card:', e instanceof Error ? e.message : e);
+    }
+  }
 
   // Fall back to a clean generic card if the player/stat didn't resolve.
   if (!research || research.stat !== stat) {

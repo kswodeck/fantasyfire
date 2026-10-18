@@ -1607,14 +1607,19 @@ export interface RungHint {
   multiplier?: number | null;
 }
 
-export async function getPlayerResearch(
+/**
+ * The line + hit-rate windows for one player/stat: player record, active season,
+ * qualified games, the chosen book's ladder, the resolved line and the windows.
+ * The opening of getPlayerResearch, shared verbatim with getPlayerHitRateCard so a
+ * share card's numbers are identical to the page's by construction.
+ */
+async function loadHitRateCore(
   sport: Sport,
   slug: string,
   statParam?: StatKey,
   lineParam?: number,
   source?: string,
-  rungHint?: RungHint,
-): Promise<PlayerResearch | null> {
+) {
   const record = await getPlayerRecord(sport, slug);
   if (!record) return null;
   const player = toSummary(record);
@@ -1657,6 +1662,48 @@ export async function getPlayerResearch(
   const variants = await getProvidedVariants(sport, record.id, stat, src);
   const providedLine = lineParam == null ? (pickRepresentative(variants, null)?.line ?? null) : null;
   const line = lineParam ?? providedLine ?? defaultPropLine(games, stat);
+
+  const windows: WindowResult[] = STAT_WINDOWS.map((w) => {
+    const hitRate = computeHitRate(games, stat, line, w);
+    return {
+      window: String(w),
+      hitRate,
+      confidence: hitRateConfidence(hitRate.overs, hitRate.decided),
+    };
+  });
+
+  return { record, player, season, stat, allGames, carriedAll, games, src, variants, line, windows };
+}
+
+/**
+ * Just what a share card draws — player, stat, line and hit-rate windows — without
+ * the rest of the research read (DvP + pace scans, book quotes, teammate splits,
+ * injuries). The OG image and embed routes are fetched by crawlers across the whole
+ * long tail; running the full ~15-query read per image is what pinned the pooler
+ * (Sentry SENTRY-FANTASYFIRE-APP-S). Same defaults as getPlayerResearch called with
+ * no line/source, so the numbers match the page.
+ */
+export async function getPlayerHitRateCard(
+  sport: Sport,
+  slug: string,
+  statParam?: StatKey,
+): Promise<Pick<PlayerResearch, 'player' | 'stat' | 'line' | 'windows'> | null> {
+  const core = await loadHitRateCore(sport, slug, statParam);
+  if (!core) return null;
+  return { player: core.player, stat: core.stat, line: core.line, windows: core.windows };
+}
+
+export async function getPlayerResearch(
+  sport: Sport,
+  slug: string,
+  statParam?: StatKey,
+  lineParam?: number,
+  source?: string,
+  rungHint?: RungHint,
+): Promise<PlayerResearch | null> {
+  const core = await loadHitRateCore(sport, slug, statParam, lineParam, source);
+  if (!core) return null;
+  const { record, player, season, stat, allGames, carriedAll, games, src, variants, line, windows } = core;
   // Attribute the line to its book when it matches a known rung (auto-picked, or one
   // the user selected via the switcher); a hand-typed custom number stays sourceless.
   // When the ladder has MOVED since the caller rendered (books re-price intraday) the
@@ -1675,15 +1722,6 @@ export async function getPlayerResearch(
         } satisfies ProvidedVariant)
       : null);
   const lineSource = selectedVariant ? src : null;
-
-  const windows: WindowResult[] = STAT_WINDOWS.map((w) => {
-    const hitRate = computeHitRate(games, stat, line, w);
-    return {
-      window: String(w),
-      hitRate,
-      confidence: hitRateConfidence(hitRate.overs, hitRate.decided),
-    };
-  });
 
   const seasonResult = windows.find((w) => w.window === 'season')!.hitRate;
 

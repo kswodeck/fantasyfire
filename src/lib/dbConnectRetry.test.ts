@@ -8,6 +8,14 @@ describe('isConnectFailure', () => {
     expect(isConnectFailure(new Error('timeout exceeded when trying to connect'))).toBe(true);
   });
 
+  it('matches the Supavisor checkout timeout (Sentry APP-S)', () => {
+    const e = new Error(
+      '(ECHECKOUTTIMEOUT) unable to check out connection from the pool after 15000ms in Transaction mode',
+    );
+    e.name = 'DriverAdapterError';
+    expect(isConnectFailure(e)).toBe(true);
+  });
+
   it('matches through a cause chain and by code', () => {
     const inner = new Error('Connection terminated due to connection timeout');
     expect(isConnectFailure(new Error('wrapped', { cause: inner }))).toBe(true);
