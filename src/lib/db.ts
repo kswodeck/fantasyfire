@@ -11,6 +11,7 @@ import 'dotenv/config';
 // without needing tsconfig path support.
 import { PrismaClient } from '../generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { retryOnConnectFailure } from './dbConnectRetry';
 
 const createPrismaClient = () => {
   const raw = process.env.DATABASE_URL ?? '';
@@ -55,7 +56,16 @@ const createPrismaClient = () => {
     connectionTimeoutMillis: isBuild ? 45_000 : 10_000,
     ...(hasSslmode ? { ssl: { rejectUnauthorized: false } } : {}),
   });
-  return new PrismaClient({ adapter });
+  // Inside Next (serving or building), retry a query once when no connection could be
+  // obtained, instead of 500ing the page on a pooler stall (see dbConnectRetry.ts).
+  // Ingest scripts (tsx — no NEXT_RUNTIME) already wrap their calls in withDbRetry,
+  // so they get a single attempt here rather than nested retries multiplying the wait.
+  const attempts = process.env.NEXT_RUNTIME ? 2 : 1;
+  return new PrismaClient({ adapter }).$extends({
+    query: {
+      $allOperations: ({ args, query }) => retryOnConnectFailure(() => query(args), { attempts }),
+    },
+  });
 };
 
 type PrismaClientSingleton = ReturnType<typeof createPrismaClient>;
