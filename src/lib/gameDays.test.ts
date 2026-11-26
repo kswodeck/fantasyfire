@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
   addDaysIso,
+  dayTargetIds,
   formatDayLabel,
   formatDayRange,
   groupGamesByDay,
   localDayIso,
+  toggleIds,
 } from './gameDays';
 
 describe('localDayIso', () => {
@@ -109,5 +111,50 @@ describe('formatDayRange', () => {
 
   it('spans a year end', () => {
     expect(formatDayRange('2026-12-31', '2027-01-04')).toBe('Dec 31, 2026 – Jan 4, 2027');
+  });
+});
+
+describe('dayTargetIds', () => {
+  const thursday = [
+    { externalId: 'CHI@DET' },
+    { externalId: 'PHI@DAL' },
+    { externalId: 'KC@BUF' },
+  ];
+
+  it('selects only the games that have not started', () => {
+    expect(dayTargetIds(thursday, new Set(['CHI@DET']))).toEqual(['PHI@DAL', 'KC@BUF']);
+  });
+
+  it('selects the whole day when nothing has started', () => {
+    expect(dayTargetIds(thursday, new Set())).toEqual(['CHI@DET', 'PHI@DAL', 'KC@BUF']);
+  });
+
+  it('falls back to every game once the whole day is underway, so the tap still works', () => {
+    expect(dayTargetIds(thursday, new Set(['CHI@DET', 'PHI@DAL', 'KC@BUF']))).toEqual([
+      'CHI@DET',
+      'PHI@DAL',
+      'KC@BUF',
+    ]);
+  });
+});
+
+describe('toggleIds', () => {
+  it('adds the whole set when any of it is missing', () => {
+    expect([...toggleIds(new Set(['a']), ['a', 'b'])].sort()).toEqual(['a', 'b']);
+  });
+
+  it('removes the whole set when all of it is already selected', () => {
+    expect([...toggleIds(new Set(['a', 'b', 'x']), ['a', 'b'])]).toEqual(['x']);
+  });
+
+  it('leaves other selections alone, and never mutates its input', () => {
+    const prev = new Set(['x']);
+    const next = toggleIds(prev, ['a']);
+    expect([...next].sort()).toEqual(['a', 'x']);
+    expect([...prev]).toEqual(['x']);
+  });
+
+  it('treats an empty set as a no-op', () => {
+    expect([...toggleIds(new Set(['x']), [])]).toEqual(['x']);
   });
 });

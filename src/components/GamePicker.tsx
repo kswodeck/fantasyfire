@@ -5,10 +5,12 @@ import type { Sport } from '@/lib/sports';
 import type { TonightGame } from '@/lib/types';
 import { MatchupStrip } from './MatchupStrip';
 import {
+  dayTargetIds,
   formatDayLabel,
   formatDayRange,
   groupGamesByDay,
   localDayIso,
+  toggleIds,
 } from '@/lib/gameDays';
 
 /**
@@ -65,11 +67,15 @@ export function useGameFilter(games: TonightGame[]) {
       else next.add(id);
       return next;
     });
+  // A day heading selects (or clears) that day's games in one tap — see toggleIds.
+  const toggleGames = (ids: readonly string[]) =>
+    setSelectedGames((prev) => toggleIds(prev, ids));
   const clearGames = () => setSelectedGames(new Set());
 
   return {
     selectedGames,
     toggleGame,
+    toggleGames,
     clearGames,
     chooseOpen,
     setChooseOpen,
@@ -115,6 +121,7 @@ export function GamePicker({
   const {
     selectedGames,
     toggleGame,
+    toggleGames,
     clearGames,
     chooseOpen,
     setChooseOpen,
@@ -179,24 +186,70 @@ export function GamePicker({
           )}
           {multiDay ? (
             <div className="space-y-2.5">
-              {groups.map(({ day, games: dayGames }) => (
-                <div key={day} role="group" aria-labelledby={`${idBase}-${day}`}>
-                  <p
-                    id={`${idBase}-${day}`}
-                    className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted"
-                  >
-                    {formatDayLabel(day, todayIso)} · {dayGames.length}{' '}
-                    {dayGames.length === 1 ? 'game' : 'games'}
-                  </p>
-                  <MatchupStrip
-                    sport={sport}
-                    games={dayGames}
-                    selected={selectedGames}
-                    startedIds={startedIds}
-                    onToggle={toggleGame}
-                  />
-                </div>
-              ))}
+              {groups.map(({ day, games: dayGames }) => {
+                const dayLabel = formatDayLabel(day, todayIso);
+                const targets = dayTargetIds(dayGames, startedIds);
+                const pressed = targets.every((id) => selectedGames.has(id));
+                // Say so when the tap will skip games already underway, so "3 games"
+                // in the heading and 2 selected never reads as a miscount.
+                const skipsStarted = targets.length < dayGames.length;
+                return (
+                  <div key={day} role="group" aria-labelledby={`${idBase}-${day}`}>
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <p
+                        id={`${idBase}-${day}`}
+                        className="text-[11px] font-semibold uppercase tracking-wide text-muted"
+                      >
+                        {dayLabel} · {dayGames.length}{' '}
+                        {dayGames.length === 1 ? 'game' : 'games'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => toggleGames(targets)}
+                        aria-pressed={pressed}
+                        // Stable name; aria-pressed carries the on/off state.
+                        aria-label={`Select ${skipsStarted ? `the ${targets.length} upcoming` : 'all'} games on ${dayLabel}`}
+                        className={
+                          'inline-flex min-h-7 shrink-0 cursor-pointer items-center gap-1 rounded-full border px-2.5 text-[11px] font-medium transition-colors ' +
+                          (pressed
+                            ? 'border-brand bg-brand/10 text-brand'
+                            : 'border-line bg-surface text-muted hover:border-brand/60 hover:text-foreground')
+                        }
+                      >
+                        {pressed ? (
+                          <>
+                            <svg
+                              viewBox="0 0 12 12"
+                              width="10"
+                              height="10"
+                              aria-hidden="true"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M2.5 6.5 5 9l4.5-6" />
+                            </svg>
+                            Selected
+                          </>
+                        ) : skipsStarted ? (
+                          `Select ${targets.length} upcoming`
+                        ) : (
+                          'Select day'
+                        )}
+                      </button>
+                    </div>
+                    <MatchupStrip
+                      sport={sport}
+                      games={dayGames}
+                      selected={selectedGames}
+                      startedIds={startedIds}
+                      onToggle={toggleGame}
+                    />
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <MatchupStrip

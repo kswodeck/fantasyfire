@@ -92,3 +92,37 @@ export function formatDayRange(firstIso: string, lastIso: string): string {
   if (m1 !== m2) return `${MONTHS[m1 - 1]} ${d1} – ${MONTHS[m2 - 1]} ${d2}, ${y2}`;
   return `${MONTHS[m1 - 1]} ${d1}–${d2}, ${y2}`;
 }
+
+/**
+ * The games a day heading selects: the ones that have NOT started. A started game's
+ * props are dead, which is why the picker already leaves it out of the default scope
+ * — selecting a whole day must not quietly put it back. If every game that day has
+ * started there is nothing upcoming to pick, so it takes them all; the tap should
+ * never do nothing.
+ */
+export function dayTargetIds(
+  dayGames: readonly { externalId: string }[],
+  startedIds: ReadonlySet<string>,
+): string[] {
+  const all = dayGames.map((g) => g.externalId);
+  const upcoming = all.filter((id) => !startedIds.has(id));
+  return upcoming.length > 0 ? upcoming : all;
+}
+
+/**
+ * Toggle a set of ids as one: add them all, unless every one is already selected, in
+ * which case take them all back out. Other selections are left alone, so a day adds
+ * to whatever else is picked rather than replacing it.
+ */
+export function toggleIds(
+  prev: ReadonlySet<string>,
+  ids: readonly string[],
+): Set<string> {
+  const next = new Set(prev);
+  const allIn = ids.length > 0 && ids.every((id) => next.has(id));
+  for (const id of ids) {
+    if (allIn) next.delete(id);
+    else next.add(id);
+  }
+  return next;
+}

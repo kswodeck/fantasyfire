@@ -122,3 +122,74 @@ describe('GamePicker on a weekly slate', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
   });
 });
+
+describe('selecting a whole day', () => {
+  const dayGroup = (name: RegExp) => screen.getByRole('group', { name });
+  const dayButton = (group: HTMLElement) =>
+    within(group).getByRole('button', {
+      name: /^select (all|the \d+ upcoming) games on/i,
+    });
+  /** The game chips currently selected inside a day (the day button itself excluded). */
+  const pickedIn = (group: HTMLElement) =>
+    within(group)
+      .getAllByRole('button', { pressed: true })
+      .filter((b) => !/^select /i.test(b.getAttribute('aria-label') ?? ''));
+  const picker = () => screen.getByRole('button', { expanded: true });
+
+  it('picks today’s games in one tap, leaving out the one already underway', () => {
+    openPicker(THANKSGIVING_WEEK);
+    const today = dayGroup(/^today/i);
+    const select = dayButton(today);
+    // The heading says 3 games; the button says up front that it will take 2.
+    expect(select).toHaveTextContent('Select 2 upcoming');
+
+    fireEvent.click(select);
+
+    expect(select).toHaveAttribute('aria-pressed', 'true');
+    expect(select).toHaveTextContent('Selected');
+    const picked = pickedIn(today);
+    expect(picked).toHaveLength(2);
+    expect(picked.map((b) => b.textContent).join(' ')).toMatch(/PHI.*DAL.*KC.*BUF/);
+    expect(picked.map((b) => b.textContent).join(' ')).not.toMatch(/CHI/);
+    expect(picker()).toHaveTextContent('Games (2 of 15)');
+  });
+
+  it('clears the day on a second tap', () => {
+    openPicker(THANKSGIVING_WEEK);
+    const select = dayButton(dayGroup(/^today/i));
+    fireEvent.click(select);
+    fireEvent.click(select);
+
+    expect(select).toHaveAttribute('aria-pressed', 'false');
+    expect(picker()).toHaveTextContent('Choose games');
+  });
+
+  it('adds days together, and takes one back out without touching the other', () => {
+    openPicker(THANKSGIVING_WEEK);
+    const sunday = dayButton(dayGroup(/^sun, nov 29/i));
+    expect(sunday).toHaveTextContent('Select day');
+
+    fireEvent.click(sunday);
+    expect(picker()).toHaveTextContent('Games (10 of 15)');
+    fireEvent.click(dayButton(dayGroup(/^today/i)));
+    expect(picker()).toHaveTextContent('Games (12 of 15)');
+    fireEvent.click(sunday);
+    expect(picker()).toHaveTextContent('Games (2 of 15)');
+  });
+
+  it('takes the whole day once every game in it is underway', () => {
+    // 11pm Central on Thanksgiving: all three games have kicked off, nothing upcoming.
+    vi.setSystemTime(new Date('2026-11-27T05:00:00Z'));
+    try {
+      openPicker(THANKSGIVING_WEEK);
+      const today = dayGroup(/^today/i);
+      const select = dayButton(today);
+      expect(select).toHaveTextContent('Select day');
+
+      fireEvent.click(select);
+      expect(pickedIn(today)).toHaveLength(3);
+    } finally {
+      vi.setSystemTime(new Date('2026-11-26T19:19:00Z'));
+    }
+  });
+});
