@@ -1,10 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import type { Sport } from '@/lib/sports';
 import type { TonightGame } from '@/lib/types';
 import { MatchupStrip } from './MatchupStrip';
-import { formatIsoDate } from '@/lib/format';
+import {
+  formatDayLabel,
+  formatDayRange,
+  groupGamesByDay,
+  localDayIso,
+} from '@/lib/gameDays';
 
 /**
  * Shared "Choose games" slate filter — the collapsed picker button plus the
@@ -71,7 +76,27 @@ export function useGameFilter(games: TonightGame[]) {
     startedIds,
     upcomingGames,
     activeTeams,
+    /** The client clock (null until hydrated) — shared so day labels tick with it. */
+    now,
   };
+}
+
+/**
+ * The slate grouped by day. Until the browser has hydrated (`now` null) each game
+ * sits on the date the server gave it — the Eastern calendar date for a timed game —
+ * so the server and first client render agree. After that it moves to the viewer's
+ * own date, matching the local start time printed on its chip; for anyone in the US
+ * the two are the same day. `todayIso` likewise waits for the client clock.
+ */
+function useGameDays(games: TonightGame[], now: number | null) {
+  return useMemo(() => {
+    const dayOf = (g: TonightGame) =>
+      (now != null && g.startTime ? localDayIso(g.startTime) : null) ?? g.date;
+    return {
+      groups: groupGamesByDay(games, dayOf),
+      todayIso: now != null ? localDayIso(new Date(now).toISOString()) : null,
+    };
+  }, [games, now]);
 }
 
 export type GameFilter = ReturnType<typeof useGameFilter>;
@@ -87,8 +112,22 @@ export function GamePicker({
   slateDate: string | null;
   filter: GameFilter;
 }) {
-  const { selectedGames, toggleGame, clearGames, chooseOpen, setChooseOpen, startedIds } =
-    filter;
+  const {
+    selectedGames,
+    toggleGame,
+    clearGames,
+    chooseOpen,
+    setChooseOpen,
+    startedIds,
+    now,
+  } = filter;
+  const { groups, todayIso } = useGameDays(games, now);
+  // Prefix for the day headings' ids, so two pickers on one page can never collide.
+  const idBase = useId();
+  // A weekly slate (NFL, MLS, college football) spans several days, and a chip only
+  // carries a start time — so split it under day headings. A one-day slate keeps the
+  // single flat strip; a heading there would just repeat the date above it.
+  const multiDay = groups.length > 1;
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
@@ -132,19 +171,42 @@ export function GamePicker({
       {/* The game picker expands directly under its row. */}
       {chooseOpen && (
         <div>
-          {slateDate && (
+          {slateDate && groups.length > 0 && (
             <p className="mb-1.5 text-xs text-muted">
               {games.length} {games.length === 1 ? 'game' : 'games'} ·{' '}
-              {formatIsoDate(slateDate)}
+              {formatDayRange(groups[0].day, groups[groups.length - 1].day)}
             </p>
           )}
-          <MatchupStrip
-            sport={sport}
-            games={games}
-            selected={selectedGames}
-            startedIds={startedIds}
-            onToggle={toggleGame}
-          />
+          {multiDay ? (
+            <div className="space-y-2.5">
+              {groups.map(({ day, games: dayGames }) => (
+                <div key={day} role="group" aria-labelledby={`${idBase}-${day}`}>
+                  <p
+                    id={`${idBase}-${day}`}
+                    className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted"
+                  >
+                    {formatDayLabel(day, todayIso)} · {dayGames.length}{' '}
+                    {dayGames.length === 1 ? 'game' : 'games'}
+                  </p>
+                  <MatchupStrip
+                    sport={sport}
+                    games={dayGames}
+                    selected={selectedGames}
+                    startedIds={startedIds}
+                    onToggle={toggleGame}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <MatchupStrip
+              sport={sport}
+              games={games}
+              selected={selectedGames}
+              startedIds={startedIds}
+              onToggle={toggleGame}
+            />
+          )}
           <p className="mt-1.5 text-[11px] text-muted">
             {startedIds.size > 0
               ? 'Games already underway are dimmed and hidden by default — tap one to include its players.'
